@@ -1,0 +1,4166 @@
+<!doctype html>
+<html lang="id" data-theme="light">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Manhood Panel — Pesantren Management System</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap"
+            rel="stylesheet"
+        />
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+        <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+        <style>
+            /* ===== CSS RESET & ROOT ===== */
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+            html {
+                scroll-behavior: smooth;
+            }
+
+            /* ===== CSS VARIABLES ===== */
+            :root {
+                /* Brand */
+                --primary: #2563eb;
+                --primary-light: #3b82f6;
+                --primary-dark: #1d4ed8;
+                --primary-subtle: #eff6ff;
+                --primary-glow: rgba(37, 99, 235, 0.15);
+
+                --accent: #0ea5e9;
+                --accent-light: #38bdf8;
+                --success: #10b981;
+                --success-subtle: #ecfdf5;
+                --warning: #f59e0b;
+                --warning-subtle: #fffbeb;
+                --danger: #ef4444;
+                --danger-subtle: #fef2f2;
+
+                /* Light mode */
+                --bg: #f8faff;
+                --bg-2: #ffffff;
+                --bg-3: #f1f5ff;
+                --surface: #ffffff;
+                --surface-2: #f8faff;
+                --border: #e2e8f8;
+                --border-light: #eef2ff;
+
+                --text: #0f172a;
+                --text-2: #334155;
+                --text-3: #64748b;
+                --text-4: #94a3b8;
+                --text-inv: #ffffff;
+
+                --sidebar-w: 260px;
+                --sidebar-collapsed: 72px;
+                --navbar-h: 68px;
+                --radius: 12px;
+                --radius-lg: 16px;
+                --radius-xl: 20px;
+                --radius-2xl: 24px;
+
+                --shadow-sm:
+                    0 1px 3px rgba(15, 23, 42, 0.06),
+                    0 1px 2px rgba(15, 23, 42, 0.04);
+                --shadow:
+                    0 4px 16px rgba(15, 23, 42, 0.08),
+                    0 1px 4px rgba(15, 23, 42, 0.04);
+                --shadow-lg:
+                    0 8px 32px rgba(15, 23, 42, 0.1),
+                    0 2px 8px rgba(15, 23, 42, 0.06);
+                --shadow-xl: 0 20px 60px rgba(15, 23, 42, 0.12);
+                --shadow-primary: 0 4px 20px rgba(37, 99, 235, 0.25);
+
+                --transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+                --transition-slow: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+
+            [data-theme='dark'] {
+                --bg: #0d1321;
+                --bg-2: #111827;
+                --bg-3: #1a2236;
+                --surface: #131c2e;
+                --surface-2: #1a2540;
+                --border: #1e2d4a;
+                --border-light: #1a2540;
+
+                --text: #f1f5ff;
+                --text-2: #cbd5e1;
+                --text-3: #94a3b8;
+                --text-4: #475569;
+                --text-inv: #0f172a;
+
+                --primary-subtle: rgba(37, 99, 235, 0.12);
+                --success-subtle: rgba(16, 185, 129, 0.1);
+                --warning-subtle: rgba(245, 158, 11, 0.1);
+                --danger-subtle: rgba(239, 68, 68, 0.1);
+
+                --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+                --shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+                --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+                --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.5);
+            }
+
+            /* ===== BASE ===== */
+            body {
+                font-family: 'DM Sans', sans-serif;
+                background: var(--bg);
+                color: var(--text);
+                min-height: 100vh;
+                overflow-x: hidden;
+                transition:
+                    background 0.35s ease,
+                    color 0.35s ease;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+
+            h1,
+            h2,
+            h3,
+            h4,
+            h5,
+            h6 {
+                font-family: 'Sora', sans-serif;
+                font-weight: 600;
+                line-height: 1.25;
+            }
+
+            /* ===== LAYOUT ===== */
+            .app-layout {
+                display: flex;
+                min-height: 100vh;
+            }
+
+            /* ===== SIDEBAR ===== */
+            .sidebar {
+                width: var(--sidebar-w);
+                height: 100vh;
+                position: fixed;
+                top: 0;
+                left: 0;
+                background: var(--surface);
+                border-right: 1px solid var(--border);
+                display: flex;
+                flex-direction: column;
+                z-index: 100;
+                transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                overflow: hidden;
+            }
+
+            .sidebar.collapsed {
+                width: var(--sidebar-collapsed);
+            }
+
+            .sidebar-logo {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 20px 16px;
+                border-bottom: 1px solid var(--border);
+                min-height: var(--navbar-h);
+                overflow: hidden;
+                white-space: nowrap;
+            }
+
+            .logo-icon {
+                width: 40px;
+                height: 40px;
+                background: linear-gradient(
+                    135deg,
+                    var(--primary),
+                    var(--accent)
+                );
+                border-radius: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+                box-shadow: var(--shadow-primary);
+            }
+
+            .logo-icon svg {
+                color: white;
+                width: 20px;
+                height: 20px;
+            }
+
+            .logo-text {
+                overflow: hidden;
+            }
+            .logo-text h2 {
+                font-size: 15px;
+                font-weight: 700;
+                color: var(--text);
+                letter-spacing: -0.3px;
+            }
+            .logo-text span {
+                font-size: 11px;
+                color: var(--text-3);
+                font-weight: 400;
+            }
+
+            .sidebar-nav {
+                flex: 1;
+                overflow-y: auto;
+                overflow-x: hidden;
+                padding: 12px 0;
+            }
+            .sidebar-nav::-webkit-scrollbar {
+                width: 0;
+            }
+
+            .nav-section {
+                margin-bottom: 8px;
+            }
+            .nav-section-label {
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+                color: var(--text-4);
+                padding: 8px 16px 4px;
+                white-space: nowrap;
+                overflow: hidden;
+                transition: opacity 0.2s;
+            }
+            .sidebar.collapsed .nav-section-label {
+                opacity: 0;
+            }
+
+            .nav-item {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 10px 16px;
+                color: var(--text-3);
+                cursor: pointer;
+                border-radius: 0;
+                transition: var(--transition);
+                position: relative;
+                white-space: nowrap;
+                margin: 1px 8px;
+                border-radius: var(--radius);
+                text-decoration: none;
+            }
+
+            .nav-item:hover {
+                background: var(--bg-3);
+                color: var(--text);
+            }
+            .nav-item.active {
+                background: var(--primary-subtle);
+                color: var(--primary);
+                font-weight: 600;
+            }
+            .nav-item.active::before {
+                content: '';
+                position: absolute;
+                left: -8px;
+                top: 50%;
+                transform: translateY(-50%);
+                width: 3px;
+                height: 20px;
+                background: var(--primary);
+                border-radius: 0 3px 3px 0;
+            }
+
+            .nav-item svg {
+                width: 18px;
+                height: 18px;
+                flex-shrink: 0;
+            }
+            .nav-item span {
+                font-size: 14px;
+                overflow: hidden;
+            }
+
+            .nav-badge {
+                margin-left: auto;
+                padding: 2px 7px;
+                background: var(--primary);
+                color: white;
+                border-radius: 20px;
+                font-size: 10px;
+                font-weight: 600;
+                flex-shrink: 0;
+                min-width: 20px;
+                text-align: center;
+            }
+            .sidebar.collapsed .nav-badge {
+                display: none;
+            }
+
+            .sidebar-footer {
+                padding: 12px;
+                border-top: 1px solid var(--border);
+            }
+
+            .user-card {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px 12px;
+                border-radius: var(--radius);
+                cursor: pointer;
+                transition: var(--transition);
+                overflow: hidden;
+                white-space: nowrap;
+            }
+            .user-card:hover {
+                background: var(--bg-3);
+            }
+
+            .user-avatar {
+                width: 36px;
+                height: 36px;
+                border-radius: 10px;
+                background: linear-gradient(
+                    135deg,
+                    var(--primary),
+                    var(--accent)
+                );
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-weight: 700;
+                font-size: 14px;
+                flex-shrink: 0;
+            }
+
+            .user-info {
+                overflow: hidden;
+            }
+            .user-info .name {
+                font-size: 13px;
+                font-weight: 600;
+                color: var(--text);
+            }
+            .user-info .role {
+                font-size: 11px;
+                color: var(--text-3);
+            }
+
+            /* ===== MAIN CONTENT ===== */
+            .main {
+                margin-left: var(--sidebar-w);
+                flex: 1;
+                min-height: 100vh;
+                transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                display: flex;
+                flex-direction: column;
+            }
+            .main.sidebar-collapsed {
+                margin-left: var(--sidebar-collapsed);
+            }
+
+            /* ===== NAVBAR ===== */
+            .navbar {
+                height: var(--navbar-h);
+                background: var(--surface);
+                border-bottom: 1px solid var(--border);
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 0 24px;
+                position: sticky;
+                top: 0;
+                z-index: 50;
+                backdrop-filter: blur(12px);
+            }
+
+            .navbar-toggle {
+                width: 36px;
+                height: 36px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                border-radius: var(--radius);
+                color: var(--text-3);
+                transition: var(--transition);
+                border: none;
+                background: none;
+            }
+            .navbar-toggle:hover {
+                background: var(--bg-3);
+                color: var(--text);
+            }
+
+            .search-bar {
+                flex: 1;
+                max-width: 360px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                background: var(--bg-3);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 0 14px;
+                height: 38px;
+                transition: var(--transition);
+            }
+            .search-bar:focus-within {
+                border-color: var(--primary-light);
+                background: var(--surface);
+                box-shadow: 0 0 0 3px var(--primary-glow);
+            }
+            .search-bar svg {
+                color: var(--text-4);
+                width: 16px;
+                height: 16px;
+                flex-shrink: 0;
+            }
+            .search-bar input {
+                border: none;
+                background: none;
+                outline: none;
+                font-family: 'DM Sans', sans-serif;
+                font-size: 13px;
+                color: var(--text);
+                width: 100%;
+            }
+            .search-bar input::placeholder {
+                color: var(--text-4);
+            }
+
+            .navbar-actions {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                margin-left: auto;
+            }
+
+            .icon-btn {
+                width: 38px;
+                height: 38px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: var(--radius);
+                cursor: pointer;
+                border: 1px solid var(--border);
+                background: var(--surface);
+                color: var(--text-3);
+                transition: var(--transition);
+                position: relative;
+            }
+            .icon-btn:hover {
+                background: var(--bg-3);
+                color: var(--text);
+                border-color: var(--border);
+            }
+            .icon-btn svg {
+                width: 17px;
+                height: 17px;
+            }
+
+            .notif-dot {
+                position: absolute;
+                top: 6px;
+                right: 6px;
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: var(--danger);
+                border: 2px solid var(--surface);
+            }
+
+            /* Theme toggle */
+            .theme-toggle {
+                width: 52px;
+                height: 28px;
+                background: var(--bg-3);
+                border: 1px solid var(--border);
+                border-radius: 20px;
+                cursor: pointer;
+                position: relative;
+                transition: var(--transition);
+                flex-shrink: 0;
+            }
+            [data-theme='dark'] .theme-toggle {
+                background: var(--primary-subtle);
+                border-color: var(--primary);
+            }
+            .theme-toggle-thumb {
+                position: absolute;
+                top: 3px;
+                left: 3px;
+                width: 20px;
+                height: 20px;
+                background: var(--text);
+                border-radius: 50%;
+                transition: var(--transition);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            [data-theme='dark'] .theme-toggle-thumb {
+                left: 27px;
+                background: var(--primary);
+            }
+            .theme-toggle-thumb svg {
+                width: 11px;
+                height: 11px;
+                color: var(--bg);
+            }
+
+            /* User dropdown */
+            .user-dropdown-wrap {
+                position: relative;
+            }
+            .user-btn {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 4px 8px 4px 4px;
+                border-radius: var(--radius);
+                cursor: pointer;
+                transition: var(--transition);
+                border: 1px solid var(--border);
+                background: var(--surface);
+            }
+            .user-btn:hover {
+                background: var(--bg-3);
+            }
+
+            .user-btn-avatar {
+                width: 30px;
+                height: 30px;
+                border-radius: 8px;
+                background: linear-gradient(
+                    135deg,
+                    var(--primary),
+                    var(--accent)
+                );
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-weight: 700;
+                font-size: 12px;
+            }
+            .user-btn-name {
+                font-size: 13px;
+                font-weight: 600;
+                color: var(--text);
+            }
+            .user-btn svg {
+                width: 14px;
+                height: 14px;
+                color: var(--text-3);
+            }
+
+            .dropdown-menu {
+                position: absolute;
+                top: calc(100% + 8px);
+                right: 0;
+                min-width: 200px;
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-lg);
+                box-shadow: var(--shadow-lg);
+                padding: 6px;
+                z-index: 200;
+                opacity: 0;
+                pointer-events: none;
+                transform: translateY(-8px) scale(0.97);
+                transition:
+                    opacity 0.18s ease,
+                    transform 0.18s ease;
+                transform-origin: top right;
+            }
+            .dropdown-menu.open {
+                opacity: 1;
+                pointer-events: all;
+                transform: translateY(0) scale(1);
+            }
+
+            .dropdown-item {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 9px 12px;
+                border-radius: var(--radius);
+                cursor: pointer;
+                transition: var(--transition);
+                color: var(--text-2);
+                font-size: 13px;
+            }
+            .dropdown-item:hover {
+                background: var(--bg-3);
+                color: var(--text);
+            }
+            .dropdown-item.danger:hover {
+                background: var(--danger-subtle);
+                color: var(--danger);
+            }
+            .dropdown-item svg {
+                width: 15px;
+                height: 15px;
+            }
+            .dropdown-divider {
+                height: 1px;
+                background: var(--border);
+                margin: 4px 0;
+            }
+
+            /* ===== CONTENT ===== */
+            .content {
+                flex: 1;
+                padding: 28px 28px;
+                max-width: 1400px;
+            }
+
+            .page-header {
+                margin-bottom: 28px;
+            }
+            .page-header h1 {
+                font-size: 24px;
+                font-weight: 700;
+                color: var(--text);
+                letter-spacing: -0.5px;
+            }
+            .page-header p {
+                font-size: 14px;
+                color: var(--text-3);
+                margin-top: 4px;
+            }
+
+            .breadcrumb {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 12px;
+                color: var(--text-4);
+                margin-bottom: 8px;
+            }
+            .breadcrumb span {
+                color: var(--text-3);
+            }
+            .breadcrumb .sep {
+                color: var(--text-4);
+            }
+
+            /* ===== STATS GRID ===== */
+            .stats-grid {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 16px;
+                margin-bottom: 24px;
+            }
+
+            .stat-card {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-xl);
+                padding: 20px;
+                transition: var(--transition);
+                position: relative;
+                overflow: hidden;
+            }
+            .stat-card::after {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 3px;
+                border-radius: 3px 3px 0 0;
+            }
+            .stat-card.blue::after {
+                background: linear-gradient(
+                    90deg,
+                    var(--primary),
+                    var(--accent)
+                );
+            }
+            .stat-card.green::after {
+                background: linear-gradient(90deg, var(--success), #34d399);
+            }
+            .stat-card.amber::after {
+                background: linear-gradient(90deg, var(--warning), #fcd34d);
+            }
+            .stat-card.purple::after {
+                background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+            }
+
+            .stat-card:hover {
+                box-shadow: var(--shadow-lg);
+                transform: translateY(-2px);
+            }
+
+            .stat-card-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 14px;
+            }
+
+            .stat-icon {
+                width: 40px;
+                height: 40px;
+                border-radius: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .stat-icon.blue {
+                background: var(--primary-subtle);
+                color: var(--primary);
+            }
+            .stat-icon.green {
+                background: var(--success-subtle);
+                color: var(--success);
+            }
+            .stat-icon.amber {
+                background: var(--warning-subtle);
+                color: var(--warning);
+            }
+            .stat-icon.purple {
+                background: rgba(139, 92, 246, 0.1);
+                color: #8b5cf6;
+            }
+            .stat-icon svg {
+                width: 18px;
+                height: 18px;
+            }
+
+            .stat-badge {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                padding: 3px 8px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            .stat-badge.up {
+                background: var(--success-subtle);
+                color: var(--success);
+            }
+            .stat-badge.down {
+                background: var(--danger-subtle);
+                color: var(--danger);
+            }
+            .stat-badge svg {
+                width: 11px;
+                height: 11px;
+            }
+
+            .stat-value {
+                font-family: 'Sora', sans-serif;
+                font-size: 28px;
+                font-weight: 700;
+                color: var(--text);
+                letter-spacing: -1px;
+                line-height: 1;
+                margin-bottom: 4px;
+            }
+
+            .stat-label {
+                font-size: 12px;
+                color: var(--text-3);
+                font-weight: 500;
+            }
+            .stat-sub {
+                font-size: 11px;
+                color: var(--text-4);
+                margin-top: 6px;
+            }
+
+            /* ===== CHART ROW ===== */
+            .chart-row {
+                display: grid;
+                grid-template-columns: 1fr 380px;
+                gap: 16px;
+                margin-bottom: 24px;
+            }
+
+            .card {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-xl);
+                padding: 24px;
+                transition: var(--transition);
+            }
+
+            .card-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 20px;
+            }
+
+            .card-title {
+                font-size: 15px;
+                font-weight: 700;
+                color: var(--text);
+                letter-spacing: -0.2px;
+            }
+            .card-sub {
+                font-size: 12px;
+                color: var(--text-3);
+                margin-top: 2px;
+            }
+
+            .chart-wrap {
+                position: relative;
+                height: 240px;
+            }
+
+            /* Doughnut legend */
+            .donut-wrap {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+            .donut-chart-wrap {
+                position: relative;
+                height: 180px;
+                width: 100%;
+            }
+            .donut-center {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                text-align: center;
+                pointer-events: none;
+            }
+            .donut-center .num {
+                font-family: 'Sora', sans-serif;
+                font-size: 28px;
+                font-weight: 700;
+                color: var(--text);
+                line-height: 1;
+            }
+            .donut-center .lbl {
+                font-size: 11px;
+                color: var(--text-3);
+                margin-top: 2px;
+            }
+
+            .donut-legend {
+                width: 100%;
+                margin-top: 16px;
+            }
+            .legend-item {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 7px 0;
+                border-bottom: 1px solid var(--border-light);
+            }
+            .legend-item:last-child {
+                border-bottom: none;
+            }
+            .legend-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                flex-shrink: 0;
+            }
+            .legend-name {
+                font-size: 13px;
+                color: var(--text-2);
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .legend-val {
+                font-size: 13px;
+                font-weight: 600;
+                color: var(--text);
+            }
+
+            /* ===== BOTTOM ROW ===== */
+            .bottom-row {
+                display: grid;
+                grid-template-columns: 1fr 320px;
+                gap: 16px;
+                margin-bottom: 24px;
+            }
+
+            /* ===== TABLE ===== */
+            .table-card {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-xl);
+                overflow: hidden;
+            }
+
+            .table-toolbar {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 16px 20px;
+                border-bottom: 1px solid var(--border);
+            }
+
+            .table-search {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                background: var(--bg-3);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 0 12px;
+                height: 34px;
+                flex: 1;
+                max-width: 280px;
+                transition: var(--transition);
+            }
+            .table-search:focus-within {
+                border-color: var(--primary-light);
+                box-shadow: 0 0 0 3px var(--primary-glow);
+            }
+            .table-search input {
+                border: none;
+                background: none;
+                outline: none;
+                font-family: 'DM Sans', sans-serif;
+                font-size: 13px;
+                color: var(--text);
+                width: 100%;
+            }
+            .table-search input::placeholder {
+                color: var(--text-4);
+            }
+            .table-search svg {
+                width: 14px;
+                height: 14px;
+                color: var(--text-4);
+                flex-shrink: 0;
+            }
+
+            .btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 7px;
+                padding: 0 16px;
+                height: 34px;
+                border-radius: var(--radius);
+                font-family: 'DM Sans', sans-serif;
+                font-size: 13px;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+                transition: var(--transition);
+                text-decoration: none;
+            }
+            .btn svg {
+                width: 14px;
+                height: 14px;
+            }
+
+            .btn-primary {
+                background: var(--primary);
+                color: white;
+                box-shadow: 0 1px 4px rgba(37, 99, 235, 0.25);
+            }
+            .btn-primary:hover {
+                background: var(--primary-dark);
+                box-shadow: var(--shadow-primary);
+                transform: translateY(-1px);
+            }
+
+            .btn-secondary {
+                background: var(--bg-3);
+                color: var(--text-2);
+                border: 1px solid var(--border);
+            }
+            .btn-secondary:hover {
+                background: var(--border);
+                color: var(--text);
+            }
+
+            .btn-danger {
+                background: var(--danger-subtle);
+                color: var(--danger);
+                border: 1px solid rgba(239, 68, 68, 0.2);
+            }
+            .btn-danger:hover {
+                background: var(--danger);
+                color: white;
+            }
+
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            thead {
+                background: var(--bg-3);
+            }
+            th {
+                padding: 11px 16px;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 0.5px;
+                text-transform: uppercase;
+                color: var(--text-3);
+                text-align: left;
+                white-space: nowrap;
+            }
+            td {
+                padding: 13px 16px;
+                font-size: 13px;
+                color: var(--text-2);
+                border-bottom: 1px solid var(--border-light);
+            }
+            tbody tr {
+                transition: var(--transition);
+            }
+            tbody tr:last-child td {
+                border-bottom: none;
+            }
+            tbody tr:hover {
+                background: var(--bg-3);
+            }
+
+            .avatar-cell {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .table-avatar {
+                width: 32px;
+                height: 32px;
+                border-radius: 8px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                font-weight: 700;
+                color: white;
+                flex-shrink: 0;
+            }
+
+            .badge {
+                display: inline-flex;
+                align-items: center;
+                padding: 3px 9px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            .badge-success {
+                background: var(--success-subtle);
+                color: var(--success);
+            }
+            .badge-warning {
+                background: var(--warning-subtle);
+                color: var(--warning);
+            }
+            .badge-danger {
+                background: var(--danger-subtle);
+                color: var(--danger);
+            }
+            .badge-blue {
+                background: var(--primary-subtle);
+                color: var(--primary);
+            }
+            .badge-purple {
+                background: rgba(139, 92, 246, 0.1);
+                color: #8b5cf6;
+            }
+
+            .action-btn {
+                width: 28px;
+                height: 28px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 8px;
+                cursor: pointer;
+                border: 1px solid var(--border);
+                background: var(--surface);
+                color: var(--text-3);
+                transition: var(--transition);
+            }
+            .action-btn:hover {
+                background: var(--bg-3);
+                color: var(--text);
+            }
+            .action-btn svg {
+                width: 13px;
+                height: 13px;
+            }
+
+            .pagination {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 14px 20px;
+                border-top: 1px solid var(--border);
+            }
+            .pagination-info {
+                font-size: 12px;
+                color: var(--text-3);
+            }
+            .pagination-pages {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+            .page-btn {
+                width: 30px;
+                height: 30px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 12px;
+                font-weight: 500;
+                border: 1px solid var(--border);
+                background: var(--surface);
+                color: var(--text-3);
+                transition: var(--transition);
+            }
+            .page-btn:hover {
+                background: var(--bg-3);
+                color: var(--text);
+            }
+            .page-btn.active {
+                background: var(--primary);
+                color: white;
+                border-color: var(--primary);
+            }
+
+            /* ===== ACTIVITY CARD ===== */
+            .activity-list {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            }
+            .activity-item {
+                display: flex;
+                align-items: flex-start;
+                gap: 12px;
+                padding: 12px;
+                border-radius: var(--radius);
+                transition: var(--transition);
+                cursor: pointer;
+            }
+            .activity-item:hover {
+                background: var(--bg-3);
+            }
+            .activity-dot-wrap {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                flex-shrink: 0;
+            }
+            .activity-dot {
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                flex-shrink: 0;
+                margin-top: 4px;
+            }
+            .activity-line {
+                width: 1px;
+                flex: 1;
+                min-height: 20px;
+                background: var(--border);
+                margin-top: 4px;
+            }
+            .activity-item:last-child .activity-line {
+                display: none;
+            }
+            .activity-content {
+                flex: 1;
+            }
+            .activity-title {
+                font-size: 13px;
+                font-weight: 500;
+                color: var(--text);
+            }
+            .activity-time {
+                font-size: 11px;
+                color: var(--text-4);
+                margin-top: 2px;
+            }
+
+            /* ===== FINANCE CARDS ===== */
+            .finance-row {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 16px;
+                margin-bottom: 24px;
+            }
+
+            .finance-card {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-xl);
+                padding: 20px;
+                transition: var(--transition);
+            }
+            .finance-card:hover {
+                box-shadow: var(--shadow-lg);
+                transform: translateY(-2px);
+            }
+
+            .finance-label {
+                font-size: 12px;
+                color: var(--text-3);
+                font-weight: 500;
+                margin-bottom: 8px;
+            }
+            .finance-val {
+                font-family: 'Sora', sans-serif;
+                font-size: 22px;
+                font-weight: 700;
+                color: var(--text);
+                letter-spacing: -0.5px;
+            }
+            .finance-trend {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                margin-top: 8px;
+                font-size: 12px;
+            }
+
+            .progress-bar {
+                height: 4px;
+                background: var(--bg-3);
+                border-radius: 4px;
+                margin-top: 10px;
+                overflow: hidden;
+            }
+            .progress-fill {
+                height: 100%;
+                border-radius: 4px;
+                transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+
+            /* ===== MODAL ===== */
+            .modal-overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.5);
+                backdrop-filter: blur(4px);
+                z-index: 500;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.22s ease;
+            }
+            .modal-overlay.open {
+                opacity: 1;
+                pointer-events: all;
+            }
+
+            .modal {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-2xl);
+                box-shadow: var(--shadow-xl);
+                width: 90%;
+                max-width: 480px;
+                transform: translateY(20px) scale(0.97);
+                transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+            }
+            .modal-overlay.open .modal {
+                transform: translateY(0) scale(1);
+            }
+
+            .modal-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 20px 24px;
+                border-bottom: 1px solid var(--border);
+            }
+            .modal-header h3 {
+                font-size: 16px;
+                font-weight: 700;
+                color: var(--text);
+            }
+            .modal-close {
+                width: 32px;
+                height: 32px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 8px;
+                cursor: pointer;
+                border: 1px solid var(--border);
+                background: var(--surface);
+                color: var(--text-3);
+                transition: var(--transition);
+            }
+            .modal-close:hover {
+                background: var(--danger-subtle);
+                color: var(--danger);
+                border-color: var(--danger);
+            }
+            .modal-close svg {
+                width: 15px;
+                height: 15px;
+            }
+
+            .modal-body {
+                padding: 24px;
+            }
+
+            .form-group {
+                margin-bottom: 16px;
+            }
+            .form-label {
+                font-size: 12px;
+                font-weight: 600;
+                color: var(--text-2);
+                margin-bottom: 6px;
+                display: block;
+            }
+            .form-input {
+                width: 100%;
+                height: 38px;
+                background: var(--bg-3);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 0 12px;
+                font-family: 'DM Sans', sans-serif;
+                font-size: 14px;
+                color: var(--text);
+                outline: none;
+                transition: var(--transition);
+            }
+            .form-input:focus {
+                border-color: var(--primary-light);
+                box-shadow: 0 0 0 3px var(--primary-glow);
+                background: var(--surface);
+            }
+            .form-input::placeholder {
+                color: var(--text-4);
+            }
+
+            .form-row {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+
+            .modal-footer {
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 8px;
+                padding: 16px 24px;
+                border-top: 1px solid var(--border);
+            }
+
+            /* ===== NOTIFICATIONS ===== */
+            .notif-panel {
+                position: fixed;
+                top: 78px;
+                right: 16px;
+                width: 340px;
+                max-height: 420px;
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-xl);
+                box-shadow: var(--shadow-xl);
+                z-index: 300;
+                overflow: hidden;
+                opacity: 0;
+                pointer-events: none;
+                transform: translateY(-10px) scale(0.97);
+                transition:
+                    opacity 0.18s ease,
+                    transform 0.18s ease;
+                transform-origin: top right;
+            }
+            .notif-panel.open {
+                opacity: 1;
+                pointer-events: all;
+                transform: translateY(0) scale(1);
+            }
+
+            .notif-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 16px 16px 12px;
+                border-bottom: 1px solid var(--border);
+            }
+            .notif-header h4 {
+                font-size: 14px;
+                font-weight: 700;
+                color: var(--text);
+            }
+            .notif-count {
+                background: var(--danger);
+                color: white;
+                border-radius: 20px;
+                padding: 1px 7px;
+                font-size: 11px;
+                font-weight: 700;
+            }
+            .notif-clear {
+                font-size: 12px;
+                color: var(--primary);
+                cursor: pointer;
+                font-weight: 500;
+            }
+            .notif-clear:hover {
+                text-decoration: underline;
+            }
+
+            .notif-list {
+                overflow-y: auto;
+                max-height: 320px;
+            }
+            .notif-list::-webkit-scrollbar {
+                width: 4px;
+            }
+            .notif-list::-webkit-scrollbar-thumb {
+                background: var(--border);
+                border-radius: 4px;
+            }
+
+            .notif-item {
+                display: flex;
+                align-items: flex-start;
+                gap: 12px;
+                padding: 12px 16px;
+                border-bottom: 1px solid var(--border-light);
+                transition: var(--transition);
+                cursor: pointer;
+            }
+            .notif-item:hover {
+                background: var(--bg-3);
+            }
+            .notif-item.unread {
+                background: var(--primary-subtle);
+            }
+            .notif-item:last-child {
+                border-bottom: none;
+            }
+
+            .notif-icon {
+                width: 34px;
+                height: 34px;
+                border-radius: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+            }
+            .notif-icon svg {
+                width: 16px;
+                height: 16px;
+            }
+            .notif-content {
+                flex: 1;
+            }
+            .notif-title {
+                font-size: 13px;
+                font-weight: 600;
+                color: var(--text);
+            }
+            .notif-msg {
+                font-size: 12px;
+                color: var(--text-3);
+                margin-top: 2px;
+                line-height: 1.4;
+            }
+            .notif-time {
+                font-size: 10px;
+                color: var(--text-4);
+                margin-top: 4px;
+            }
+
+            /* ===== TOAST ===== */
+            .toast-container {
+                position: fixed;
+                bottom: 24px;
+                right: 24px;
+                z-index: 9999;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                pointer-events: none;
+            }
+
+            .toast {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 12px 16px;
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-lg);
+                box-shadow: var(--shadow-xl);
+                min-width: 280px;
+                max-width: 360px;
+                pointer-events: all;
+                animation: toastIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)
+                    forwards;
+            }
+            .toast.removing {
+                animation: toastOut 0.25s ease forwards;
+            }
+
+            @keyframes toastIn {
+                from {
+                    opacity: 0;
+                    transform: translateX(60px) scale(0.9);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateX(0) scale(1);
+                }
+            }
+            @keyframes toastOut {
+                from {
+                    opacity: 1;
+                    transform: translateX(0) scale(1);
+                }
+                to {
+                    opacity: 0;
+                    transform: translateX(60px) scale(0.9);
+                }
+            }
+
+            .toast-icon {
+                width: 32px;
+                height: 32px;
+                border-radius: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+            }
+            .toast-icon svg {
+                width: 16px;
+                height: 16px;
+            }
+            .toast.success .toast-icon {
+                background: var(--success-subtle);
+                color: var(--success);
+            }
+            .toast.warning .toast-icon {
+                background: var(--warning-subtle);
+                color: var(--warning);
+            }
+            .toast.danger .toast-icon {
+                background: var(--danger-subtle);
+                color: var(--danger);
+            }
+            .toast.info .toast-icon {
+                background: var(--primary-subtle);
+                color: var(--primary);
+            }
+
+            .toast-body {
+                flex: 1;
+            }
+            .toast-title {
+                font-size: 13px;
+                font-weight: 600;
+                color: var(--text);
+            }
+            .toast-msg {
+                font-size: 12px;
+                color: var(--text-3);
+                margin-top: 1px;
+            }
+
+            .toast-close {
+                width: 24px;
+                height: 24px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 6px;
+                color: var(--text-4);
+                border: none;
+                background: none;
+                transition: var(--transition);
+            }
+            .toast-close:hover {
+                background: var(--bg-3);
+                color: var(--text);
+            }
+            .toast-close svg {
+                width: 13px;
+                height: 13px;
+            }
+
+            /* ===== QUICK ACTIONS ===== */
+            .quick-actions {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 12px;
+                margin-bottom: 24px;
+            }
+
+            .quick-btn {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-xl);
+                padding: 16px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 8px;
+                cursor: pointer;
+                transition: var(--transition);
+                text-align: center;
+            }
+            .quick-btn:hover {
+                border-color: var(--primary-light);
+                box-shadow: var(--shadow-lg);
+                transform: translateY(-2px);
+            }
+            .quick-btn-icon {
+                width: 44px;
+                height: 44px;
+                border-radius: 14px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .quick-btn-icon svg {
+                width: 20px;
+                height: 20px;
+            }
+            .quick-btn span {
+                font-size: 12px;
+                font-weight: 600;
+                color: var(--text-2);
+            }
+
+            /* ===== MINI CALENDAR / SCHEDULE ===== */
+            .schedule-list {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            .schedule-item {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 10px 12px;
+                background: var(--bg-3);
+                border-radius: var(--radius);
+                border-left: 3px solid transparent;
+                transition: var(--transition);
+                cursor: pointer;
+            }
+            .schedule-item:hover {
+                background: var(--border-light);
+            }
+            .schedule-item.blue {
+                border-color: var(--primary);
+            }
+            .schedule-item.green {
+                border-color: var(--success);
+            }
+            .schedule-item.amber {
+                border-color: var(--warning);
+            }
+            .schedule-item.purple {
+                border-color: #8b5cf6;
+            }
+            .schedule-item.red {
+                border-color: var(--danger);
+            }
+
+            .sched-time {
+                font-size: 11px;
+                font-weight: 600;
+                color: var(--text-3);
+                width: 50px;
+                flex-shrink: 0;
+            }
+            .sched-info .title {
+                font-size: 13px;
+                font-weight: 600;
+                color: var(--text);
+            }
+            .sched-info .sub {
+                font-size: 11px;
+                color: var(--text-3);
+                margin-top: 1px;
+            }
+
+            /* ===== COMPONENT SHOWCASE ===== */
+            .component-demo {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-xl);
+                padding: 24px;
+                margin-bottom: 24px;
+            }
+            .demo-section {
+                margin-bottom: 24px;
+            }
+            .demo-section:last-child {
+                margin-bottom: 0;
+            }
+            .demo-title {
+                font-size: 12px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.8px;
+                color: var(--text-3);
+                margin-bottom: 12px;
+            }
+            .demo-row {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                flex-wrap: wrap;
+            }
+
+            /* ===== SCROLLBAR ===== */
+            ::-webkit-scrollbar {
+                width: 6px;
+                height: 6px;
+            }
+            ::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            ::-webkit-scrollbar-thumb {
+                background: var(--border);
+                border-radius: 6px;
+            }
+            ::-webkit-scrollbar-thumb:hover {
+                background: var(--text-4);
+            }
+
+            /* ===== RESPONSIVE ===== */
+            @media (max-width: 1200px) {
+                .stats-grid {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+                .chart-row {
+                    grid-template-columns: 1fr;
+                }
+                .finance-row {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+                .quick-actions {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+            }
+
+            @media (max-width: 900px) {
+                .bottom-row {
+                    grid-template-columns: 1fr;
+                }
+                .content {
+                    padding: 20px 16px;
+                }
+            }
+
+            @media (max-width: 600px) {
+                .sidebar {
+                    transform: translateX(-100%);
+                }
+                .sidebar.mobile-open {
+                    transform: translateX(0);
+                    width: var(--sidebar-w) !important;
+                }
+                .main {
+                    margin-left: 0 !important;
+                }
+                .stats-grid {
+                    grid-template-columns: 1fr 1fr;
+                }
+                .finance-row {
+                    grid-template-columns: 1fr;
+                }
+                .navbar {
+                    padding: 0 16px;
+                }
+                .user-btn-name {
+                    display: none;
+                }
+                .search-bar {
+                    max-width: 180px;
+                }
+            }
+
+            /* ===== ANIMATIONS ===== */
+            @keyframes fadeUp {
+                from {
+                    opacity: 0;
+                    transform: translateY(16px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+
+            .fade-up {
+                animation: fadeUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+            }
+
+            .fade-up-1 {
+                animation-delay: 0.05s;
+            }
+            .fade-up-2 {
+                animation-delay: 0.1s;
+            }
+            .fade-up-3 {
+                animation-delay: 0.15s;
+            }
+            .fade-up-4 {
+                animation-delay: 0.2s;
+            }
+            .fade-up-5 {
+                animation-delay: 0.25s;
+            }
+            .fade-up-6 {
+                animation-delay: 0.3s;
+            }
+
+            /* mobile overlay */
+            .sidebar-overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 99;
+                display: none;
+                backdrop-filter: blur(2px);
+            }
+            @media (max-width: 600px) {
+                .sidebar-overlay.visible {
+                    display: block;
+                }
+            }
+
+            /* ===== EMPTY LINE SPACER ===== */
+            .section-title {
+                font-size: 16px;
+                font-weight: 700;
+                color: var(--text);
+                margin-bottom: 14px;
+                letter-spacing: -0.2px;
+            }
+        </style>
+    </head>
+    <body>
+        <!-- Sidebar overlay for mobile -->
+        <div
+            class="sidebar-overlay"
+            id="sidebarOverlay"
+            onclick="closeMobileSidebar()"
+        ></div>
+
+        <!-- ===== SIDEBAR ===== -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-logo">
+                <div class="logo-icon">
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    >
+                        <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
+                        <path d="M6 12v5c3 3 9 3 12 0v-5" />
+                    </svg>
+                </div>
+                <div class="logo-text">
+                    <h2>Manhood Panel</h2>
+                    <span>Pesantren Management</span>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-label">Utama</div>
+                    <div
+                        class="nav-item active"
+                        onclick="setActivePage(this, 'Dashboard')"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <rect x="3" y="3" width="7" height="7" />
+                            <rect x="14" y="3" width="7" height="7" />
+                            <rect x="14" y="14" width="7" height="7" />
+                            <rect x="3" y="14" width="7" height="7" />
+                        </svg>
+                        <span>Dashboard</span>
+                    </div>
+                    <div
+                        class="nav-item"
+                        onclick="setActivePage(this, 'Data Santri')"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path
+                                d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                            />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                        </svg>
+                        <span>Data Santri</span>
+                        <span class="nav-badge">248</span>
+                    </div>
+                    <div
+                        class="nav-item"
+                        onclick="setActivePage(this, 'Data Ustadz')"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <circle cx="12" cy="8" r="5" />
+                            <path d="M20 21a8 8 0 1 0-16 0" />
+                        </svg>
+                        <span>Data Ustadz</span>
+                    </div>
+                    <div
+                        class="nav-item"
+                        onclick="setActivePage(this, 'Kelas & Halaqah')"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                            <path
+                                d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
+                            />
+                        </svg>
+                        <span>Kelas & Halaqah</span>
+                    </div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-label">Akademik</div>
+                    <div
+                        class="nav-item"
+                        onclick="setActivePage(this, 'Jadwal Pelajaran')"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <rect
+                                x="3"
+                                y="4"
+                                width="18"
+                                height="18"
+                                rx="2"
+                                ry="2"
+                            />
+                            <line x1="16" y1="2" x2="16" y2="6" />
+                            <line x1="8" y1="2" x2="8" y2="6" />
+                            <line x1="3" y1="10" x2="21" y2="10" />
+                        </svg>
+                        <span>Jadwal Pelajaran</span>
+                    </div>
+                    <div
+                        class="nav-item"
+                        onclick="setActivePage(this, 'Absensi')"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <polyline points="9 11 12 14 22 4" />
+                            <path
+                                d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"
+                            />
+                        </svg>
+                        <span>Absensi</span>
+                        <span class="nav-badge">3</span>
+                    </div>
+                    <div
+                        class="nav-item"
+                        onclick="setActivePage(this, 'Nilai & Raport')"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <line x1="18" y1="20" x2="18" y2="10" />
+                            <line x1="12" y1="20" x2="12" y2="4" />
+                            <line x1="6" y1="20" x2="6" y2="14" />
+                        </svg>
+                        <span>Nilai & Raport</span>
+                    </div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-label">Administrasi</div>
+                    <div
+                        class="nav-item"
+                        onclick="setActivePage(this, 'Keuangan')"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <line x1="12" y1="1" x2="12" y2="23" />
+                            <path
+                                d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+                            />
+                        </svg>
+                        <span>Keuangan</span>
+                    </div>
+                    <div
+                        class="nav-item"
+                        onclick="setActivePage(this, 'Asrama')"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path
+                                d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+                            />
+                            <polyline points="9 22 9 12 15 12 15 22" />
+                        </svg>
+                        <span>Asrama</span>
+                    </div>
+                    <div
+                        class="nav-item"
+                        onclick="setActivePage(this, 'Pengumuman')"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path
+                                d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+                            />
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                        </svg>
+                        <span>Pengumuman</span>
+                    </div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-label">Sistem</div>
+                    <div
+                        class="nav-item"
+                        onclick="setActivePage(this, 'Pengaturan')"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <circle cx="12" cy="12" r="3" />
+                            <path
+                                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+                            />
+                        </svg>
+                        <span>Pengaturan</span>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-card">
+                    <div class="user-avatar">KH</div>
+                    <div class="user-info">
+                        <div class="name">KH. Ahmad Fauzi</div>
+                        <div class="role">Administrator</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ===== MAIN ===== -->
+        <div class="main" id="main">
+            <!-- NAVBAR -->
+            <header class="navbar">
+                <button
+                    class="navbar-toggle"
+                    onclick="toggleSidebar()"
+                    aria-label="Toggle sidebar"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    >
+                        <line x1="3" y1="12" x2="21" y2="12" />
+                        <line x1="3" y1="6" x2="21" y2="6" />
+                        <line x1="3" y1="18" x2="21" y2="18" />
+                    </svg>
+                </button>
+
+                <div class="search-bar">
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    >
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input
+                        type="text"
+                        placeholder="Cari santri, ustadz, kelas..."
+                    />
+                </div>
+
+                <div class="navbar-actions">
+                    <!-- Theme Toggle -->
+                    <div
+                        class="theme-toggle"
+                        onclick="toggleTheme()"
+                        title="Toggle theme"
+                    >
+                        <div class="theme-toggle-thumb" id="themeThumb">
+                            <svg
+                                id="themeIcon"
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2.5"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <circle cx="12" cy="12" r="5" />
+                                <line x1="12" y1="1" x2="12" y2="3" />
+                                <line x1="12" y1="21" x2="12" y2="23" />
+                                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                                <line
+                                    x1="18.36"
+                                    y1="18.36"
+                                    x2="19.78"
+                                    y2="19.78"
+                                />
+                                <line x1="1" y1="12" x2="3" y2="12" />
+                                <line x1="21" y1="12" x2="23" y2="12" />
+                                <line
+                                    x1="4.22"
+                                    y1="19.78"
+                                    x2="5.64"
+                                    y2="18.36"
+                                />
+                                <line
+                                    x1="18.36"
+                                    y1="5.64"
+                                    x2="19.78"
+                                    y2="4.22"
+                                />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- Notifications -->
+                    <div class="icon-btn" onclick="toggleNotif()" id="notifBtn">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path
+                                d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+                            />
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                        </svg>
+                        <div class="notif-dot"></div>
+                    </div>
+
+                    <!-- User -->
+                    <div class="user-dropdown-wrap">
+                        <div class="user-btn" onclick="toggleDropdown()">
+                            <div class="user-btn-avatar">KH</div>
+                            <span class="user-btn-name">KH. Fauzi</span>
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                        </div>
+                        <div class="dropdown-menu" id="dropdownMenu">
+                            <div class="dropdown-item">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    width="15"
+                                    height="15"
+                                >
+                                    <circle cx="12" cy="8" r="5" />
+                                    <path d="M20 21a8 8 0 1 0-16 0" />
+                                </svg>
+                                Profil Saya
+                            </div>
+                            <div class="dropdown-item">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    width="15"
+                                    height="15"
+                                >
+                                    <circle cx="12" cy="12" r="3" />
+                                    <path
+                                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+                                    />
+                                </svg>
+                                Pengaturan
+                            </div>
+                            <div class="dropdown-item">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    width="15"
+                                    height="15"
+                                >
+                                    <circle cx="12" cy="12" r="10" />
+                                    <path
+                                        d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"
+                                    />
+                                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                                </svg>
+                                Bantuan
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <div
+                                class="dropdown-item danger"
+                                onclick="
+                                    showToast(
+                                        'warning',
+                                        'Logout',
+                                        'Sesi Anda telah berakhir.',
+                                    )
+                                "
+                            >
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    width="15"
+                                    height="15"
+                                >
+                                    <path
+                                        d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
+                                    />
+                                    <polyline points="16 17 21 12 16 7" />
+                                    <line x1="21" y1="12" x2="9" y2="12" />
+                                </svg>
+                                Keluar
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- NOTIFICATION PANEL -->
+            <div class="notif-panel" id="notifPanel">
+                <div class="notif-header">
+                    <h4>Notifikasi <span class="notif-count">4</span></h4>
+                    <span class="notif-clear" onclick="clearNotifs()"
+                        >Bersihkan semua</span
+                    >
+                </div>
+                <div class="notif-list" id="notifList">
+                    <div class="notif-item unread">
+                        <div
+                            class="notif-icon"
+                            style="
+                                background: var(--primary-subtle);
+                                color: var(--primary);
+                            "
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <path
+                                    d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                                />
+                                <circle cx="9" cy="7" r="4" />
+                            </svg>
+                        </div>
+                        <div class="notif-content">
+                            <div class="notif-title">Santri Baru Terdaftar</div>
+                            <div class="notif-msg">
+                                Muhammad Hafidz telah menyelesaikan pendaftaran
+                                santri baru.
+                            </div>
+                            <div class="notif-time">5 menit lalu</div>
+                        </div>
+                    </div>
+                    <div class="notif-item unread">
+                        <div
+                            class="notif-icon"
+                            style="
+                                background: var(--warning-subtle);
+                                color: var(--warning);
+                            "
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="8" x2="12" y2="12" />
+                                <line x1="12" y1="16" x2="12.01" y2="16" />
+                            </svg>
+                        </div>
+                        <div class="notif-content">
+                            <div class="notif-title">SPP Belum Dibayar</div>
+                            <div class="notif-msg">
+                                12 santri belum membayar SPP bulan Januari 2025.
+                            </div>
+                            <div class="notif-time">1 jam lalu</div>
+                        </div>
+                    </div>
+                    <div class="notif-item unread">
+                        <div
+                            class="notif-icon"
+                            style="
+                                background: var(--success-subtle);
+                                color: var(--success);
+                            "
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                        </div>
+                        <div class="notif-content">
+                            <div class="notif-title">
+                                Ujian Semester Selesai
+                            </div>
+                            <div class="notif-msg">
+                                Nilai ujian kelas Tahfidz Wustho telah diinput
+                                oleh Ust. Arifin.
+                            </div>
+                            <div class="notif-time">3 jam lalu</div>
+                        </div>
+                    </div>
+                    <div class="notif-item unread">
+                        <div
+                            class="notif-icon"
+                            style="
+                                background: rgba(139, 92, 246, 0.1);
+                                color: #8b5cf6;
+                            "
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <rect
+                                    x="3"
+                                    y="4"
+                                    width="18"
+                                    height="18"
+                                    rx="2"
+                                    ry="2"
+                                />
+                                <line x1="16" y1="2" x2="16" y2="6" />
+                                <line x1="8" y1="2" x2="8" y2="6" />
+                                <line x1="3" y1="10" x2="21" y2="10" />
+                            </svg>
+                        </div>
+                        <div class="notif-content">
+                            <div class="notif-title">Jadwal Diperbarui</div>
+                            <div class="notif-msg">
+                                Jadwal halaqah minggu ini telah diperbarui oleh
+                                pengurus pesantren.
+                            </div>
+                            <div class="notif-time">Kemarin</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CONTENT -->
+            <main class="content">
+                <!-- Page Header -->
+                <div class="page-header fade-up">
+                    <div class="breadcrumb">
+                        <span>Manhood Panel</span>
+                        <span class="sep">›</span>
+                        <span id="currentPage">Dashboard</span>
+                    </div>
+                    <h1 id="pageTitle">Dashboard Overview</h1>
+                    <p>
+                        Selamat datang kembali, KH. Ahmad Fauzi. Berikut
+                        ringkasan aktivitas pesantren hari ini.
+                    </p>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="quick-actions fade-up fade-up-1">
+                    <div class="quick-btn" onclick="openModal()">
+                        <div
+                            class="quick-btn-icon"
+                            style="
+                                background: var(--primary-subtle);
+                                color: var(--primary);
+                            "
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <path
+                                    d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                                />
+                                <circle cx="8.5" cy="7" r="4" />
+                                <line x1="20" y1="8" x2="20" y2="14" />
+                                <line x1="23" y1="11" x2="17" y2="11" />
+                            </svg>
+                        </div>
+                        <span>Tambah Santri</span>
+                    </div>
+                    <div
+                        class="quick-btn"
+                        onclick="
+                            showToast(
+                                'success',
+                                'Laporan',
+                                'Laporan berhasil diunduh!',
+                            )
+                        "
+                    >
+                        <div
+                            class="quick-btn-icon"
+                            style="
+                                background: var(--success-subtle);
+                                color: var(--success);
+                            "
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <path
+                                    d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                                />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                        </div>
+                        <span>Unduh Laporan</span>
+                    </div>
+                    <div
+                        class="quick-btn"
+                        onclick="
+                            showToast(
+                                'info',
+                                'Rekap Absensi',
+                                'Rekap absensi sedang diproses...',
+                            )
+                        "
+                    >
+                        <div
+                            class="quick-btn-icon"
+                            style="
+                                background: var(--warning-subtle);
+                                color: var(--warning);
+                            "
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <polyline points="9 11 12 14 22 4" />
+                                <path
+                                    d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"
+                                />
+                            </svg>
+                        </div>
+                        <span>Rekap Absensi</span>
+                    </div>
+                    <div
+                        class="quick-btn"
+                        onclick="
+                            showToast(
+                                'info',
+                                'Pengumuman',
+                                'Fitur pengumuman dibuka.',
+                            )
+                        "
+                    >
+                        <div
+                            class="quick-btn-icon"
+                            style="
+                                background: rgba(139, 92, 246, 0.1);
+                                color: #8b5cf6;
+                            "
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <path
+                                    d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+                                />
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                            </svg>
+                        </div>
+                        <span>Pengumuman</span>
+                    </div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="stats-grid fade-up fade-up-2">
+                    <div class="stat-card blue">
+                        <div class="stat-card-header">
+                            <div class="stat-icon blue">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <path
+                                        d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                                    />
+                                    <circle cx="9" cy="7" r="4" />
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                </svg>
+                            </div>
+                            <div class="stat-badge up">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.5"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <polyline points="18 15 12 9 6 15" />
+                                </svg>
+                                +12%
+                            </div>
+                        </div>
+                        <div class="stat-value">248</div>
+                        <div class="stat-label">Total Santri</div>
+                        <div class="stat-sub">↑ 27 santri dari bulan lalu</div>
+                    </div>
+
+                    <div class="stat-card green">
+                        <div class="stat-card-header">
+                            <div class="stat-icon green">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <circle cx="12" cy="8" r="5" />
+                                    <path d="M20 21a8 8 0 1 0-16 0" />
+                                </svg>
+                            </div>
+                            <div class="stat-badge up">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.5"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <polyline points="18 15 12 9 6 15" />
+                                </svg>
+                                +3%
+                            </div>
+                        </div>
+                        <div class="stat-value">34</div>
+                        <div class="stat-label">Total Ustadz</div>
+                        <div class="stat-sub">↑ 1 ustadz baru bulan ini</div>
+                    </div>
+
+                    <div class="stat-card amber">
+                        <div class="stat-card-header">
+                            <div class="stat-icon amber">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                                    <path
+                                        d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
+                                    />
+                                </svg>
+                            </div>
+                            <div class="stat-badge up">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.5"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <polyline points="18 15 12 9 6 15" />
+                                </svg>
+                                +2
+                            </div>
+                        </div>
+                        <div class="stat-value">18</div>
+                        <div class="stat-label">Kelas Aktif</div>
+                        <div class="stat-sub">Tahfidz, Kitab, Bahasa</div>
+                    </div>
+
+                    <div class="stat-card purple">
+                        <div class="stat-card-header">
+                            <div class="stat-icon purple">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <line x1="12" y1="1" x2="12" y2="23" />
+                                    <path
+                                        d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+                                    />
+                                </svg>
+                            </div>
+                            <div class="stat-badge up">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.5"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <polyline points="18 15 12 9 6 15" />
+                                </svg>
+                                +8%
+                            </div>
+                        </div>
+                        <div class="stat-value">Rp 48,2jt</div>
+                        <div class="stat-label">Pendapatan Bulan Ini</div>
+                        <div class="stat-sub">
+                            Target: Rp 55jt · 88% tercapai
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="chart-row fade-up fade-up-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">
+                                    Tren Santri & Pendapatan
+                                </div>
+                                <div class="card-sub">
+                                    Statistik 6 bulan terakhir
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 6px">
+                                <button
+                                    class="btn btn-secondary"
+                                    style="
+                                        height: 30px;
+                                        padding: 0 12px;
+                                        font-size: 12px;
+                                    "
+                                >
+                                    Bulanan
+                                </button>
+                                <button
+                                    class="btn btn-secondary"
+                                    style="
+                                        height: 30px;
+                                        padding: 0 12px;
+                                        font-size: 12px;
+                                    "
+                                >
+                                    Tahunan
+                                </button>
+                            </div>
+                        </div>
+                        <div class="chart-wrap">
+                            <canvas id="mainChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Distribusi Kelas</div>
+                                <div class="card-sub">
+                                    Sebaran santri per program
+                                </div>
+                            </div>
+                        </div>
+                        <div class="donut-wrap">
+                            <div class="donut-chart-wrap">
+                                <canvas id="donutChart"></canvas>
+                                <div class="donut-center">
+                                    <div class="num">248</div>
+                                    <div class="lbl">Santri</div>
+                                </div>
+                            </div>
+                            <div class="donut-legend">
+                                <div class="legend-item">
+                                    <div class="legend-name">
+                                        <div
+                                            class="legend-dot"
+                                            style="background: #2563eb"
+                                        ></div>
+                                        Tahfidz Ulya
+                                    </div>
+                                    <div class="legend-val">87</div>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-name">
+                                        <div
+                                            class="legend-dot"
+                                            style="background: #10b981"
+                                        ></div>
+                                        Tahfidz Wustho
+                                    </div>
+                                    <div class="legend-val">72</div>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-name">
+                                        <div
+                                            class="legend-dot"
+                                            style="background: #f59e0b"
+                                        ></div>
+                                        Kitab Kuning
+                                    </div>
+                                    <div class="legend-val">54</div>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-name">
+                                        <div
+                                            class="legend-dot"
+                                            style="background: #8b5cf6"
+                                        ></div>
+                                        Bahasa Arab
+                                    </div>
+                                    <div class="legend-val">35</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Finance Row -->
+                <div class="section-title fade-up fade-up-4">
+                    Ringkasan Keuangan
+                </div>
+                <div class="finance-row fade-up fade-up-4">
+                    <div class="finance-card">
+                        <div class="finance-label">Total Pemasukan</div>
+                        <div class="finance-val">Rp 48.240.000</div>
+                        <div
+                            class="finance-trend"
+                            style="color: var(--success)"
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="12"
+                                height="12"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2.5"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <polyline points="18 15 12 9 6 15" />
+                            </svg>
+                            +8.2% dari bulan lalu
+                        </div>
+                        <div class="progress-bar">
+                            <div
+                                class="progress-fill"
+                                style="width: 88%; background: var(--success)"
+                            ></div>
+                        </div>
+                        <div
+                            style="
+                                font-size: 11px;
+                                color: var(--text-4);
+                                margin-top: 6px;
+                            "
+                        >
+                            88% dari target Rp 55jt
+                        </div>
+                    </div>
+                    <div class="finance-card">
+                        <div class="finance-label">Total Pengeluaran</div>
+                        <div class="finance-val">Rp 31.700.000</div>
+                        <div class="finance-trend" style="color: var(--danger)">
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="12"
+                                height="12"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2.5"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                            +3.1% dari bulan lalu
+                        </div>
+                        <div class="progress-bar">
+                            <div
+                                class="progress-fill"
+                                style="width: 65%; background: var(--danger)"
+                            ></div>
+                        </div>
+                        <div
+                            style="
+                                font-size: 11px;
+                                color: var(--text-4);
+                                margin-top: 6px;
+                            "
+                        >
+                            65% dari anggaran Rp 48jt
+                        </div>
+                    </div>
+                    <div class="finance-card">
+                        <div class="finance-label">Saldo Bersih</div>
+                        <div class="finance-val" style="color: var(--success)">
+                            Rp 16.540.000
+                        </div>
+                        <div
+                            class="finance-trend"
+                            style="color: var(--success)"
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="12"
+                                height="12"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2.5"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <polyline points="18 15 12 9 6 15" />
+                            </svg>
+                            +15.4% dari bulan lalu
+                        </div>
+                        <div class="progress-bar">
+                            <div
+                                class="progress-fill"
+                                style="
+                                    width: 72%;
+                                    background: linear-gradient(
+                                        90deg,
+                                        var(--primary),
+                                        var(--accent)
+                                    );
+                                "
+                            ></div>
+                        </div>
+                        <div
+                            style="
+                                font-size: 11px;
+                                color: var(--text-4);
+                                margin-top: 6px;
+                            "
+                        >
+                            Surplus 34% dari pemasukan
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table + Activity -->
+                <div class="bottom-row fade-up fade-up-5">
+                    <!-- Santri Table -->
+                    <div class="table-card">
+                        <div class="table-toolbar">
+                            <div class="card-title" style="margin-right: 8px">
+                                Daftar Santri
+                            </div>
+                            <div class="table-search">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <circle cx="11" cy="11" r="8" />
+                                    <line
+                                        x1="21"
+                                        y1="21"
+                                        x2="16.65"
+                                        y2="16.65"
+                                    />
+                                </svg>
+                                <input
+                                    type="text"
+                                    id="tableSearch"
+                                    placeholder="Cari santri..."
+                                    oninput="filterTable()"
+                                />
+                            </div>
+                            <div
+                                style="
+                                    display: flex;
+                                    gap: 6px;
+                                    margin-left: auto;
+                                "
+                            >
+                                <button
+                                    class="btn btn-secondary"
+                                    style="
+                                        height: 32px;
+                                        padding: 0 12px;
+                                        font-size: 12px;
+                                    "
+                                >
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        width="13"
+                                        height="13"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    >
+                                        <line x1="8" y1="6" x2="21" y2="6" />
+                                        <line x1="8" y1="12" x2="21" y2="12" />
+                                        <line x1="8" y1="18" x2="21" y2="18" />
+                                        <line x1="3" y1="6" x2="3.01" y2="6" />
+                                        <line
+                                            x1="3"
+                                            y1="12"
+                                            x2="3.01"
+                                            y2="12"
+                                        />
+                                        <line
+                                            x1="3"
+                                            y1="18"
+                                            x2="3.01"
+                                            y2="18"
+                                        />
+                                    </svg>
+                                    Filter
+                                </button>
+                                <button
+                                    class="btn btn-primary"
+                                    style="
+                                        height: 32px;
+                                        padding: 0 12px;
+                                        font-size: 12px;
+                                    "
+                                    onclick="openModal()"
+                                >
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        width="13"
+                                        height="13"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    >
+                                        <line x1="12" y1="5" x2="12" y2="19" />
+                                        <line x1="5" y1="12" x2="19" y2="12" />
+                                    </svg>
+                                    Tambah
+                                </button>
+                            </div>
+                        </div>
+                        <div style="overflow-x: auto">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Santri</th>
+                                        <th>NIS</th>
+                                        <th>Kelas</th>
+                                        <th>Kamar</th>
+                                        <th>Status SPP</th>
+                                        <th>Masuk</th>
+                                        <th>Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tableBody">
+                                    <!-- JS generated -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="pagination">
+                            <div class="pagination-info">
+                                Menampilkan <b>1-8</b> dari <b>248</b> santri
+                            </div>
+                            <div class="pagination-pages">
+                                <div class="page-btn">‹</div>
+                                <div class="page-btn active">1</div>
+                                <div
+                                    class="page-btn"
+                                    onclick="
+                                        this.parentElement
+                                            .querySelectorAll('.page-btn')
+                                            .forEach((b) =>
+                                                b.classList.remove('active'),
+                                            );
+                                        this.classList.add('active');
+                                    "
+                                >
+                                    2
+                                </div>
+                                <div
+                                    class="page-btn"
+                                    onclick="
+                                        this.parentElement
+                                            .querySelectorAll('.page-btn')
+                                            .forEach((b) =>
+                                                b.classList.remove('active'),
+                                            );
+                                        this.classList.add('active');
+                                    "
+                                >
+                                    3
+                                </div>
+                                <div class="page-btn">…</div>
+                                <div
+                                    class="page-btn"
+                                    onclick="
+                                        this.parentElement
+                                            .querySelectorAll('.page-btn')
+                                            .forEach((b) =>
+                                                b.classList.remove('active'),
+                                            );
+                                        this.classList.add('active');
+                                    "
+                                >
+                                    31
+                                </div>
+                                <div class="page-btn">›</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Activity -->
+                    <div class="card" style="height: fit-content">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Aktivitas Terkini</div>
+                                <div class="card-sub">
+                                    Kegiatan 24 jam terakhir
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 16px">
+                            <div
+                                class="section-title"
+                                style="font-size: 13px; margin-bottom: 10px"
+                            >
+                                Jadwal Hari Ini
+                            </div>
+                            <div class="schedule-list">
+                                <div class="schedule-item blue">
+                                    <div class="sched-time">04:00</div>
+                                    <div class="sched-info">
+                                        <div class="title">
+                                            Sholat Subuh Berjamaah
+                                        </div>
+                                        <div class="sub">
+                                            Masjid Utama · Seluruh Santri
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="schedule-item green">
+                                    <div class="sched-time">08:00</div>
+                                    <div class="sched-info">
+                                        <div class="title">Setoran Hafalan</div>
+                                        <div class="sub">
+                                            Aula A · Kelas Tahfidz Ulya
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="schedule-item amber">
+                                    <div class="sched-time">10:00</div>
+                                    <div class="sched-info">
+                                        <div class="title">
+                                            Kajian Kitab Fiqih
+                                        </div>
+                                        <div class="sub">
+                                            Kelas B3 · Ust. Arifin
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="schedule-item purple">
+                                    <div class="sched-time">14:00</div>
+                                    <div class="sched-info">
+                                        <div class="title">
+                                            Muhadharah Bahasa Arab
+                                        </div>
+                                        <div class="sub">
+                                            Aula B · Kelas Bahasa
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="schedule-item red">
+                                    <div class="sched-time">19:00</div>
+                                    <div class="sched-info">
+                                        <div class="title">Halaqah Malam</div>
+                                        <div class="sub">
+                                            Masjid · Semua Halaqah
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div
+                                class="section-title"
+                                style="font-size: 13px; margin-bottom: 8px"
+                            >
+                                Log Aktivitas
+                            </div>
+                            <div class="activity-list">
+                                <div class="activity-item">
+                                    <div class="activity-dot-wrap">
+                                        <div
+                                            class="activity-dot"
+                                            style="background: var(--primary)"
+                                        ></div>
+                                        <div class="activity-line"></div>
+                                    </div>
+                                    <div class="activity-content">
+                                        <div class="activity-title">
+                                            Ahmad Farid menyelesaikan setoran
+                                            juz 30
+                                        </div>
+                                        <div class="activity-time">
+                                            10 menit lalu
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="activity-item">
+                                    <div class="activity-dot-wrap">
+                                        <div
+                                            class="activity-dot"
+                                            style="background: var(--success)"
+                                        ></div>
+                                        <div class="activity-line"></div>
+                                    </div>
+                                    <div class="activity-content">
+                                        <div class="activity-title">
+                                            SPP Maret dibayar oleh 14 santri
+                                        </div>
+                                        <div class="activity-time">
+                                            1 jam lalu
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="activity-item">
+                                    <div class="activity-dot-wrap">
+                                        <div
+                                            class="activity-dot"
+                                            style="background: var(--warning)"
+                                        ></div>
+                                        <div class="activity-line"></div>
+                                    </div>
+                                    <div class="activity-content">
+                                        <div class="activity-title">
+                                            Izin pulang: Zain Abdullah (3 hari)
+                                        </div>
+                                        <div class="activity-time">
+                                            2 jam lalu
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="activity-item">
+                                    <div class="activity-dot-wrap">
+                                        <div
+                                            class="activity-dot"
+                                            style="background: #8b5cf6"
+                                        ></div>
+                                        <div class="activity-line"></div>
+                                    </div>
+                                    <div class="activity-content">
+                                        <div class="activity-title">
+                                            Jadwal ujian semester diperbarui
+                                        </div>
+                                        <div class="activity-time">
+                                            4 jam lalu
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="activity-item">
+                                    <div class="activity-dot-wrap">
+                                        <div
+                                            class="activity-dot"
+                                            style="background: var(--danger)"
+                                        ></div>
+                                    </div>
+                                    <div class="activity-content">
+                                        <div class="activity-title">
+                                            Santri baru: Muhammad Hafidz
+                                            terdaftar
+                                        </div>
+                                        <div class="activity-time">
+                                            6 jam lalu
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Component Demo -->
+                <div class="component-demo fade-up fade-up-6">
+                    <div class="card-header" style="margin-bottom: 20px">
+                        <div>
+                            <div class="card-title">Komponen UI</div>
+                            <div class="card-sub">
+                                Showcase komponen yang tersedia di sistem
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="demo-section">
+                        <div class="demo-title">Tombol</div>
+                        <div class="demo-row">
+                            <button
+                                class="btn btn-primary"
+                                onclick="
+                                    showToast(
+                                        'success',
+                                        'Berhasil!',
+                                        'Aksi berhasil dijalankan.',
+                                    )
+                                "
+                            >
+                                Primary
+                            </button>
+                            <button class="btn btn-secondary">Secondary</button>
+                            <button
+                                class="btn btn-danger"
+                                onclick="
+                                    showToast(
+                                        'danger',
+                                        'Peringatan',
+                                        'Aksi ini tidak dapat dibatalkan.',
+                                    )
+                                "
+                            >
+                                Danger
+                            </button>
+                            <button
+                                class="btn btn-primary"
+                                onclick="openModal()"
+                            >
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <line x1="12" y1="5" x2="12" y2="19" />
+                                    <line x1="5" y1="12" x2="19" y2="12" />
+                                </svg>
+                                Buka Modal
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="demo-section">
+                        <div class="demo-title">Badge Status</div>
+                        <div class="demo-row">
+                            <span class="badge badge-success">● Aktif</span>
+                            <span class="badge badge-warning">● Cuti</span>
+                            <span class="badge badge-danger"
+                                >● Tidak Aktif</span
+                            >
+                            <span class="badge badge-blue">● Tahfidz</span>
+                            <span class="badge badge-purple">● Wustho</span>
+                        </div>
+                    </div>
+
+                    <div class="demo-section">
+                        <div class="demo-title">Toast Notifikasi</div>
+                        <div class="demo-row">
+                            <button
+                                class="btn btn-secondary"
+                                onclick="
+                                    showToast(
+                                        'success',
+                                        'Berhasil!',
+                                        'Data santri berhasil disimpan.',
+                                    )
+                                "
+                            >
+                                ✓ Success
+                            </button>
+                            <button
+                                class="btn btn-secondary"
+                                onclick="
+                                    showToast(
+                                        'warning',
+                                        'Peringatan',
+                                        'Ada 3 santri yang belum mengisi data.',
+                                    )
+                                "
+                            >
+                                ⚠ Warning
+                            </button>
+                            <button
+                                class="btn btn-secondary"
+                                onclick="
+                                    showToast(
+                                        'danger',
+                                        'Error',
+                                        'Gagal menghubungi server. Coba lagi.',
+                                    )
+                                "
+                            >
+                                ✕ Error
+                            </button>
+                            <button
+                                class="btn btn-secondary"
+                                onclick="
+                                    showToast(
+                                        'info',
+                                        'Info',
+                                        'Sistem akan maintenance pukul 22.00.',
+                                    )
+                                "
+                            >
+                                ℹ Info
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- ===== MODAL ===== -->
+        <div
+            class="modal-overlay"
+            id="modalOverlay"
+            onclick="handleOverlayClick(event)"
+        >
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>Tambah Santri Baru</h3>
+                    <div class="modal-close" onclick="closeModal()">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="modal-body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Nama Lengkap</label>
+                            <input
+                                type="text"
+                                class="form-input"
+                                placeholder="Muhammad Hafidz..."
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">NIS</label>
+                            <input
+                                type="text"
+                                class="form-input"
+                                placeholder="Auto: #249"
+                            />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Tanggal Lahir</label>
+                            <input type="date" class="form-input" />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Jenis Kelamin</label>
+                            <select class="form-input">
+                                <option>Laki-laki</option>
+                                <option>Perempuan</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Program</label>
+                            <select class="form-input">
+                                <option>Tahfidz Ulya</option>
+                                <option>Tahfidz Wustho</option>
+                                <option>Kitab Kuning</option>
+                                <option>Bahasa Arab</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Kamar Asrama</label>
+                            <input
+                                type="text"
+                                class="form-input"
+                                placeholder="Kamar A-12"
+                            />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Nama Wali / Orang Tua</label>
+                        <input
+                            type="text"
+                            class="form-input"
+                            placeholder="Nama orang tua..."
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">No. Telepon Wali</label>
+                        <input
+                            type="tel"
+                            class="form-input"
+                            placeholder="08xx-xxxx-xxxx"
+                        />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeModal()">
+                        Batal
+                    </button>
+                    <button class="btn btn-primary" onclick="saveModal()">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                        Simpan Santri
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== TOAST CONTAINER ===== -->
+        <div class="toast-container" id="toastContainer"></div>
+
+        <script>
+            /* ===== DATA ===== */
+            const santriData = [
+                {
+                    name: 'Ahmad Farid Al-Hafidz',
+                    nis: '#001',
+                    kelas: 'Tahfidz Ulya',
+                    kamar: 'A-01',
+                    spp: 'Lunas',
+                    masuk: '2022',
+                    color: '#2563EB',
+                },
+                {
+                    name: 'Muhammad Zainul Abidin',
+                    nis: '#002',
+                    kelas: 'Tahfidz Wustho',
+                    kamar: 'B-04',
+                    spp: 'Lunas',
+                    masuk: '2023',
+                    color: '#10B981',
+                },
+                {
+                    name: 'Abdullah Hakim',
+                    nis: '#003',
+                    kelas: 'Kitab Kuning',
+                    kamar: 'C-07',
+                    spp: 'Belum',
+                    masuk: '2022',
+                    color: '#F59E0B',
+                },
+                {
+                    name: 'Yusuf Al-Amin',
+                    nis: '#004',
+                    kelas: 'Bahasa Arab',
+                    kamar: 'D-02',
+                    spp: 'Lunas',
+                    masuk: '2024',
+                    color: '#8B5CF6',
+                },
+                {
+                    name: 'Ibrahim Shalih',
+                    nis: '#005',
+                    kelas: 'Tahfidz Ulya',
+                    kamar: 'A-05',
+                    spp: 'Lunas',
+                    masuk: '2023',
+                    color: '#0EA5E9',
+                },
+                {
+                    name: 'Hasan Basri Nugroho',
+                    nis: '#006',
+                    kelas: 'Kitab Kuning',
+                    kamar: 'C-11',
+                    spp: 'Cicil',
+                    masuk: '2022',
+                    color: '#EF4444',
+                },
+                {
+                    name: 'Salman Al-Farisi',
+                    nis: '#007',
+                    kelas: 'Tahfidz Wustho',
+                    kamar: 'B-09',
+                    spp: 'Lunas',
+                    masuk: '2023',
+                    color: '#2563EB',
+                },
+                {
+                    name: 'Umar Faruq Hidayat',
+                    nis: '#008',
+                    kelas: 'Bahasa Arab',
+                    kamar: 'D-06',
+                    spp: 'Belum',
+                    masuk: '2024',
+                    color: '#10B981',
+                },
+            ];
+
+            /* ===== RENDER TABLE ===== */
+            function renderTable(data) {
+                const tbody = document.getElementById('tableBody');
+                tbody.innerHTML = data
+                    .map((s) => {
+                        const sppClass =
+                            s.spp === 'Lunas'
+                                ? 'badge-success'
+                                : s.spp === 'Cicil'
+                                  ? 'badge-warning'
+                                  : 'badge-danger';
+                        const initials = s.name
+                            .split(' ')
+                            .map((n) => n[0])
+                            .slice(0, 2)
+                            .join('');
+                        return `
+      <tr>
+        <td>
+          <div class="avatar-cell">
+            <div class="table-avatar" style="background:${s.color}">${initials}</div>
+            <div>
+              <div style="font-weight:600;color:var(--text);font-size:13px;">${s.name}</div>
+              <div style="font-size:11px;color:var(--text-4);">${s.nis}</div>
+            </div>
+          </div>
+        </td>
+        <td style="font-family:'Sora',sans-serif;font-size:12px;font-weight:600;">${s.nis}</td>
+        <td><span class="badge badge-blue">${s.kelas}</span></td>
+        <td style="color:var(--text-3)">${s.kamar}</td>
+        <td><span class="badge ${sppClass}">${s.spp}</span></td>
+        <td style="color:var(--text-3)">${s.masuk}</td>
+        <td>
+          <div style="display:flex;gap:4px;">
+            <div class="action-btn" onclick="showToast('info','Detail','Membuka detail santri...')">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </div>
+            <div class="action-btn" onclick="showToast('info','Edit','Membuka form edit...')">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </div>
+            <div class="action-btn" onclick="showToast('danger','Hapus','Data santri dihapus.')">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            </div>
+          </div>
+        </td>
+      </tr>
+    `;
+                    })
+                    .join('');
+            }
+
+            function filterTable() {
+                const q = document
+                    .getElementById('tableSearch')
+                    .value.toLowerCase();
+                const filtered = santriData.filter(
+                    (s) =>
+                        s.name.toLowerCase().includes(q) ||
+                        s.kelas.toLowerCase().includes(q) ||
+                        s.kamar.toLowerCase().includes(q),
+                );
+                renderTable(filtered);
+            }
+
+            /* ===== SIDEBAR ===== */
+            let sidebarCollapsed = false;
+            function toggleSidebar() {
+                if (window.innerWidth <= 600) {
+                    const sidebar = document.getElementById('sidebar');
+                    const overlay = document.getElementById('sidebarOverlay');
+                    sidebar.classList.toggle('mobile-open');
+                    overlay.classList.toggle('visible');
+                } else {
+                    sidebarCollapsed = !sidebarCollapsed;
+                    document
+                        .getElementById('sidebar')
+                        .classList.toggle('collapsed', sidebarCollapsed);
+                    document
+                        .getElementById('main')
+                        .classList.toggle(
+                            'sidebar-collapsed',
+                            sidebarCollapsed,
+                        );
+                }
+            }
+            function closeMobileSidebar() {
+                document
+                    .getElementById('sidebar')
+                    .classList.remove('mobile-open');
+                document
+                    .getElementById('sidebarOverlay')
+                    .classList.remove('visible');
+            }
+
+            /* ===== THEME ===== */
+            function toggleTheme() {
+                const html = document.documentElement;
+                const isDark = html.getAttribute('data-theme') === 'dark';
+                const newTheme = isDark ? 'light' : 'dark';
+                html.setAttribute('data-theme', newTheme);
+                localStorage.setItem('mp-theme', newTheme);
+                const icon = document.getElementById('themeIcon');
+                if (newTheme === 'dark') {
+                    icon.innerHTML =
+                        '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+                } else {
+                    icon.innerHTML =
+                        '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+                }
+                setTimeout(initCharts, 50);
+            }
+
+            /* ===== DROPDOWN ===== */
+            function toggleDropdown() {
+                const menu = document.getElementById('dropdownMenu');
+                menu.classList.toggle('open');
+            }
+
+            /* ===== NOTIFICATIONS ===== */
+            function toggleNotif() {
+                const panel = document.getElementById('notifPanel');
+                panel.classList.toggle('open');
+                if (
+                    document
+                        .getElementById('dropdownMenu')
+                        .classList.contains('open')
+                ) {
+                    document
+                        .getElementById('dropdownMenu')
+                        .classList.remove('open');
+                }
+            }
+
+            function clearNotifs() {
+                document.getElementById('notifList').innerHTML = `
+    <div style="padding:32px;text-align:center;color:var(--text-4);">
+      <div style="font-size:32px;margin-bottom:8px;">🎉</div>
+      <div style="font-size:13px;font-weight:500;">Semua notifikasi telah dibersihkan</div>
+    </div>
+  `;
+                document.querySelector('.notif-count').textContent = '0';
+                document.querySelector('.notif-dot').style.display = 'none';
+            }
+
+            /* ===== MODAL ===== */
+            function openModal() {
+                document.getElementById('modalOverlay').classList.add('open');
+                document.body.style.overflow = 'hidden';
+            }
+            function closeModal() {
+                document
+                    .getElementById('modalOverlay')
+                    .classList.remove('open');
+                document.body.style.overflow = '';
+            }
+            function handleOverlayClick(e) {
+                if (e.target === document.getElementById('modalOverlay'))
+                    closeModal();
+            }
+            function saveModal() {
+                closeModal();
+                showToast(
+                    'success',
+                    'Berhasil Ditambahkan!',
+                    'Data santri baru berhasil disimpan ke sistem.',
+                );
+            }
+
+            /* ===== TOAST ===== */
+            function showToast(type, title, msg) {
+                const icons = {
+                    success: '<polyline points="20 6 9 17 4 12"/>',
+                    warning:
+                        '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
+                    danger: '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>',
+                    info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
+                };
+                const container = document.getElementById('toastContainer');
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                toast.innerHTML = `
+    <div class="toast-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[type]}</svg>
+    </div>
+    <div class="toast-body">
+      <div class="toast-title">${title}</div>
+      <div class="toast-msg">${msg}</div>
+    </div>
+    <button class="toast-close" onclick="removeToast(this.parentElement)">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  `;
+                container.appendChild(toast);
+                setTimeout(() => removeToast(toast), 4000);
+            }
+
+            function removeToast(toast) {
+                if (!toast.parentElement) return;
+                toast.classList.add('removing');
+                setTimeout(() => toast.remove(), 250);
+            }
+
+            /* ===== ACTIVE NAV ===== */
+            function setActivePage(el, name) {
+                document
+                    .querySelectorAll('.nav-item')
+                    .forEach((i) => i.classList.remove('active'));
+                el.classList.add('active');
+                document.getElementById('currentPage').textContent = name;
+                document.getElementById('pageTitle').textContent = name;
+                if (window.innerWidth <= 600) closeMobileSidebar();
+                showToast(
+                    'info',
+                    name,
+                    `Halaman ${name} sedang dalam pengembangan.`,
+                );
+            }
+
+            /* ===== CHARTS ===== */
+            let mainChart, donutChart;
+
+            function getCSSVar(name) {
+                return getComputedStyle(document.documentElement)
+                    .getPropertyValue(name)
+                    .trim();
+            }
+
+            function initCharts() {
+                const isDark =
+                    document.documentElement.getAttribute('data-theme') ===
+                    'dark';
+                const textColor = isDark ? '#94A3B8' : '#64748B';
+                const gridColor = isDark
+                    ? 'rgba(30,45,74,0.8)'
+                    : 'rgba(226,232,248,0.8)';
+
+                Chart.defaults.font.family = "'DM Sans', sans-serif";
+
+                if (mainChart) mainChart.destroy();
+                if (donutChart) donutChart.destroy();
+
+                const mainCtx = document
+                    .getElementById('mainChart')
+                    .getContext('2d');
+                const months = ['Agu', 'Sep', 'Okt', 'Nov', 'Des', 'Jan'];
+
+                // Gradient
+                const grad1 = mainCtx.createLinearGradient(0, 0, 0, 220);
+                grad1.addColorStop(0, 'rgba(37,99,235,0.25)');
+                grad1.addColorStop(1, 'rgba(37,99,235,0)');
+
+                const grad2 = mainCtx.createLinearGradient(0, 0, 0, 220);
+                grad2.addColorStop(0, 'rgba(16,185,129,0.20)');
+                grad2.addColorStop(1, 'rgba(16,185,129,0)');
+
+                mainChart = new Chart(mainCtx, {
+                    type: 'line',
+                    data: {
+                        labels: months,
+                        datasets: [
+                            {
+                                label: 'Santri',
+                                data: [198, 210, 218, 225, 235, 248],
+                                borderColor: '#2563EB',
+                                backgroundColor: grad1,
+                                borderWidth: 2.5,
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 4,
+                                pointBackgroundColor: '#2563EB',
+                                pointBorderColor: isDark ? '#131C2E' : '#fff',
+                                pointBorderWidth: 2,
+                                pointHoverRadius: 6,
+                                yAxisID: 'y',
+                            },
+                            {
+                                label: 'Pendapatan (juta)',
+                                data: [38, 41, 42, 44, 46, 48.2],
+                                borderColor: '#10B981',
+                                backgroundColor: grad2,
+                                borderWidth: 2.5,
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 4,
+                                pointBackgroundColor: '#10B981',
+                                pointBorderColor: isDark ? '#131C2E' : '#fff',
+                                pointBorderWidth: 2,
+                                pointHoverRadius: 6,
+                                yAxisID: 'y1',
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                align: 'end',
+                                labels: {
+                                    color: textColor,
+                                    boxWidth: 10,
+                                    boxHeight: 10,
+                                    borderRadius: 4,
+                                    usePointStyle: true,
+                                    pointStyle: 'circle',
+                                    padding: 16,
+                                    font: { size: 12, weight: '500' },
+                                },
+                            },
+                            tooltip: {
+                                backgroundColor: isDark ? '#1A2540' : '#fff',
+                                titleColor: isDark ? '#F1F5FF' : '#0F172A',
+                                bodyColor: textColor,
+                                borderColor: isDark ? '#1E2D4A' : '#E2E8F8',
+                                borderWidth: 1,
+                                padding: 12,
+                                cornerRadius: 10,
+                                boxPadding: 4,
+                            },
+                        },
+                        scales: {
+                            x: {
+                                grid: { color: gridColor, drawBorder: false },
+                                ticks: { color: textColor, font: { size: 11 } },
+                            },
+                            y: {
+                                type: 'linear',
+                                position: 'left',
+                                grid: { color: gridColor },
+                                ticks: { color: textColor, font: { size: 11 } },
+                            },
+                            y1: {
+                                type: 'linear',
+                                position: 'right',
+                                grid: { drawOnChartArea: false },
+                                ticks: {
+                                    color: textColor,
+                                    font: { size: 11 },
+                                    callback: (v) => 'Rp ' + v + 'jt',
+                                },
+                            },
+                        },
+                    },
+                });
+
+                const donutCtx = document
+                    .getElementById('donutChart')
+                    .getContext('2d');
+                donutChart = new Chart(donutCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: [
+                            'Tahfidz Ulya',
+                            'Tahfidz Wustho',
+                            'Kitab Kuning',
+                            'Bahasa Arab',
+                        ],
+                        datasets: [
+                            {
+                                data: [87, 72, 54, 35],
+                                backgroundColor: [
+                                    '#2563EB',
+                                    '#10B981',
+                                    '#F59E0B',
+                                    '#8B5CF6',
+                                ],
+                                borderColor: isDark ? '#131C2E' : '#fff',
+                                borderWidth: 3,
+                                hoverBorderWidth: 4,
+                                hoverOffset: 6,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '70%',
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: isDark ? '#1A2540' : '#fff',
+                                titleColor: isDark ? '#F1F5FF' : '#0F172A',
+                                bodyColor: textColor,
+                                borderColor: isDark ? '#1E2D4A' : '#E2E8F8',
+                                borderWidth: 1,
+                                padding: 12,
+                                cornerRadius: 10,
+                            },
+                        },
+                    },
+                });
+            }
+
+            /* ===== CLOSE DROPDOWNS ON OUTSIDE CLICK ===== */
+            document.addEventListener('click', function (e) {
+                const menu = document.getElementById('dropdownMenu');
+                const notifPanel = document.getElementById('notifPanel');
+                if (
+                    menu.classList.contains('open') &&
+                    !e.target.closest('.user-dropdown-wrap')
+                ) {
+                    menu.classList.remove('open');
+                }
+                if (
+                    notifPanel.classList.contains('open') &&
+                    !e.target.closest('.notif-panel') &&
+                    !e.target.closest('#notifBtn')
+                ) {
+                    notifPanel.classList.remove('open');
+                }
+            });
+
+            /* ===== INIT ===== */
+            document.addEventListener('DOMContentLoaded', function () {
+                // Load theme
+                const savedTheme = localStorage.getItem('mp-theme') || 'light';
+                document.documentElement.setAttribute('data-theme', savedTheme);
+                if (savedTheme === 'dark') {
+                    document.getElementById('themeIcon').innerHTML =
+                        '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+                }
+
+                // Render table
+                renderTable(santriData);
+
+                // Init charts
+                setTimeout(initCharts, 100);
+
+                // Welcome toast
+                setTimeout(() => {
+                    showToast(
+                        'success',
+                        'Selamat Datang!',
+                        'Manhood Panel siap digunakan, KH. Ahmad Fauzi.',
+                    );
+                }, 800);
+            });
+        </script>
+    </body>
+</html>

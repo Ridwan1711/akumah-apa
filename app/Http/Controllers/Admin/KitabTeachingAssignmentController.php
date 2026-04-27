@@ -1,0 +1,130 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\StoreKitabTeachingAssignmentRequest;
+use App\Models\AcademicYear;
+use App\Models\Diniyyah\LevelSubjectDefault;
+use App\Models\Diniyyah\SchoolClass;
+use App\Models\Diniyyah\Subject;
+use App\Models\Diniyyah\TeacherAssignment;
+use App\Models\Role;
+use App\Models\Semester;
+use App\Models\User;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class KitabTeachingAssignmentController extends Controller
+{
+    public function index(Request $request): Response
+    {
+        $selectedSemesterId = (int) $request->input('semester_id', 0);
+        $selectedPeriodId = $selectedSemesterId > 0
+            ? (int) (DB::table('academic_periods')->where('semester_id', $selectedSemesterId)->value('id') ?? 0)
+            : (int) $request->input('period_id', 0);
+        if ($selectedPeriodId <= 0) {
+            $selectedPeriodId = (int) (DB::table('academic_periods')->where('is_active', true)->value('id') ?? 0);
+        }
+        if ($selectedPeriodId <= 0) {
+            $selectedPeriodId = (int) (DB::table('academic_periods')->value('id') ?? 0);
+        }
+        $selectedSemesterId = (int) (DB::table('academic_periods')->where('id', $selectedPeriodId)->value('semester_id') ?? 0);
+
+        return Inertia::render('admin/teaching-assignments/index', [
+            'assignments' => TeacherAssignment::with(['teacher:id,name', 'schoolClass:id,name', 'subject:id,name', 'period:id,name'])
+                ->when($selectedPeriodId > 0, fn ($query) => $query->where('period_id', $selectedPeriodId))
+                ->orderBy('class_id')
+                ->orderBy('subject_id')
+                ->get(),
+            'teachers' => User::query()
+                ->where('is_active', true)
+                ->whereHas('roles', fn ($query) => $query->whereNotIn('name', [Role::SANTRI]))
+                ->orderBy('name')
+                ->get(['id', 'name']),
+            'activeAcademicYear' => AcademicYear::where('is_active', true)->first(['id', 'name']),
+            'classes' => SchoolClass::orderBy('level_order')->orderBy('name')->get(['id', 'name']),
+            'subjects' => Subject::query()->orderBy('name')->get(['id', 'name']),
+            'semesters' => Semester::query()
+                ->with('academicYear:id,name')
+                ->orderByDesc('is_active')
+                ->orderByDesc('id')
+                ->get(['id', 'name', 'academic_year_id', 'is_active'])
+                ->map(fn (Semester $semester) => [
+                    'id' => $semester->id,
+                    'name' => $semester->name,
+                    'academic_year_name' => $semester->academicYear?->name,
+                    'is_active' => $semester->is_active,
+                ]),
+            'selectedPeriodId' => $selectedPeriodId,
+            'selectedSemesterId' => $selectedSemesterId,
+        ]);
+    }
+
+    public function store(StoreKitabTeachingAssignmentRequest $request): RedirectResponse
+    {
+        $payload = $request->validated();
+        $periodId = $this->resolvePeriodIdBySemesterId((int) $payload['semester_id']);
+        $resolvedTargetJam = $this->resolveTargetJam(
+            (int) $payload['class_id'],
+            (int) $payload['subject_id'],
+            $periodId,
+            isset($payload['target_jam']) ? (int) $payload['target_jam'] : null
+        );
+        TeacherAssignment::updateOrCreate(
+            [
+                'class_id' => $payload['class_id'],
+                'subject_id' => $payload['subject_id'],
+                'period_id' => $periodId,
+            ],
+            [
+                'teacher_id' => $payload['teacher_id'],
+                'target_jam' => $resolvedTargetJam,
+            ]
+        );
+
+        return redirect()->route('admin.teaching-assignments.index', ['semester_id' => $payload['semester_id']])
+            ->with('success', 'Penugasan guru berhasil ditambahkan.');
+    }
+
+    public function destroy(Request $request, TeacherAssignment $teachingAssignment): RedirectResponse
+    {
+        $semesterId = $request->integer('semester_id');
+        $teachingAssignment->delete();
+
+        return redirect()->route('admin.teaching-assignments.index', ['semester_id' => $semesterId > 0 ? $semesterId : null])
+            ->with('success', 'Penugasan guru berhasil dihapus.');
+    }
+
+    protected function resolvePeriodIdBySemesterId(int $semesterId): int
+    {
+        return (int) DB::table('academic_periods')
+            ->where('semester_id', $semesterId)
+            ->value('id');
+    }
+
+    protected function resolveTargetJam(int $classId, int $subjectId, int $periodId, ?int $requestedTargetJam): int
+    {
+        if ($requestedTargetJam !== null && $requestedTargetJam > 0) {
+            return $requestedTargetJam;
+        }
+
+        $levelTag = (string) (SchoolClass::query()->whereKey($classId)->value('level') ?? '');
+        if ($levelTag !== '') {
+            $defaultTargetJam = (int) (LevelSubjectDefault::query()
+                ->where('level_tag', $levelTag)
+                ->where('subject_id', $subjectId)
+                ->where('period_id', $periodId)
+                ->value('target_jam_default') ?? 0);
+
+            if ($defaultTargetJam > 0) {
+                return $defaultTargetJam;
+            }
+        }
+
+        return 1;
+    }
+}

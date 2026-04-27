@@ -1,0 +1,596 @@
+import type { User } from './auth';
+
+export type AcademicYear = {
+    id: number;
+    name: string;
+    start_date: string;
+    end_date: string;
+    is_active: boolean;
+    semesters?: Semester[];
+    created_at: string;
+    updated_at: string;
+};
+
+export type Semester = {
+    id: number;
+    academic_year_id: number;
+    name: string;
+    start_date: string;
+    end_date: string;
+    is_active: boolean;
+    academic_year?: AcademicYear;
+    created_at: string;
+    updated_at: string;
+};
+
+/** Diniyyah `classes` row (model `SchoolClass`). */
+export type SchoolClass = {
+    id: number;
+    name: string;
+    /** Optional fee-schedule / legacy level tag (e.g. ibtida, 1salafy). */
+    level: string | null;
+    /** Santri di kelas ini: L = Santriyyin, P = Santriyah (satu kelas = satu jenis). */
+    student_gender?: 'L' | 'P' | null;
+    student_gender_label?: string | null;
+    grade_level_id?: number;
+    level_order?: number;
+    grade_level?: { id: number; name: string; order: number };
+    students_count?: number;
+    created_at?: string;
+    updated_at?: string;
+};
+
+/** @deprecated Use `SchoolClass` — kept for gradual migration of imports. */
+export type DiniyahClass = SchoolClass;
+
+export type Student = {
+    id: number;
+    user_id: number | null;
+    nis: string;
+    nik: string | null;
+    full_name: string;
+    birth_place: string | null;
+    birth_date: string | null;
+    gender: 'L' | 'P';
+    photo: string | null;
+    address: string | null;
+    status: 'active' | 'alumni' | 'keluar' | 'wafat';
+    admission_year: number;
+    current_class_id: number | null;
+    current_class?: SchoolClass;
+    guardians?: Guardian[];
+    user?: User;
+    tahfidz_summary?: TahfidzSummary;
+    violation_summary?: ViolationSummary;
+    created_at: string;
+    updated_at: string;
+};
+
+export type Guardian = {
+    id: number;
+    user_id: number | null;
+    student_id: number;
+    full_name: string;
+    nik: string | null;
+    phone: string | null;
+    email: string | null;
+    occupation: string | null;
+    income_band: string | null;
+    relationship: string;
+    pivot?: {
+        relationship: string;
+    };
+    student?: Student;
+    user?: User;
+    created_at: string;
+    updated_at: string;
+};
+
+export type GeneratedAccount = {
+    nis?: string;
+    name?: string;
+    guardian_name?: string;
+    student_nis?: string;
+    username: string;
+    password: string;
+};
+
+/** Response from POST /admin/account-generator/wali-preview */
+export type WaliPreviewStudentInSelection = {
+    id: number;
+    full_name: string;
+    nis: string | null;
+    relationship: string | null;
+};
+
+export type WaliPreviewGuardianRow = {
+    id: number;
+    full_name: string;
+    relationship: string | null;
+    already_has_account: boolean;
+    is_shared_in_selection: boolean;
+    students_in_selection: WaliPreviewStudentInSelection[];
+    total_children_in_db: number;
+};
+
+export type WaliPreviewResponse = {
+    selection_count: number;
+    guardians: WaliPreviewGuardianRow[];
+    students_without_guardians: Pick<Student, 'id' | 'full_name' | 'nis'>[];
+};
+
+// --- Akademik Diniyyah ---
+
+export type Subject = {
+    id: number;
+    name: string;
+    fan_id?: number | null;
+    fan?: Pick<Fan, 'id' | 'name'> | null;
+};
+
+export type Fan = {
+    id: number;
+    name: string;
+    description?: string | null;
+    sort_order?: number;
+    is_active?: boolean;
+};
+
+/** @deprecated Use `Subject` */
+export type KitabSubject = Subject;
+
+export type AcademicPeriod = {
+    id: number;
+    name: string;
+    type: string;
+    is_active?: boolean;
+};
+
+export type AssessmentComponent = {
+    id: number;
+    name: string;
+    type: string;
+    weight?: number | string | null;
+    created_at?: string;
+    updated_at?: string;
+};
+
+export type TeacherAssignment = {
+    id: number;
+    teacher_id: number;
+    class_id: number;
+    subject_id: number;
+    period_id: number;
+    target_jam: number;
+    teacher?: Pick<User, 'id' | 'name'>;
+    school_class?: Pick<SchoolClass, 'id' | 'name'>;
+    subject?: Subject;
+    period?: Pick<AcademicPeriod, 'id' | 'name' | 'type'>;
+    created_at?: string;
+    updated_at?: string;
+};
+
+/** @deprecated Use `TeacherAssignment` */
+export type KitabTeachingAssignment = TeacherAssignment;
+
+export type ScheduleSet = {
+    id: number;
+    period_id: number;
+    name: string;
+    jam_count: number;
+    day_count: number;
+    is_active: boolean;
+    created_by?: number | null;
+    cells_count?: number;
+    period?: Pick<AcademicPeriod, 'id' | 'name' | 'type'>;
+    creator?: Pick<User, 'id' | 'name'>;
+    created_at?: string;
+    updated_at?: string;
+};
+
+export type ScheduleTimeSlot = {
+    id?: number;
+    jam_no: number;
+    time_start: string;
+    time_end: string;
+};
+
+export type ScheduleMatrixCell = {
+    schedule_id: number;
+    class_id: number;
+    day: number;
+    jam_no: number;
+    teacher_id: number;
+    teacher_name?: string | null;
+    subject_id: number;
+    subject_name?: string | null;
+    combined_group_id: string | null;
+};
+
+export type ScheduleMatrixPayload = {
+    classes: Array<Pick<SchoolClass, 'id' | 'name' | 'level' | 'level_order'>>;
+    slots: ScheduleTimeSlot[];
+    days: number[];
+    cells: Record<string, ScheduleMatrixCell>;
+};
+
+export type ScheduleMatrixPengampu = {
+    id: number;
+    teacher_id: number;
+    class_id: number;
+    subject_id: number;
+    target_jam: number;
+    teacher?: Pick<User, 'id' | 'name'>;
+    school_class?: Pick<SchoolClass, 'id' | 'name' | 'level' | 'level_order'>;
+    subject?: Pick<Subject, 'id' | 'name'>;
+};
+
+export type ScheduleConflictType =
+    | 'none'
+    | 'occupied'
+    | 'same_subject_other_class'
+    | 'different_subject_other_class'
+    | 'target_reached';
+
+export type ScheduleConflictResponse = {
+    type: ScheduleConflictType;
+    allocation?: number;
+    target_jam?: number;
+    cell?: {
+        schedule_id: number;
+        teacher_id: number;
+        subject_id: number;
+    };
+    conflicts?: Array<{
+        schedule_id: number;
+        class_id: number;
+        class_name?: string;
+        subject_id: number;
+        subject_name?: string;
+        combined_group_id?: string | null;
+    }>;
+};
+
+export type DiniyyahScore = {
+    id: number;
+    student_id: number;
+    subject_id: number;
+    component_id: number;
+    period_id: number;
+    score: number | string | null;
+    status?: string;
+    grade_letter?: string | null;
+    subject?: Subject;
+    created_at?: string;
+    updated_at?: string;
+};
+
+/** @deprecated Use `DiniyyahScore` */
+export type KitabGrade = DiniyyahScore;
+
+// --- Tahfidz ---
+
+export type TahfidzTarget = {
+    id: number;
+    student_id: number;
+    target_juz: number;
+    start_date: string;
+    end_date: string;
+    status: 'ongoing' | 'completed' | 'overdue';
+    created_at: string;
+    updated_at: string;
+};
+
+export type TahfidzProgress = {
+    id: number;
+    student_id: number;
+    juz: number;
+    surah_from: string;
+    surah_to: string;
+    ayat_from: number;
+    ayat_to: number;
+    type: 'ziyadah' | 'murojaah';
+    grade: string;
+    notes: string | null;
+    validated_by: number | null;
+    validated_at: string | null;
+    validator?: User;
+    created_at: string;
+    updated_at: string;
+};
+
+export type TahfidzSummary = {
+    id: number;
+    student_id: number;
+    total_juz_completed: number;
+    last_hafalan_date: string | null;
+};
+
+// --- Asrama ---
+
+export type DormBuilding = {
+    id: number;
+    name: string;
+    description: string | null;
+    rooms?: DormRoom[];
+    created_at: string;
+    updated_at: string;
+};
+
+export type DormRoom = {
+    id: number;
+    building_id: number;
+    room_number: string;
+    capacity: number;
+    floor: number | null;
+    occupants_count?: number;
+    building?: DormBuilding;
+    musyrif?: MusyrifAssignment;
+    created_at: string;
+    updated_at: string;
+};
+
+export type DormAssignment = {
+    id: number;
+    student_id: number;
+    room_id: number;
+    checkin_date: string;
+    checkout_date: string | null;
+    student?: Student;
+    room?: DormRoom;
+    created_at: string;
+    updated_at: string;
+};
+
+export type MusyrifAssignment = {
+    id: number;
+    user_id: number;
+    assigned_room_id: number | null;
+    user?: User;
+};
+
+// --- Pelanggaran ---
+
+export type ViolationType = {
+    id: number;
+    name: string;
+    points: number;
+    category: 'ringan' | 'sedang' | 'berat';
+    created_at: string;
+    updated_at: string;
+};
+
+export type StudentViolation = {
+    id: number;
+    student_id: number;
+    violation_type_id: number;
+    date: string;
+    description: string | null;
+    handled_by: number | null;
+    status: 'open' | 'resolved';
+    resolution_notes: string | null;
+    student?: Student;
+    violation_type?: ViolationType;
+    handler?: User;
+    created_at: string;
+    updated_at: string;
+};
+
+export type ViolationSummary = {
+    id: number;
+    student_id: number;
+    total_points: number;
+    last_violation_date: string | null;
+};
+
+// --- Perizinan ---
+
+export type LeavePermission = {
+    id: number;
+    student_id: number;
+    reason: string;
+    leave_date: string;
+    return_date: string | null;
+    actual_return_date: string | null;
+    approved_by: number | null;
+    status: 'pending' | 'approved' | 'rejected';
+    rejection_reason: string | null;
+    student?: Student;
+    approver?: User;
+    created_at: string;
+    updated_at: string;
+};
+
+// --- Report Card ---
+
+export type ReportCard = {
+    id: number;
+    student_id: number;
+    semester_id: number;
+    wali_kelas_notes: string | null;
+    generated_by: number | null;
+    generated_at: string | null;
+    verification_token: string | null;
+    student?: Student;
+    semester?: Semester;
+    created_at: string;
+    updated_at: string;
+};
+
+export type ReportCardTemplate = {
+    id: number;
+    name: string;
+    is_default: boolean;
+    config: {
+        layout: string[];
+        blocks: Record<string, { visible?: boolean }>;
+        style: Record<string, string | number>;
+        images: Record<string, string | null>;
+    };
+    created_at: string;
+    updated_at: string;
+};
+
+// --- Keuangan ---
+
+export type PaymentType = {
+    id: number;
+    name: string;
+    code: string;
+    category: 'spp' | 'non_spp' | 'infaq';
+    is_recurring: boolean;
+    default_amount: number;
+    description: string | null;
+    is_active: boolean;
+    fee_schedules?: FeeSchedule[];
+    created_at: string;
+    updated_at: string;
+};
+
+export type FeeSchedule = {
+    id: number;
+    payment_type_id: number;
+    academic_year_id: number;
+    class_level: string | null;
+    amount: number;
+    notes: string | null;
+    payment_type?: PaymentType;
+    academic_year?: AcademicYear;
+    created_at: string;
+    updated_at: string;
+};
+
+export type StudentDiscount = {
+    id: number;
+    student_id: number;
+    payment_type_id: number;
+    academic_year_id: number;
+    discount_type: 'percentage' | 'fixed';
+    discount_value: number;
+    reason: string | null;
+    approved_by: number | null;
+    student?: Student;
+    payment_type?: PaymentType;
+    academic_year?: AcademicYear;
+    approver?: import('./auth').User;
+    created_at: string;
+    updated_at: string;
+};
+
+export type Invoice = {
+    id: number;
+    invoice_number: string;
+    student_id: number;
+    payment_type_id: number;
+    academic_year_id: number;
+    semester_id: number | null;
+    month: number | null;
+    amount: number;
+    discount_amount: number;
+    final_amount: number;
+    status: 'pending' | 'paid' | 'partial' | 'overdue' | 'cancelled';
+    due_date: string;
+    notes: string | null;
+    generated_by: number | null;
+    total_paid?: number;
+    remaining?: number;
+    student?: Student;
+    payment_type?: PaymentType;
+    academic_year?: AcademicYear;
+    semester?: Semester;
+    payments?: Payment[];
+    created_at: string;
+    updated_at: string;
+};
+
+export type Payment = {
+    id: number;
+    payment_number: string;
+    invoice_id: number;
+    amount: number;
+    payment_method: 'cash' | 'bank_transfer' | 'gateway';
+    payment_date: string;
+    proof_file: string | null;
+    gateway_order_id: string | null;
+    gateway_transaction_id: string | null;
+    gateway_payment_type: string | null;
+    status: 'pending' | 'verified' | 'rejected';
+    verified_by: number | null;
+    verified_at: string | null;
+    notes: string | null;
+    invoice?: Invoice;
+    verifier?: import('./auth').User;
+    created_at: string;
+    updated_at: string;
+};
+
+// --- Audit Log ---
+
+export type AuditLog = {
+    id: number;
+    user_id: number | null;
+    module: string;
+    action: string;
+    auditable_type: string;
+    auditable_id: number;
+    old_data: Record<string, unknown> | null;
+    new_data: Record<string, unknown> | null;
+    ip_address: string | null;
+    user_agent: string | null;
+    user?: User;
+    created_at: string;
+    /** Ringkasan bahasa sehari-hari (dari server) */
+    summary_line?: string;
+    time_relative?: string;
+    actor_label?: string;
+    technical_target?: string;
+};
+
+// --- Pagination ---
+
+export type PaginatedData<T> = {
+    data: T[];
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    from: number | null;
+    to: number | null;
+    links: PaginationLink[];
+};
+
+export type PaginationLink = {
+    url: string | null;
+    label: string;
+    active: boolean;
+};
+
+export type ImportRun = {
+    id: number;
+    uuid: string;
+    type: 'students' | 'teachers' | 'enrollments' | 'bulk';
+    job_type?: string | null;
+    strategy: 'skip' | 'update';
+    status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+    requested_by: number | null;
+    requestedBy?: {
+        id: number;
+        name: string;
+    } | null;
+    file_name: string;
+    file_path: string;
+    total_rows: number;
+    processed_rows: number;
+    created_count: number;
+    updated_count: number;
+    skipped_count: number;
+    failed_count: number;
+    error_report_path: string | null;
+    error_message: string | null;
+    started_at: string | null;
+    finished_at: string | null;
+    meta?: Record<string, unknown> | null;
+    result_payload?: Record<string, unknown> | null;
+    created_at: string;
+    updated_at: string;
+};
