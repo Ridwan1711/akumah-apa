@@ -2,12 +2,12 @@ import { Head, Link } from '@inertiajs/react';
 import { Users } from 'lucide-react';
 import { CrudCard, CrudPageHeader } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
-import type { AcademicPeriod, BreadcrumbItem, SchoolClass, Subject } from '@/types';
+import type { BreadcrumbItem, SchoolClass, Subject } from '@/types';
 
 type Props = {
-    academicPeriod: Pick<AcademicPeriod, 'id' | 'name' | 'type'>;
+    academicPeriod: { id: number; name: string };
     subject: Pick<Subject, 'id' | 'name'>;
-    classes: Pick<SchoolClass, 'id' | 'name' | 'level'>[];
+    classes: Pick<SchoolClass, 'id' | 'name' | 'grade_level_id'>[];
 };
 
 export default function KitabGradesSelectClass({
@@ -48,7 +48,7 @@ export default function KitabGradesSelectClass({
                                     style={{ justifyContent: 'space-between', height: 44, textDecoration: 'none' }}
                                 >
                                     <span style={{ fontWeight: 600 }}>{item.name}</span>
-                                    <span className="mcr-table-meta">{item.level}</span>
+                                    <span className="mcr-table-meta">Jenjang #{item.grade_level_id ?? '-'}</span>
                                 </Link>
                             ))}
                         </div>

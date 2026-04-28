@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
-import type { BreadcrumbItem, KitabGrade, Semester, Student, StudentViolation, TahfidzProgress } from '@/types';
+import type { BreadcrumbItem, KitabGrade, Semester, Student, StudentViolation } from '@/types';
 
 type ReportCardData = { id?: number; wali_kelas_notes: string | null; generated_at: string | null } | null;
 
@@ -15,7 +15,6 @@ type Props = {
     student: Student;
     semester: Semester;
     grades: KitabGrade[];
-    tahfidzProgress: TahfidzProgress[];
     violations: StudentViolation[];
     reportCard: ReportCardData;
     avgScore: number | null;
@@ -29,7 +28,6 @@ export default function WaliKelasReportPreview({
     student,
     semester,
     grades,
-    tahfidzProgress,
     violations,
     reportCard,
     avgScore,
@@ -87,7 +85,6 @@ export default function WaliKelasReportPreview({
                         <dl className="grid grid-cols-2 gap-2 text-sm">
                             <dt className="text-muted-foreground">Rata-rata Nilai</dt><dd className="font-bold text-lg">{avgScore ?? '-'}</dd>
                             <dt className="text-muted-foreground">Jumlah Mata Pelajaran</dt><dd>{grades.length}</dd>
-                            <dt className="text-muted-foreground">Progress Tahfidz</dt><dd>{tahfidzProgress.length} entri</dd>
                             <dt className="text-muted-foreground">Poin Pelanggaran</dt><dd>{totalViolationPoints}</dd>
                         </dl>
                     </div>
@@ -120,34 +117,6 @@ export default function WaliKelasReportPreview({
                         </table>
                     )}
                 </div>
-
-                {tahfidzProgress.length > 0 && (
-                    <div className="rounded-xl border p-4">
-                        <h3 className="mb-3 font-semibold">Progress Tahfidz</h3>
-                        <table className="w-full text-sm">
-                            <thead className="border-b bg-muted/50">
-                                <tr>
-                                    <th className="px-3 py-2 text-left font-medium">Juz</th>
-                                    <th className="px-3 py-2 text-left font-medium">Surah</th>
-                                    <th className="px-3 py-2 text-left font-medium">Ayat</th>
-                                    <th className="px-3 py-2 text-left font-medium">Tipe</th>
-                                    <th className="px-3 py-2 text-left font-medium">Nilai</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {tahfidzProgress.map((t) => (
-                                    <tr key={t.id} className="border-b last:border-0">
-                                        <td className="px-3 py-2">{t.juz}</td>
-                                        <td className="px-3 py-2">{t.surah_to && t.surah_to !== t.surah_from ? `${t.surah_from} - ${t.surah_to}` : t.surah_from}</td>
-                                        <td className="px-3 py-2">{t.ayat_from}-{t.ayat_to}</td>
-                                        <td className="px-3 py-2"><Badge variant={t.type === 'ziyadah' ? 'default' : 'secondary'}>{t.type}</Badge></td>
-                                        <td className="px-3 py-2">{t.grade}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
 
                 {violations.length > 0 && (
                     <div className="rounded-xl border p-4">

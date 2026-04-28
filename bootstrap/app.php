@@ -5,6 +5,7 @@ use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\EnsureCanAccessKitabGrades;
 use App\Http\Middleware\EnsureHasWaliKelasRecord;
 use App\Http\Middleware\EnsurePasswordChanged;
+use App\Http\Middleware\EnsurePpdbSyncApiKey;
 use App\Http\Middleware\EnsureProfileComplete;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -36,6 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'can.access.kitab-grades' => EnsureCanAccessKitabGrades::class,
             'has.wali-kelas-record' => EnsureHasWaliKelasRecord::class,
             'profile.complete' => EnsureProfileComplete::class,
+            'ppdb.sync' => EnsurePpdbSyncApiKey::class,
         ]);
 
         $middleware->validateCsrfTokens(except: [

@@ -21,7 +21,7 @@ class WaliProfileController extends Controller
             return redirect()->route('dashboard');
         }
 
-        $guardian = $user->guardian;
+        $guardian = $user->primaryGuardian();
         abort_unless($guardian, 404, 'Data wali tidak ditemukan.');
 
         return Inertia::render('wali/profile-complete', [
@@ -34,7 +34,7 @@ class WaliProfileController extends Controller
         $user = $request->user();
         abort_unless($user->hasRole(Role::WALI_SANTRI), 403);
 
-        $guardian = $user->guardian;
+        $guardian = $user->primaryGuardian();
         abort_unless($guardian, 404);
 
         $validated = $request->validated();

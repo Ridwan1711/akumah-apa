@@ -35,7 +35,12 @@ class KitabTeachingAssignmentController extends Controller
         $selectedSemesterId = (int) (DB::table('academic_periods')->where('id', $selectedPeriodId)->value('semester_id') ?? 0);
 
         return Inertia::render('admin/teaching-assignments/index', [
-            'assignments' => TeacherAssignment::with(['teacher:id,name', 'schoolClass:id,name', 'subject:id,name', 'period:id,name'])
+            'assignments' => TeacherAssignment::with([
+                'teacher:id,name',
+                'schoolClass:id,name,grade_level_id',
+                'subject:id,name',
+                'period:id,academic_year_id,semester_id,is_active',
+            ])
                 ->when($selectedPeriodId > 0, fn ($query) => $query->where('period_id', $selectedPeriodId))
                 ->orderBy('class_id')
                 ->orderBy('subject_id')
@@ -46,7 +51,7 @@ class KitabTeachingAssignmentController extends Controller
                 ->orderBy('name')
                 ->get(['id', 'name']),
             'activeAcademicYear' => AcademicYear::where('is_active', true)->first(['id', 'name']),
-            'classes' => SchoolClass::orderBy('level_order')->orderBy('name')->get(['id', 'name']),
+            'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'grade_level_id']),
             'subjects' => Subject::query()->orderBy('name')->get(['id', 'name']),
             'semesters' => Semester::query()
                 ->with('academicYear:id,name')
@@ -112,10 +117,10 @@ class KitabTeachingAssignmentController extends Controller
             return $requestedTargetJam;
         }
 
-        $levelTag = (string) (SchoolClass::query()->whereKey($classId)->value('level') ?? '');
-        if ($levelTag !== '') {
+        $levelId = (int) (SchoolClass::query()->whereKey($classId)->value('grade_level_id') ?? 0);
+        if ($levelId > 0) {
             $defaultTargetJam = (int) (LevelSubjectDefault::query()
-                ->where('level_tag', $levelTag)
+                ->where('level_id', $levelId)
                 ->where('subject_id', $subjectId)
                 ->where('period_id', $periodId)
                 ->value('target_jam_default') ?? 0);

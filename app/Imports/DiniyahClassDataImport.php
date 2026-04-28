@@ -6,7 +6,6 @@ use App\Models\Diniyyah\GradeLevel;
 use App\Models\Diniyyah\SchoolClass;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
@@ -55,8 +54,7 @@ class DiniyahClassDataImport implements ToCollection, WithHeadingRow
                 [
                     'name' => ['required', 'string', 'max:100'],
                     'grade_level_id' => ['required', 'integer', 'exists:grade_levels,id'],
-                    'level_order' => ['required', 'integer', 'min:0', 'max:1000'],
-                    'level' => ['nullable', Rule::in(SchoolClass::LEVELS)],
+                    'order' => ['required', 'integer', 'min:0', 'max:1000'],
                     ...SchoolClass::studentGenderValidationRules(required: true),
                 ]
             );
@@ -66,14 +64,14 @@ class DiniyahClassDataImport implements ToCollection, WithHeadingRow
                     'row' => $rowNumber,
                     'message' => $validator->errors()->first(),
                 ];
+                \Log::error($validator->errors()->first());
                 continue;
             }
 
             $payload = [
                 'name' => $data['name'],
                 'grade_level_id' => $gradeLevelId,
-                'level_order' => (int) $data['level_order'],
-                'level' => $data['level'],
+                'order' => (int) $data['order'],
                 'student_gender' => $data['student_gender'],
             ];
 
@@ -131,8 +129,7 @@ class DiniyahClassDataImport implements ToCollection, WithHeadingRow
             'name' => $this->string($row['name'] ?? null),
             'grade_level_id' => $this->string($row['grade_level_id'] ?? null),
             'grade_level_name' => $this->string($row['grade_level_name'] ?? null),
-            'level_order' => $this->string($row['level_order'] ?? null),
-            'level' => $this->nullableString($row['level'] ?? null),
+            'order' => $this->string($row['order'] ?? null),
             'student_gender' => strtoupper((string) $this->string($row['student_gender'] ?? null)),
         ];
     }

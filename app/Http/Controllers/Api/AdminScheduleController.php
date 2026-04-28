@@ -20,7 +20,7 @@ class AdminScheduleController extends Controller
                 'schoolClass:id,name,level',
                 'subject:id,name',
                 'teacher:id,name',
-                'period:id,name,type',
+                'period:id,academic_year_id,semester_id,is_active',
             ])
             ->orderBy('day')
             ->orderBy('time_start');
@@ -64,7 +64,7 @@ class AdminScheduleController extends Controller
                 'schoolClass:id,name,level',
                 'subject:id,name',
                 'teacher:id,name',
-                'period:id,name,type',
+                'period:id,academic_year_id,semester_id,is_active',
             ]),
         ], 201);
     }
@@ -89,7 +89,7 @@ class AdminScheduleController extends Controller
                 'schoolClass:id,name,level',
                 'subject:id,name',
                 'teacher:id,name',
-                'period:id,name,type',
+                'period:id,academic_year_id,semester_id,is_active',
             ]),
         ]);
     }

@@ -93,7 +93,7 @@ class KitabGradeController extends Controller
             }
         }
 
-        $classesQuery = SchoolClass::query()->orderBy('level_order')->orderBy('name');
+        $classesQuery = SchoolClass::query()->orderBy('order')->orderBy('name');
         if ($hasLimitedView) {
             $classIds = TeacherAssignment::where('teacher_id', $user->id)
                 ->where('period_id', $period->id)
@@ -104,7 +104,7 @@ class KitabGradeController extends Controller
         }
 
         /** @var Collection<int, SchoolClass> $classes */
-        $classes = $classesQuery->get(['id', 'name', 'level'])
+        $classes = $classesQuery->get(['id', 'name', 'grade_level_id'])
             ->filter(fn (SchoolClass $c) => $resolver->gradingEnabled($c->id, $kitab_subject->id, (int) $period->id))
             ->values();
 
@@ -171,7 +171,7 @@ class KitabGradeController extends Controller
         return Inertia::render('admin/kitab-grades/input', [
             'academicPeriod' => ['id' => $academic_period->id, 'name' => $academic_period->name, 'type' => null],
             'subject' => $kitab_subject->only(['id', 'name']),
-            'schoolClass' => $diniyah_class->only(['id', 'name', 'level']),
+            'schoolClass' => $diniyah_class->only(['id', 'name', 'grade_level_id']),
             'assessmentComponents' => $assessmentComponents,
             'students' => $students,
             'gradeMatrix' => $gradeMatrix,

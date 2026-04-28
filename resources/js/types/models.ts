@@ -27,15 +27,25 @@ export type Semester = {
 export type SchoolClass = {
     id: number;
     name: string;
-    /** Optional fee-schedule / legacy level tag (e.g. ibtida, 1salafy). */
-    level: string | null;
+    /** @deprecated Legacy level tag (e.g. ibtida, 1salafy). */
+    level?: string | null;
     /** Santri di kelas ini: L = Santriyyin, P = Santriyah (satu kelas = satu jenis). */
     student_gender?: 'L' | 'P' | null;
+    order?: number;
     student_gender_label?: string | null;
     grade_level_id?: number;
+    /** @deprecated Use `order`. */
     level_order?: number;
     grade_level?: { id: number; name: string; order: number };
     students_count?: number;
+    created_at?: string;
+    updated_at?: string;
+};
+
+export type GradeLevel = {
+    id: number;
+    name: string;
+    order: number;
     created_at?: string;
     updated_at?: string;
 };
@@ -52,16 +62,38 @@ export type Student = {
     birth_place: string | null;
     birth_date: string | null;
     gender: 'L' | 'P';
+    sex?: 'L' | 'P';
     photo: string | null;
     address: string | null;
+    address_line?: string | null;
     status: 'active' | 'alumni' | 'keluar' | 'wafat';
+    is_kuliah?: boolean;
     admission_year: number;
     current_class_id: number | null;
     current_class?: SchoolClass;
     guardians?: Guardian[];
+    em_profile?: {
+        santri?: Record<string, unknown>;
+        alamat?: Record<string, unknown>;
+    };
+    ppdb_application_id?: number | null;
+    ppdb_reg_no?: string | null;
+    ppdb_synced_at?: string | null;
     user?: User;
-    tahfidz_summary?: TahfidzSummary;
     violation_summary?: ViolationSummary;
+    created_at: string;
+    updated_at: string;
+};
+
+export type StudentPosition = {
+    id: number;
+    student_id: number;
+    position_type: string;
+    division_code: string | null;
+    is_active: boolean;
+    started_at: string | null;
+    ended_at: string | null;
+    student?: Pick<Student, 'id' | 'full_name' | 'nis' | 'current_class'>;
     created_at: string;
     updated_at: string;
 };
@@ -76,7 +108,18 @@ export type Guardian = {
     email: string | null;
     occupation: string | null;
     income_band: string | null;
-    relationship: string;
+    relationship: string | null;
+    status?: string | null;
+    birth_place?: string | null;
+    birth_date?: string | null;
+    without_phone?: boolean;
+    last_education?: string | null;
+    education?: string | null;
+    monthly_income?: string | null;
+    kewarganegaraan?: string | null;
+    alamat?: string | null;
+    address_line?: string | null;
+    is_alive?: boolean;
     pivot?: {
         relationship: string;
     };
@@ -124,16 +167,15 @@ export type WaliPreviewResponse = {
 export type Subject = {
     id: number;
     name: string;
-    fan_id?: number | null;
-    fan?: Pick<Fan, 'id' | 'name'> | null;
+    aliases?: SubjectAlias[];
 };
 
-export type Fan = {
+export type SubjectAlias = {
     id: number;
-    name: string;
-    description?: string | null;
-    sort_order?: number;
-    is_active?: boolean;
+    subject_id: number;
+    tingkat_id: number;
+    alias_name: string | null;
+    tingkat?: Pick<GradeLevel, 'id' | 'name' | 'order'>;
 };
 
 /** @deprecated Use `Subject` */
@@ -141,9 +183,15 @@ export type KitabSubject = Subject;
 
 export type AcademicPeriod = {
     id: number;
-    name: string;
-    type: string;
+    academic_year_id: number;
+    semester_id: number;
     is_active?: boolean;
+    academic_year?: Pick<AcademicYear, 'id' | 'name'>;
+    semester?: Pick<Semester, 'id' | 'name'>;
+    /** @deprecated legacy flattened label. */
+    name?: string;
+    /** @deprecated legacy field. */
+    type?: string;
 };
 
 export type AssessmentComponent = {
@@ -165,7 +213,10 @@ export type TeacherAssignment = {
     teacher?: Pick<User, 'id' | 'name'>;
     school_class?: Pick<SchoolClass, 'id' | 'name'>;
     subject?: Subject;
-    period?: Pick<AcademicPeriod, 'id' | 'name' | 'type'>;
+    period?: Pick<AcademicPeriod, 'id' | 'academic_year_id' | 'semester_id' | 'is_active'> & {
+        academic_year?: Pick<AcademicYear, 'id' | 'name'>;
+        semester?: Pick<Semester, 'id' | 'name'>;
+    };
     created_at?: string;
     updated_at?: string;
 };
@@ -182,7 +233,10 @@ export type ScheduleSet = {
     is_active: boolean;
     created_by?: number | null;
     cells_count?: number;
-    period?: Pick<AcademicPeriod, 'id' | 'name' | 'type'>;
+    period?: Pick<AcademicPeriod, 'id' | 'academic_year_id' | 'semester_id' | 'is_active'> & {
+        academic_year?: Pick<AcademicYear, 'id' | 'name'>;
+        semester?: Pick<Semester, 'id' | 'name'>;
+    };
     creator?: Pick<User, 'id' | 'name'>;
     created_at?: string;
     updated_at?: string;
@@ -208,7 +262,7 @@ export type ScheduleMatrixCell = {
 };
 
 export type ScheduleMatrixPayload = {
-    classes: Array<Pick<SchoolClass, 'id' | 'name' | 'level' | 'level_order'>>;
+    classes: Array<Pick<SchoolClass, 'id' | 'name' | 'grade_level_id' | 'order'>>;
     slots: ScheduleTimeSlot[];
     days: number[];
     cells: Record<string, ScheduleMatrixCell>;
@@ -221,7 +275,7 @@ export type ScheduleMatrixPengampu = {
     subject_id: number;
     target_jam: number;
     teacher?: Pick<User, 'id' | 'name'>;
-    school_class?: Pick<SchoolClass, 'id' | 'name' | 'level' | 'level_order'>;
+    school_class?: Pick<SchoolClass, 'id' | 'name' | 'grade_level_id' | 'order'>;
     subject?: Pick<Subject, 'id' | 'name'>;
 };
 
@@ -267,44 +321,6 @@ export type DiniyyahScore = {
 
 /** @deprecated Use `DiniyyahScore` */
 export type KitabGrade = DiniyyahScore;
-
-// --- Tahfidz ---
-
-export type TahfidzTarget = {
-    id: number;
-    student_id: number;
-    target_juz: number;
-    start_date: string;
-    end_date: string;
-    status: 'ongoing' | 'completed' | 'overdue';
-    created_at: string;
-    updated_at: string;
-};
-
-export type TahfidzProgress = {
-    id: number;
-    student_id: number;
-    juz: number;
-    surah_from: string;
-    surah_to: string;
-    ayat_from: number;
-    ayat_to: number;
-    type: 'ziyadah' | 'murojaah';
-    grade: string;
-    notes: string | null;
-    validated_by: number | null;
-    validated_at: string | null;
-    validator?: User;
-    created_at: string;
-    updated_at: string;
-};
-
-export type TahfidzSummary = {
-    id: number;
-    student_id: number;
-    total_juz_completed: number;
-    last_hafalan_date: string | null;
-};
 
 // --- Asrama ---
 
@@ -440,22 +456,9 @@ export type PaymentType = {
     category: 'spp' | 'non_spp' | 'infaq';
     is_recurring: boolean;
     default_amount: number;
+    kuliah_amount?: number | null;
     description: string | null;
     is_active: boolean;
-    fee_schedules?: FeeSchedule[];
-    created_at: string;
-    updated_at: string;
-};
-
-export type FeeSchedule = {
-    id: number;
-    payment_type_id: number;
-    academic_year_id: number;
-    class_level: string | null;
-    amount: number;
-    notes: string | null;
-    payment_type?: PaymentType;
-    academic_year?: AcademicYear;
     created_at: string;
     updated_at: string;
 };

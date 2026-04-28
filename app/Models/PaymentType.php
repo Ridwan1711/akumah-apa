@@ -17,6 +17,7 @@ class PaymentType extends Model
         'category',
         'is_recurring',
         'default_amount',
+        'kuliah_amount',
         'description',
         'is_active',
     ];
@@ -27,6 +28,7 @@ class PaymentType extends Model
             'is_recurring' => 'boolean',
             'is_active' => 'boolean',
             'default_amount' => 'decimal:2',
+            'kuliah_amount' => 'decimal:2',
         ];
     }
 
@@ -39,11 +41,6 @@ class PaymentType extends Model
         self::CATEGORY_NON_SPP,
         self::CATEGORY_INFAQ,
     ];
-
-    public function feeSchedules(): HasMany
-    {
-        return $this->hasMany(FeeSchedule::class);
-    }
 
     public function invoices(): HasMany
     {

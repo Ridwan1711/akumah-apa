@@ -9,7 +9,6 @@ $replacements = [
     'prop_student_nis' => e($student->nis),
     'prop_student_class' => e($student->currentClass->name ?? '-'),
     'prop_grades_table' => view('pdf.partials.grades', ['grades' => $grades, 'avgScore' => $avgScore ?? null])->render(),
-    'prop_tahfidz_table' => view('pdf.partials.tahfidz', ['tahfidzProgress' => $tahfidzProgress])->render(),
     'prop_violations_table' => view('pdf.partials.violations', ['violations' => $violations])->render(),
     'prop_notes' => '<div class="notes-box">' . e($reportCard->wali_kelas_notes ?? '-') . '</div>',
     'prop_qr' => !empty($qrCodeBase64) ? '<img src="data:image/png;base64,' . $qrCodeBase64 . '" alt="Verifikasi" style="width: 60px; height: 60px;" />' : '',

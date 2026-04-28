@@ -60,7 +60,7 @@ type ScheduleRow = {
     day: number;
     time_start: string;
     time_end: string;
-    school_class: Pick<DiniyahClass, 'id' | 'name' | 'level'>;
+    school_class: Pick<DiniyahClass, 'id' | 'name' | 'grade_level_id'>;
     subject: Pick<Subject, 'id' | 'name'>;
     teacher: Pick<User, 'id' | 'name'>;
     period: { id: number; name: string; type?: string | null };
@@ -68,7 +68,7 @@ type ScheduleRow = {
 
 type Props = {
     schedules: PaginatedData<ScheduleRow>;
-    classes: Pick<SchoolClass, 'id' | 'name' | 'level'>[];
+    classes: Pick<SchoolClass, 'id' | 'name' | 'grade_level_id'>[];
     subjects: Pick<Subject, 'id' | 'name'>[];
     teachers: Pick<User, 'id' | 'name'>[];
     semesters: (Pick<Semester, 'id' | 'name'> & { academic_year_name?: string | null; is_active?: boolean })[];

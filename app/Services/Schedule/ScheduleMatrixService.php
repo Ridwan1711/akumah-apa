@@ -59,14 +59,14 @@ class ScheduleMatrixService
 
         $classes = SchoolClass::query()
             ->when($classIds->isNotEmpty(), fn ($q) => $q->whereIn('id', $classIds))
-            ->orderBy('level_order')
+            ->orderBy('order')
             ->orderBy('name')
-            ->get(['id', 'name', 'level', 'level_order'])
+            ->get(['id', 'name', 'grade_level_id', 'order'])
             ->map(fn (SchoolClass $c) => [
                 'id' => $c->id,
                 'name' => $c->name,
-                'level' => $c->level,
-                'level_order' => $c->level_order,
+                'grade_level_id' => $c->grade_level_id,
+                'order' => $c->order,
             ])
             ->values()
             ->all();

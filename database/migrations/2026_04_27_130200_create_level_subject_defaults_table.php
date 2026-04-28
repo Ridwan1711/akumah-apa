@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('level_subject_defaults', function (Blueprint $table) {
             $table->id();
-            $table->string('level_tag', 20);
+            $table->foreignId('level_id')->constrained('grade_levels')->cascadeOnDelete();
             $table->foreignId('subject_id')->constrained('subjects')->cascadeOnDelete();
             $table->foreignId('period_id')->constrained('academic_periods')->cascadeOnDelete();
             $table->boolean('has_score_default')->default(true);
@@ -18,8 +18,8 @@ return new class extends Migration
             $table->boolean('is_mandatory_teaching')->default(true);
             $table->timestamps();
 
-            $table->unique(['level_tag', 'subject_id', 'period_id'], 'level_subject_defaults_unique');
-            $table->index(['period_id', 'level_tag']);
+            $table->unique(['level_id', 'subject_id', 'period_id'], 'level_subject_defaults_unique');
+            $table->index(['period_id', 'level_id']);
         });
     }
 

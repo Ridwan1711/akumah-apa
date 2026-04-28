@@ -11,10 +11,10 @@ class AcademicYear extends Model
     use HasFactory;
 
     protected $fillable = [
-        'name',
-        'start_date',
-        'end_date',
-        'is_active',
+        'name', // ex. 25/26 for 2025/2026
+        'start_date', // ex. 2025-01-01
+        'end_date', // ex. 2026-12-31
+        'is_active', // boolean true or false
     ];
 
     protected function casts(): array

@@ -47,7 +47,7 @@ class ClassPromotionController extends Controller
             ->pluck('requested_by');
 
         return Inertia::render('admin/class-promotion/index', [
-            'classes' => SchoolClass::orderBy('level_order')->orderBy('name')->get(['id', 'name', 'level']),
+            'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'grade_level_id']),
             'students' => $students,
             'filters' => $request->only(['source_class_id', 'run_uploader_id', 'per_page']),
             'bulkRuns' => $bulkRunsQuery->limit(20)->get(),

@@ -17,7 +17,7 @@ import type { BreadcrumbItem, SchoolClass, Student } from '@/types';
 
 type Props = {
     student: Student;
-    classes: (Pick<SchoolClass, 'id' | 'name' | 'level'>)[];
+    classes: (Pick<SchoolClass, 'id' | 'name' | 'grade_level_id'>)[];
 };
 
 export default function StudentEdit({ student, classes }: Props) {
@@ -131,7 +131,7 @@ export default function StudentEdit({ student, classes }: Props) {
                                 <SelectContent>
                                     {classes.map((c) => (
                                         <SelectItem key={c.id} value={String(c.id)}>
-                                            {c.name} ({c.level})
+                                            {c.name}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

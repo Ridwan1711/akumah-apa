@@ -12,7 +12,7 @@ type SessionRow = {
     start_time: string;
     end_time: string;
     status: string;
-    class: { id: number | null; name: string | null; level: string | null };
+    class: { id: number | null; name: string | null; grade_level_id: number | null };
     subject: { id: number | null; name: string | null };
 };
 

@@ -31,7 +31,6 @@ class SantriController extends Controller
         $student = $this->getStudent($request);
         $student->load([
             'currentClass:id,name',
-            'tahfidzSummary',
             'violationSummary',
         ]);
 
@@ -74,22 +73,6 @@ class SantriController extends Controller
         ]);
     }
 
-    public function tahfidz(Request $request): JsonResponse
-    {
-        $student = $this->getStudent($request);
-        $student->load('tahfidzSummary');
-
-        $progress = $student->tahfidzProgress()
-            ->orderByDesc('created_at')
-            ->paginate(15);
-
-        return response()->json([
-            'student' => $student->only('id', 'full_name', 'nis'),
-            'summary' => $student->tahfidzSummary,
-            'progress' => $progress,
-        ]);
-    }
-
     public function violations(Request $request): JsonResponse
     {
         $student = $this->getStudent($request);
@@ -111,7 +94,7 @@ class SantriController extends Controller
     {
         $student = $this->getStudent($request);
         $student->load([
-            'currentClass:id,name,level',
+            'currentClass:id,name,grade_level_id',
             'guardians' => function ($q) {
                 $q->withPivot('relationship');
             },
@@ -175,7 +158,7 @@ class SantriController extends Controller
         $student->save();
 
         $student->load([
-            'currentClass:id,name,level',
+            'currentClass:id,name,grade_level_id',
             'guardians' => function ($q) {
                 $q->withPivot('relationship');
             },
@@ -195,10 +178,11 @@ class SantriController extends Controller
     private function upsertEmProfile(Student $student, array $incoming): void
     {
         $student->loadMissing('emisProfile');
-        $current = $student->emisProfile?->toPayload() ?? [];
+        $current = $student->emProfilePayload();
         $merged = array_replace_recursive($current, $incoming);
         $attributes = EmProfile::fromPayload($merged);
         $student->emisProfile()->updateOrCreate([], $attributes);
+        $student->forceFill(['em_profile' => $merged])->save();
         $student->unsetRelation('emisProfile');
         $student->load('emisProfile');
     }
@@ -206,7 +190,7 @@ class SantriController extends Controller
     private function studentPayload(Student $student): array
     {
         $payload = $student->toArray();
-        $payload['em_profile'] = $student->emisProfile?->toPayload() ?? [
+        $payload['em_profile'] = $student->emProfilePayload() ?: [
             'santri' => [],
             'alamat' => [],
         ];
@@ -307,7 +291,7 @@ class SantriController extends Controller
         ksort($week);
 
         return response()->json([
-            'class' => $class->only(['id', 'name', 'level']),
+            'class' => $class->only(['id', 'name', 'grade_level_id']),
             'semester' => $activeSemester ? $activeSemester->only(['id', 'name']) : null,
             'week' => array_values($week),
         ]);

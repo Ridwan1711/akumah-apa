@@ -4,7 +4,6 @@ import {
     ArrowUpDown,
     Banknote,
     BookOpen,
-    BookOpenCheck,
     Building,
     CalendarClock,
     CalendarDays,
@@ -14,7 +13,6 @@ import {
     GraduationCap,
     Home,
     KeyRound,
-    Layers,
     LayoutGrid,
     LayoutTemplate,
     ListChecks,
@@ -67,6 +65,7 @@ export function AppSidebar() {
 
     const dataNavItems: NavItem[] = [
         { title: 'Data Santri', href: '/admin/students', icon: Users },
+        { title: 'Pengurus Santri', href: '/admin/student-positions', icon: Shield },
         { title: 'Enroll Kelas Santri', href: '/admin/student-enrollments', icon: UserPlus },
         { title: 'Kelas Diniyah', href: '/admin/diniyah-classes', icon: GraduationCap },
         { title: 'Tahun Ajaran', href: '/admin/academic-years', icon: CalendarDays },
@@ -75,7 +74,6 @@ export function AppSidebar() {
 
     const akademikNavItems: NavItem[] = [
         { title: 'Mata Pelajaran Kitab', href: '/admin/kitab-subjects', icon: BookOpen },
-        { title: 'Kurikulum Mapel (Matrix)', href: '/admin/kitab-curriculum-matrix', icon: Layers },
         { title: 'Komponen Penilaian', href: '/admin/assessment-components', icon: ListChecks },
         { title: 'Rule Penilaian Mapel', href: '/admin/class-subject-rules', icon: ClipboardList },
         { title: 'Penugasan Guru', href: '/admin/teaching-assignments', icon: UserPlus },
@@ -83,7 +81,6 @@ export function AppSidebar() {
         { title: 'Jadwal (Matrix)', href: '/admin/schedule-sets', icon: CalendarClock },
         { title: 'Kehadiran Santri', href: '/admin/attendances', icon: CalendarDays },
         { title: 'Nilai Kitab', href: '/admin/kitab-grades', icon: ClipboardList },
-        { title: 'Tahfidz', href: '/admin/tahfidz', icon: BookOpenCheck },
         { title: 'Raport', href: '/admin/report-cards', icon: ScrollText },
         { title: 'Template Raport', href: '/admin/report-card-templates', icon: LayoutTemplate },
         { title: 'Kenaikan Kelas', href: '/admin/class-promotion', icon: ArrowUpDown },
@@ -96,7 +93,6 @@ export function AppSidebar() {
     ];
 
     const keuanganNavItems: NavItem[] = [
-        ...(canAny(auth, ['invoice.create']) ? [{ title: 'Tarif', href: '/admin/fee-schedules', icon: Receipt }] : []),
         ...(canAny(auth, ['invoice.view']) ? [{ title: 'Tagihan', href: '/admin/invoices', icon: Banknote }] : []),
         ...(canAny(auth, ['payment.view']) ? [{ title: 'Pembayaran', href: '/admin/payments', icon: CreditCard }] : []),
         ...(canAny(auth, ['invoice.create']) ? [{ title: 'Diskon Santri', href: '/admin/student-discounts', icon: Wallet }] : []),
@@ -123,7 +119,6 @@ export function AppSidebar() {
     ];
 
     const musyrifNavItems: NavItem[] = [
-        { title: 'Tahfidz', href: '/admin/tahfidz', icon: BookOpenCheck },
         { title: 'Pelanggaran', href: '/admin/violations', icon: AlertTriangle },
         { title: 'Perizinan Pulang', href: '/admin/leave-permissions', icon: Home },
     ];
@@ -132,7 +127,6 @@ export function AppSidebar() {
         { title: 'Jadwal', href: '/santri/schedule', icon: CalendarDays },
         { title: 'Kehadiran', href: '/santri/attendances', icon: CalendarClock },
         { title: 'Nilai Kitab', href: '/santri/grades', icon: ClipboardList },
-        { title: 'Tahfidz', href: '/santri/tahfidz', icon: BookOpenCheck },
         { title: 'Pelanggaran', href: '/santri/violations', icon: AlertTriangle },
         { title: 'Profil', href: '/santri/profile', icon: User },
     ];

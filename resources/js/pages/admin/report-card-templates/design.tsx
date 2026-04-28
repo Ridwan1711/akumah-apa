@@ -16,7 +16,6 @@ const PROPS_BLOCKS = [
     { id: 'prop_student_class', label: 'Kelas', tag: 'span', content: '[Kelas]' },
     { id: 'prop_semester', label: 'Semester', tag: 'span', content: '[Semester]' },
     { id: 'prop_grades_table', label: 'Tabel Nilai Kitab', tag: 'div', content: '[Tabel Nilai]' },
-    { id: 'prop_tahfidz_table', label: 'Tabel Tahfidz', tag: 'div', content: '[Tabel Tahfidz]' },
     { id: 'prop_violations_table', label: 'Tabel Pelanggaran', tag: 'div', content: '[Tabel Pelanggaran]' },
     { id: 'prop_notes', label: 'Catatan Wali Kelas', tag: 'div', content: '[Catatan]' },
     { id: 'prop_qr', label: 'QR Code', tag: 'div', content: '[QR]' },
@@ -71,12 +70,6 @@ const DEFAULT_HTML = `
     <div class="section">
       <h3>Nilai Akademik</h3>
       <div data-prop="prop_grades_table">[Tabel Nilai]</div>
-    </div>
-
-    <!-- TAHFIDZ -->
-    <div class="section">
-      <h3>Nilai Tahfidz</h3>
-      <div data-prop="prop_tahfidz_table">[Tabel Tahfidz]</div>
     </div>
 
     <!-- PELANGGARAN -->
@@ -273,7 +266,7 @@ export default function ReportCardTemplateDesign({ template }: Props) {
                 },
                 isComponent(el: HTMLElement) {
                     const prop = el.getAttribute?.('data-prop');
-                    return prop && ['prop_grades_table', 'prop_tahfidz_table', 'prop_violations_table', 'prop_notes', 'prop_qr'].includes(prop);
+                    return prop && ['prop_grades_table', 'prop_violations_table', 'prop_notes', 'prop_qr'].includes(prop);
                 },
             },
         });

@@ -21,7 +21,7 @@ class ScheduleMatrixController extends Controller
 
     public function edit(ScheduleSet $scheduleSet): Response
     {
-        $scheduleSet->load(['period:id,name,type', 'timeSlots']);
+        $scheduleSet->load(['period:id,academic_year_id,semester_id,is_active', 'timeSlots']);
 
         $matrix = $this->matrix->getMatrix($scheduleSet);
 
@@ -29,7 +29,7 @@ class ScheduleMatrixController extends Controller
             ->where('period_id', $scheduleSet->period_id)
             ->with([
                 'teacher:id,name',
-                'schoolClass:id,name,level,level_order',
+                'schoolClass:id,name,grade_level_id,order',
                 'subject:id,name',
             ])
             ->get()
@@ -40,7 +40,7 @@ class ScheduleMatrixController extends Controller
                 'subject_id' => $a->subject_id,
                 'target_jam' => (int) ($a->target_jam ?? 1),
                 'teacher' => $a->teacher?->only(['id', 'name']),
-                'school_class' => $a->schoolClass?->only(['id', 'name', 'level', 'level_order']),
+                'school_class' => $a->schoolClass?->only(['id', 'name', 'grade_level_id', 'order']),
                 'subject' => $a->subject?->only(['id', 'name']),
             ])
             ->values();
@@ -53,7 +53,7 @@ class ScheduleMatrixController extends Controller
                 'jam_count' => $scheduleSet->jam_count,
                 'day_count' => $scheduleSet->day_count,
                 'is_active' => $scheduleSet->is_active,
-                'period' => $scheduleSet->period?->only(['id', 'name', 'type']),
+                'period' => $scheduleSet->period?->only(['id', 'academic_year_id', 'semester_id', 'is_active']),
             ],
             'matrix' => $matrix,
             'pengampuList' => $pengampuList,

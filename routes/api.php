@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\AdminUserManagementController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\GuruAttendanceController;
 use App\Http\Controllers\Api\GuruController;
+use App\Http\Controllers\Api\PpdbSyncController;
 use App\Http\Controllers\Api\SantriController;
 use App\Http\Controllers\Api\WaliController;
 use App\Http\Controllers\NotificationController;
@@ -15,6 +16,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
+    Route::middleware('ppdb.sync')->prefix('integrations/ppdb')->group(function () {
+        Route::get('/health', [PpdbSyncController::class, 'health']);
+        Route::post('/sync', [PpdbSyncController::class, 'sync']);
+    });
+
     // Public
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1');
@@ -47,7 +53,6 @@ Route::prefix('v1')->group(function () {
         Route::middleware('role:santri')->prefix('santri')->group(function () {
             Route::get('/dashboard', [SantriController::class, 'dashboard']);
             Route::get('/grades', [SantriController::class, 'grades']);
-            Route::get('/tahfidz', [SantriController::class, 'tahfidz']);
             Route::get('/violations', [SantriController::class, 'violations']);
             Route::get('/profile', [SantriController::class, 'profile']);
             Route::put('/profile', [SantriController::class, 'updateProfile']);

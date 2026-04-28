@@ -113,7 +113,7 @@ class WaliPaymentController extends Controller
 
     private function getChildStudentIds(Request $request): array
     {
-        $guardian = $request->user()->guardian;
+        $guardian = $request->user()->primaryGuardian();
         abort_unless($guardian, 404, 'Data wali tidak ditemukan.');
 
         return $guardian->students()->pluck('students.id')->toArray();

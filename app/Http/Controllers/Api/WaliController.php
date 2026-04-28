@@ -11,7 +11,6 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Student;
 use App\Models\StudentViolation;
-use App\Models\TahfidzProgress;
 use App\Notifications\PaymentPendingNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,7 +33,7 @@ class WaliController extends Controller
 
     private function getChildStudentIds(Request $request): array
     {
-        $guardian = $request->user()->guardian;
+        $guardian = $request->user()->primaryGuardian();
         abort_unless($guardian, 404, 'Data wali tidak ditemukan.');
 
         return $guardian->students()->pluck('students.id')->toArray();
@@ -42,11 +41,11 @@ class WaliController extends Controller
 
     public function dashboard(Request $request): JsonResponse
     {
-        $guardian = $request->user()->guardian;
+        $guardian = $request->user()->primaryGuardian();
         abort_unless($guardian, 404, 'Data wali tidak ditemukan.');
 
         $children = $guardian->students()
-            ->with(['currentClass:id,name', 'tahfidzSummary', 'violationSummary'])
+            ->with(['currentClass:id,name', 'violationSummary'])
             ->where('status', Student::STATUS_ACTIVE)
             ->orderBy('full_name')
             ->get();
@@ -56,11 +55,11 @@ class WaliController extends Controller
 
     public function children(Request $request): JsonResponse
     {
-        $guardian = $request->user()->guardian;
+        $guardian = $request->user()->primaryGuardian();
         abort_unless($guardian, 404, 'Data wali tidak ditemukan.');
 
         $children = $guardian->students()
-            ->with(['currentClass:id,name', 'tahfidzSummary', 'violationSummary'])
+            ->with(['currentClass:id,name', 'violationSummary'])
             ->where('status', Student::STATUS_ACTIVE)
             ->orderBy('full_name')
             ->get();
@@ -70,12 +69,11 @@ class WaliController extends Controller
 
     public function childDetail(Request $request, Student $student): JsonResponse
     {
-        $guardian = $request->user()->guardian;
+        $guardian = $request->user()->primaryGuardian();
         abort_unless($guardian && $guardian->students()->where('students.id', $student->id)->exists(), 403, 'Anda tidak memiliki akses ke data santri ini.');
 
         $student->load([
-            'currentClass:id,name,level',
-            'tahfidzSummary',
+            'currentClass:id,name,grade_level_id',
             'violationSummary',
             'currentDormAssignment.room.building',
             'guardians' => fn ($q) => $q->withPivot('relationship'),
@@ -95,10 +93,6 @@ class WaliController extends Controller
                 ->get();
         }
 
-        $recentTahfidz = TahfidzProgress::where('student_id', $student->id)
-            ->orderByDesc('created_at')
-            ->limit(10)->get();
-
         $recentViolations = StudentViolation::where('student_id', $student->id)
             ->with('violationType:id,name,points,category')
             ->orderByDesc('date')
@@ -113,14 +107,13 @@ class WaliController extends Controller
             'currentSemesterId' => $semesterId,
             'semester' => $semester,
             'grades' => $grades,
-            'recentTahfidz' => $recentTahfidz,
             'recentViolations' => $recentViolations,
         ]);
     }
 
     public function updateChildProfile(Request $request, Student $student): JsonResponse
     {
-        $guardian = $request->user()->guardian;
+        $guardian = $request->user()->primaryGuardian();
         abort_unless($guardian && $guardian->students()->where('students.id', $student->id)->exists(), 403, 'Anda tidak memiliki akses ke data santri ini.');
 
         $validated = $request->validate([
@@ -163,8 +156,7 @@ class WaliController extends Controller
         $student->save();
 
         $student->load([
-            'currentClass:id,name,level',
-            'tahfidzSummary',
+            'currentClass:id,name,grade_level_id',
             'violationSummary',
             'currentDormAssignment.room.building',
             'guardians' => fn ($q) => $q->withPivot('relationship'),
@@ -181,10 +173,11 @@ class WaliController extends Controller
     private function upsertEmProfile(Student $student, array $incoming): void
     {
         $student->loadMissing('emisProfile');
-        $current = $student->emisProfile?->toPayload() ?? [];
+        $current = $student->emProfilePayload();
         $merged = array_replace_recursive($current, $incoming);
         $attributes = EmProfile::fromPayload($merged);
         $student->emisProfile()->updateOrCreate([], $attributes);
+        $student->forceFill(['em_profile' => $merged])->save();
         $student->unsetRelation('emisProfile');
         $student->load('emisProfile');
     }
@@ -192,7 +185,7 @@ class WaliController extends Controller
     private function studentPayload(Student $student): array
     {
         $payload = $student->toArray();
-        $payload['em_profile'] = $student->emisProfile?->toPayload() ?? [
+        $payload['em_profile'] = $student->emProfilePayload() ?: [
             'santri' => [],
             'alamat' => [],
         ];
@@ -220,10 +213,10 @@ class WaliController extends Controller
 
     public function childSchedule(Request $request, Student $student): JsonResponse
     {
-        $guardian = $request->user()->guardian;
+        $guardian = $request->user()->primaryGuardian();
         abort_unless($guardian && $guardian->students()->where('students.id', $student->id)->exists(), 403, 'Anda tidak memiliki akses ke data santri ini.');
 
-        $student->load('currentClass:id,name,level');
+        $student->load('currentClass:id,name,grade_level_id');
         abort_unless($student->currentClass, 404, 'Kelas santri tidak ditemukan.');
 
         $schedules = AcademicSchedule::query()

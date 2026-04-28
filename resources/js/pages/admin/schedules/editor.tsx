@@ -304,8 +304,8 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                         <Heading
                             title={scheduleSet.name}
                             description={
-                                scheduleSet.period?.name
-                                    ? `Periode ${scheduleSet.period.name}`
+                                scheduleSet.period?.semester?.name
+                                    ? `Periode ${scheduleSet.period.semester.name}`
                                     : undefined
                             }
                         />

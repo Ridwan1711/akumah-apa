@@ -37,7 +37,7 @@ export default function GuardianEdit({ student, guardian }: Props) {
         email: guardian.email ?? '',
         occupation: guardian.occupation ?? '',
         income_band: guardian.income_band ?? '',
-        relationship: guardian.relationship,
+        relationship: guardian.relationship ?? '',
     });
 
     function handleSubmit(e: React.FormEvent) {

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class LevelSubjectDefault extends Model
 {
     protected $fillable = [
-        'level_tag',
+        'level_id',
         'subject_id',
         'period_id',
         'has_score_default',
@@ -29,6 +29,11 @@ class LevelSubjectDefault extends Model
     public function subject(): BelongsTo
     {
         return $this->belongsTo(Subject::class, 'subject_id');
+    }
+
+    public function level(): BelongsTo
+    {
+        return $this->belongsTo(GradeLevel::class, 'level_id');
     }
 
     public function period(): BelongsTo

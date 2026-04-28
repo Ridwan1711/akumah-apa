@@ -29,6 +29,7 @@ class PaymentTypeController extends Controller
             'category' => ['required', Rule::in(PaymentType::CATEGORIES)],
             'is_recurring' => ['boolean'],
             'default_amount' => ['required', 'numeric', 'min:0'],
+            'kuliah_amount' => ['nullable', 'numeric', 'min:0'],
             'description' => ['nullable', 'string'],
             'is_active' => ['boolean'],
         ]);
@@ -47,6 +48,7 @@ class PaymentTypeController extends Controller
             'category' => ['required', Rule::in(PaymentType::CATEGORIES)],
             'is_recurring' => ['boolean'],
             'default_amount' => ['required', 'numeric', 'min:0'],
+            'kuliah_amount' => ['nullable', 'numeric', 'min:0'],
             'description' => ['nullable', 'string'],
             'is_active' => ['boolean'],
         ]);

@@ -11,7 +11,7 @@ final class AuditLogModules
     public const FINANCE = ['invoice', 'payment', 'studentdiscount', 'paymenttype'];
 
     /** Modul akademik, santri, asrama, izin, pelanggaran, wali. */
-    public const AKADEMIK_OPERASIONAL = ['student', 'guardian', 'score', 'tahfidzprogress', 'leavepermission', 'studentviolation', 'dormassignment'];
+    public const AKADEMIK_OPERASIONAL = ['student', 'guardian', 'score', 'leavepermission', 'studentviolation', 'dormassignment'];
 
     private function __construct() {}
 
@@ -51,7 +51,7 @@ final class AuditLogModules
             return 'Menampilkan aktivitas keuangan dari semua pengguna (tagihan, pembayaran, jenis pembayaran, diskon santri).';
         }
         if ($akademik) {
-            return 'Menampilkan aktivitas akademik & operasional (santri, wali, nilai diniyah, tahfidz, izin pulang, pelanggaran, asrama).';
+            return 'Menampilkan aktivitas akademik & operasional (santri, wali, nilai diniyah, izin pulang, pelanggaran, asrama).';
         }
 
         return '';

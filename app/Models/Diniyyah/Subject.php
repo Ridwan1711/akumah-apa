@@ -3,14 +3,12 @@
 namespace App\Models\Diniyyah;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Subject extends Model
 {
     protected $fillable = [
         'name',
-        'fan_id',
         'code',
         'sort_order',
         'is_active',
@@ -22,11 +20,6 @@ class Subject extends Model
             'sort_order' => 'integer',
             'is_active' => 'boolean',
         ];
-    }
-
-    public function fan(): BelongsTo
-    {
-        return $this->belongsTo(Fan::class, 'fan_id');
     }
 
     public function classSubjects(): HasMany
@@ -47,5 +40,10 @@ class Subject extends Model
     public function levelDefaults(): HasMany
     {
         return $this->hasMany(LevelSubjectDefault::class, 'subject_id');
+    }
+
+    public function aliases(): HasMany
+    {
+        return $this->hasMany(SubjectAlias::class, 'subject_id');
     }
 }

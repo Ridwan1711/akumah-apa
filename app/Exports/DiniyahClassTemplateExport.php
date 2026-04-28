@@ -13,8 +13,7 @@ class DiniyahClassTemplateExport implements FromArray, WithHeadings
             'name',
             'grade_level_id',
             'grade_level_name',
-            'level_order',
-            'level',
+            'order',
             'student_gender',
         ];
     }
@@ -22,8 +21,8 @@ class DiniyahClassTemplateExport implements FromArray, WithHeadings
     public function array(): array
     {
         return [
-            ['Ula 1A', '1', '', '1', 'ibtida', 'L'],
-            ['Ula 1B', '', 'Ula', '2', 'ibtida', 'P'],
+            ['Ula 1A', '1', '', '1', 'L'],
+            ['Ula 1B', '', 'Ula', '2', 'P'],
         ];
     }
 }

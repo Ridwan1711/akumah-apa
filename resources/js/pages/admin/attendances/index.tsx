@@ -28,7 +28,7 @@ type AttendanceRow = {
         id: number;
         date?: string | null;
         schedule?: {
-            school_class?: { id: number; name: string; level?: string | null };
+            school_class?: { id: number; name: string; grade_level_id?: number | null };
             subject?: { id: number; name: string };
         };
     };
@@ -36,7 +36,7 @@ type AttendanceRow = {
 
 type Props = {
     attendances: PaginatedData<AttendanceRow>;
-    classes: Pick<SchoolClass, 'id' | 'name' | 'level'>[];
+    classes: Pick<SchoolClass, 'id' | 'name' | 'grade_level_id'>[];
     filters: {
         class_id?: string;
         student_id?: string;
@@ -118,7 +118,7 @@ export default function AttendanceIndex({ attendances, classes, filters }: Props
                             <select className="mcr-filter-select" value={filters.class_id ?? 'all'} onChange={(e) => applyFilters({ class_id: e.target.value === 'all' ? undefined : e.target.value })}>
                                 <option value="all">Semua Kelas</option>
                                 {classes.map((item) => (
-                                    <option key={item.id} value={String(item.id)}>{item.name} ({item.level})</option>
+                                    <option key={item.id} value={String(item.id)}>{item.name}</option>
                                 ))}
                             </select>
                             <select className="mcr-filter-select" value={filters.status ?? 'all'} onChange={(e) => applyFilters({ status: e.target.value === 'all' ? undefined : e.target.value })}>

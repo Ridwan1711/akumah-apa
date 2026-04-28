@@ -47,7 +47,7 @@ class StudentController extends Controller
 
         return Inertia::render('admin/students/index', [
             'students' => $query->paginate(15)->withQueryString(),
-            'classes' => SchoolClass::orderBy('name')->get(['id', 'name', 'level']),
+            'classes' => SchoolClass::orderBy('name')->get(['id', 'name', 'grade_level_id']),
             'filters' => $request->only(['search', 'status', 'class_id', 'import_uploader_id']),
             'importRuns' => $importRunsQuery->limit(20)->get(),
             'importUploaders' => $uploaders,

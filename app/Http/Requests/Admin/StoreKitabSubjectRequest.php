@@ -25,7 +25,9 @@ class StoreKitabSubjectRequest extends FormRequest
                 'max:255',
                 Rule::unique('subjects', 'name')->ignore($ignoreId),
             ],
-            'fan_id' => ['nullable', 'exists:fans,id'],
+            'aliases' => ['array'],
+            'aliases.*.tingkat_id' => ['required', 'distinct', 'exists:grade_levels,id'],
+            'aliases.*.alias_name' => ['nullable', 'string', 'max:255'],
         ];
     }
 }

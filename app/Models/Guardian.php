@@ -13,7 +13,7 @@ class Guardian extends Model
     use Auditable, HasFactory;
 
     protected $fillable = [
-        'user_id',
+        'user_id', // 2/Lebih Orang Tua / Wali Menggunakan 1 Akun Yang Sama,
         'student_id',
         'relationship',
         'status',
@@ -87,5 +87,56 @@ class Guardian extends Model
     public function hasAccount(): bool
     {
         return $this->user_id !== null;
+    }
+
+    /**
+     * Kompatibilitas nama field PPDB (`education`) terhadap `last_education`.
+     */
+    public function getEducationAttribute(): ?string
+    {
+        return $this->last_education;
+    }
+
+    /**
+     * Kompatibilitas nama field PPDB (`address_line`) terhadap `alamat`.
+     */
+    public function getAddressLineAttribute(): ?string
+    {
+        return $this->alamat;
+    }
+
+    /**
+     * Kompatibilitas flag PPDB (`is_alive`) dengan asumsi default hidup bila tidak ada status.
+     */
+    public function getIsAliveAttribute(): bool
+    {
+        return $this->status !== 'wafat';
+    }
+
+    /**
+     * Snapshot data ala PPDB Guardian supaya adapter migrasi lebih sederhana.
+     */
+    public function toPpdbLikeArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'full_name' => $this->full_name,
+            'is_alive' => $this->is_alive,
+            'nik' => $this->nik,
+            'sex' => null,
+            'birth_place' => $this->birth_place,
+            'birth_date' => $this->birth_date?->toDateString(),
+            'education' => $this->last_education,
+            'occupation' => $this->occupation,
+            'income_band' => $this->income_band,
+            'phone' => $this->phone,
+            'email' => $this->email,
+            'address_line' => $this->alamat,
+            'rt' => $this->rt,
+            'rw' => $this->rw,
+            'postal_code' => $this->kode_pos,
+            'domicile' => $this->domisili,
+            'nationality' => $this->kewarganegaraan,
+        ];
     }
 }

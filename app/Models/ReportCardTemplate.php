@@ -27,12 +27,11 @@ class ReportCardTemplate extends Model
     {
         return [
             'editor_type' => self::EDITOR_BLOCK,
-            'layout' => ['header', 'info', 'grades', 'tahfidz', 'violations', 'notes', 'footer', 'qr'],
+            'layout' => ['header', 'info', 'grades', 'violations', 'notes', 'footer', 'qr'],
             'blocks' => [
                 'header' => ['visible' => true],
                 'info' => ['visible' => true],
                 'grades' => ['visible' => true],
-                'tahfidz' => ['visible' => true],
                 'violations' => ['visible' => true],
                 'notes' => ['visible' => true],
                 'footer' => ['visible' => true],

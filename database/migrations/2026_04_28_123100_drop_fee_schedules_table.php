@@ -8,6 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        Schema::dropIfExists('fee_schedules');
+    }
+
+    public function down(): void
+    {
         Schema::create('fee_schedules', function (Blueprint $table) {
             $table->id();
             $table->foreignId('payment_type_id')->constrained()->cascadeOnDelete();
@@ -19,10 +24,5 @@ return new class extends Migration
 
             $table->unique(['payment_type_id', 'academic_year_id', 'class_level']);
         });
-    }
-
-    public function down(): void
-    {
-        Schema::dropIfExists('fee_schedules');
     }
 };

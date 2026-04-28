@@ -11,7 +11,6 @@ import {
 import {
     AlertTriangle,
     ArrowRight,
-    BookOpenCheck,
     ClipboardList,
     GraduationCap,
     Home,
@@ -133,7 +132,7 @@ function AdminDashboard({ stats, recentViolations = [], pendingLeaves = [], clas
                     title="Pelanggaran Terbaru"
                     isEmpty={recentViolations.length === 0}
                     emptyText="Tidak ada pelanggaran terbaru."
-                    emptyIcon={<BookOpenCheck size={20} className="text-muted-foreground" />}
+                    emptyIcon={<AlertTriangle size={20} className="text-muted-foreground" />}
                     action={
                         <Link
                             href="/admin/violations"
@@ -174,7 +173,7 @@ function AdminDashboard({ stats, recentViolations = [], pendingLeaves = [], clas
                     title="Perizinan Menunggu"
                     isEmpty={pendingLeaves.length === 0}
                     emptyText="Tidak ada perizinan menunggu persetujuan."
-                    emptyIcon={<BookOpenCheck size={20} className="text-muted-foreground" />}
+                    emptyIcon={<AlertTriangle size={20} className="text-muted-foreground" />}
                     action={
                         <Link
                             href="/admin/leave-permissions"
@@ -297,7 +296,6 @@ function SantriDashboard({ student, recentGrades = [], activeLeave }: Props) {
         <>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <ManhoodStatCard title="Kelas Saat Ini" value={student.current_class?.name ?? '-'} icon={GraduationCap} theme="blue" />
-                <ManhoodStatCard title="Juz Hafalan" value={student.tahfidz_summary?.total_juz_completed ?? 0} icon={BookOpenCheck} theme="emerald" />
                 <ManhoodStatCard title="Poin Pelanggaran" value={student.violation_summary?.total_points ?? 0} icon={AlertTriangle} theme="rose" />
                 <ManhoodStatCard title="Status Izin" value={activeLeave ? 'Sedang Izin' : 'Aktif'} icon={Home} theme={statusTheme} />
             </div>
@@ -398,8 +396,8 @@ function WaliDashboard({ children = [] }: Props) {
                         <div className="flex-1 p-5">
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="flex flex-col items-center justify-center rounded-xl border border-primary/20 bg-primary/5 p-3 text-center">
-                                    <p className="text-3xl font-bold text-primary">{child.tahfidz_summary?.total_juz_completed ?? 0}</p>
-                                    <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-primary/80">Juz Selesai</p>
+                                    <p className="text-sm font-bold text-primary">{child.current_class?.name ?? '-'}</p>
+                                    <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-primary/80">Kelas Aktif</p>
                                 </div>
                                 <div className="flex flex-col items-center justify-center rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-center">
                                     <p className="text-3xl font-bold text-destructive">{child.violation_summary?.total_points ?? 0}</p>

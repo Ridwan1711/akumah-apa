@@ -15,7 +15,6 @@ use App\Models\ReportCardTemplate;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Models\StudentViolation;
-use App\Models\TahfidzProgress;
 use App\Notifications\GradeUpdatedNotification;
 use App\Notifications\ReportCardPublishedNotification;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -50,7 +49,7 @@ class GuruController extends Controller
         $user = $request->user();
 
         $assignments = TeacherAssignment::where('teacher_id', $user->id)
-            ->with(['schoolClass:id,name,level', 'subject:id,name'])
+            ->with(['schoolClass:id,name,grade_level_id', 'subject:id,name'])
             ->get();
 
         $waliKelasClasses = [];
@@ -58,9 +57,9 @@ class GuruController extends Controller
         if ($waliClassIds->isNotEmpty()) {
             $waliKelasClasses = SchoolClass::whereIn('id', $waliClassIds)
                 ->withCount(['students' => fn ($q) => $q->where('status', Student::STATUS_ACTIVE)])
-                ->orderBy('level_order')
+                ->orderBy('order')
                 ->orderBy('name')
-                ->get(['id', 'name', 'level']);
+                ->get(['id', 'name', 'grade_level_id']);
         }
 
         return response()->json([
@@ -74,7 +73,7 @@ class GuruController extends Controller
         $user = $request->user();
         $hasLimitedView = ! $user->isAdmin();
 
-        $classesQuery = SchoolClass::orderBy('level_order')->orderBy('name');
+        $classesQuery = SchoolClass::query()->orderBy('order')->orderBy('name');
         $subjectsQuery = Subject::query()->orderBy('name');
 
         $classSubjectMap = [];
@@ -92,11 +91,11 @@ class GuruController extends Controller
         }
 
         return response()->json([
-            'classes' => $classesQuery->get(['id', 'name', 'level']),
+            'classes' => $classesQuery->get(['id', 'name', 'grade_level_id']),
             'subjects' => $subjectsQuery->get(['id', 'name']),
             'classSubjectMap' => $classSubjectMap,
             'semesters' => Semester::with('academicYear:id,name')->orderByDesc('id')->get(['id', 'name', 'academic_year_id']),
-            'academicPeriods' => AcademicPeriod::orderByDesc('id')->get(['id', 'name', 'type', 'semester_id']),
+            'academicPeriods' => AcademicPeriod::query()->orderByDesc('id')->get(['id', 'academic_year_id', 'semester_id', 'is_active']),
         ]);
     }
 
@@ -122,7 +121,7 @@ class GuruController extends Controller
         $schedulesQuery = AcademicSchedule::query()
             ->where('teacher_id', $user->id)
             ->with([
-                'schoolClass:id,name,level',
+                'schoolClass:id,name,grade_level_id',
                 'subject:id,name',
             ])
             ->orderBy('day')
@@ -145,7 +144,7 @@ class GuruController extends Controller
                 'class' => [
                     'id' => $item->schoolClass->id,
                     'name' => $item->schoolClass->name,
-                    'level' => $item->schoolClass->level,
+                    'grade_level_id' => $item->schoolClass->grade_level_id,
                 ],
                 'subject' => [
                     'id' => $item->subject->id,
@@ -171,7 +170,7 @@ class GuruController extends Controller
         $user = $request->user();
         $hasLimitedView = ! $user->isAdmin();
 
-        $classesQuery = SchoolClass::orderBy('level_order')->orderBy('name');
+        $classesQuery = SchoolClass::query()->orderBy('order')->orderBy('name');
         $subjectsQuery = Subject::query()->orderBy('name');
 
         if ($hasLimitedView) {
@@ -226,10 +225,10 @@ class GuruController extends Controller
         }
 
         return response()->json([
-            'classes' => $classesQuery->get(['id', 'name', 'level']),
+            'classes' => $classesQuery->get(['id', 'name', 'grade_level_id']),
             'subjects' => $subjectsQuery->get(['id', 'name']),
             'semesters' => Semester::with('academicYear:id,name')->orderByDesc('id')->get(['id', 'name', 'academic_year_id']),
-            'academicPeriods' => AcademicPeriod::orderByDesc('id')->get(['id', 'name', 'type', 'semester_id']),
+            'academicPeriods' => AcademicPeriod::query()->orderByDesc('id')->get(['id', 'academic_year_id', 'semester_id', 'is_active']),
             'assessmentComponents' => AssessmentComponent::orderBy('type')->orderBy('name')->get(['id', 'name', 'type']),
             'students' => $students,
             'grades' => $grades,
@@ -365,7 +364,7 @@ class GuruController extends Controller
         }
 
         return response()->json([
-            'classes' => SchoolClass::whereIn('id', $classIds)->orderBy('level_order')->orderBy('name')->get(['id', 'name', 'level']),
+            'classes' => SchoolClass::query()->whereIn('id', $classIds)->orderBy('order')->orderBy('name')->get(['id', 'name', 'grade_level_id']),
             'semesters' => Semester::with('academicYear:id,name')->orderByDesc('id')->get(['id', 'name', 'academic_year_id']),
             'students' => $students,
             'filters' => $request->only(['class_id', 'semester_id']),
@@ -457,11 +456,6 @@ class GuruController extends Controller
             ->with(['subject:id,name', 'component:id,name'])
             ->get();
 
-        $tahfidzProgress = TahfidzProgress::where('student_id', $studentId)
-            ->whereBetween('created_at', [$semester->start_date, $semester->end_date])
-            ->orderBy('juz')->orderBy('surah_from')
-            ->get();
-
         $violations = StudentViolation::where('student_id', $studentId)
             ->whereBetween('date', [$semester->start_date, $semester->end_date])
             ->with('violationType:id,name,points,category')
@@ -489,7 +483,6 @@ class GuruController extends Controller
             'student' => $student,
             'semester' => $semester,
             'grades' => $grades,
-            'tahfidzProgress' => $tahfidzProgress,
             'violations' => $violations,
             'reportCard' => $reportCard,
             'avgScore' => $avgScore,

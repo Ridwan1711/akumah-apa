@@ -1,7 +1,7 @@
 @php
 $templateConfig = $templateConfig ?? \App\Models\ReportCardTemplate::defaultConfig();
 $style = $templateConfig['style'] ?? [];
-$layout = $templateConfig['layout'] ?? ['header', 'info', 'grades', 'tahfidz', 'violations', 'notes', 'footer', 'qr'];
+$layout = $templateConfig['layout'] ?? ['header', 'info', 'grades', 'violations', 'notes', 'footer', 'qr'];
 $blocks = $templateConfig['blocks'] ?? [];
 $fontFamily = $style['font_family'] ?? 'DejaVu Sans';
 $fontSize = $style['font_size'] ?? 11;
@@ -40,7 +40,7 @@ $headerBg = $style['header_bg'] ?? '#f0f0f0';
 </head>
 <body>
     @foreach($layout as $blockName)
-        @if(($blocks[$blockName]['visible'] ?? true) && in_array($blockName, ['header', 'info', 'grades', 'tahfidz', 'violations', 'notes', 'footer', 'qr']))
+        @if(($blocks[$blockName]['visible'] ?? true) && in_array($blockName, ['header', 'info', 'grades', 'violations', 'notes', 'footer', 'qr']))
             @include('pdf.partials.' . $blockName)
         @endif
     @endforeach

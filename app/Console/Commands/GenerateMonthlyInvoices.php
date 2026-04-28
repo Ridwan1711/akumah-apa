@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Models\FeeSchedule;
 use App\Models\Invoice;
 use App\Models\PaymentType;
 use App\Models\Semester;
@@ -38,7 +37,7 @@ class GenerateMonthlyInvoices extends Command
         }
 
         $students = Student::where('status', Student::STATUS_ACTIVE)
-            ->with('currentClass:id,name,level')
+            ->with('currentClass:id,name,grade_level_id')
             ->get();
 
         $dueDate = now()->setYear($year)->setMonth($month)->endOfMonth()->toDateString();
@@ -61,7 +60,11 @@ class GenerateMonthlyInvoices extends Command
                         continue;
                     }
 
-                    $amount = $this->resolveAmount($type, $activeSemester->academic_year_id, $student->currentClass?->level);
+                    $amount = $this->resolveAmount($type, $student);
+                    if ($amount === null) {
+                        $skipped++;
+                        continue;
+                    }
                     $discount = $this->resolveDiscount($student->id, $type->id, $activeSemester->academic_year_id, $amount);
 
                     Invoice::create([
@@ -88,17 +91,13 @@ class GenerateMonthlyInvoices extends Command
         return self::SUCCESS;
     }
 
-    private function resolveAmount(PaymentType $type, int $academicYearId, ?string $classLevel): float
+    private function resolveAmount(PaymentType $type, Student $student): ?float
     {
-        $schedule = FeeSchedule::where('payment_type_id', $type->id)
-            ->where('academic_year_id', $academicYearId)
-            ->where(function ($q) use ($classLevel) {
-                $q->where('class_level', $classLevel)->orWhereNull('class_level');
-            })
-            ->orderByRaw('class_level IS NULL ASC')
-            ->first();
+        if ($student->is_kuliah) {
+            return $type->kuliah_amount !== null ? (float) $type->kuliah_amount : null;
+        }
 
-        return (float) ($schedule?->amount ?? $type->default_amount);
+        return (float) $type->default_amount;
     }
 
     private function resolveDiscount(int $studentId, int $paymentTypeId, int $academicYearId, float $amount): float

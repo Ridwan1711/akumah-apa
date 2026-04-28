@@ -37,13 +37,13 @@ class ClassSubjectGradingResolver
             return $row->is_active && $row->has_score;
         }
 
-        $levelTag = (string) (SchoolClass::query()->whereKey($classId)->value('level') ?? '');
-        if ($levelTag === '') {
+        $levelId = (int) (SchoolClass::query()->whereKey($classId)->value('grade_level_id') ?? 0);
+        if ($levelId <= 0) {
             return false;
         }
 
         $default = LevelSubjectDefault::query()
-            ->where('level_tag', $levelTag)
+            ->where('level_id', $levelId)
             ->where('subject_id', $subjectId)
             ->where('period_id', $periodId)
             ->first();

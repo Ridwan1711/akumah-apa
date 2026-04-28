@@ -69,8 +69,8 @@ class DashboardController extends Controller
             ->latest()->limit(5)->get();
 
         $classCounts = SchoolClass::withCount(['students' => fn ($q) => $q->where('status', Student::STATUS_ACTIVE)])
-            ->orderBy('level_order')->orderBy('name')
-            ->get(['id', 'name', 'level']);
+            ->orderBy('order')->orderBy('name')
+            ->get(['id', 'name', 'grade_level_id']);
 
         return [
             'stats' => compact('totalStudents', 'totalClasses', 'totalGuru', 'totalMusyrif'),
@@ -118,7 +118,6 @@ class DashboardController extends Controller
 
         $student->load([
             'currentClass:id,name',
-            'tahfidzSummary',
             'violationSummary',
         ]);
 
@@ -143,22 +142,22 @@ class DashboardController extends Controller
         $classIds = $user->homeroomAssignments()->pluck('class_id')->unique();
         $classes = SchoolClass::whereIn('id', $classIds)
             ->withCount(['students' => fn ($q) => $q->where('status', Student::STATUS_ACTIVE)])
-            ->orderBy('level_order')
+            ->orderBy('order')
             ->orderBy('name')
-            ->get(['id', 'name', 'level']);
+            ->get(['id', 'name', 'grade_level_id']);
 
         return ['waliKelasClasses' => $classes];
     }
 
     private function waliData(User $user): array
     {
-        $guardian = $user->guardian;
+        $guardian = $user->primaryGuardian();
         if (! $guardian) {
             return ['children' => []];
         }
 
         $children = $guardian->students()
-            ->with(['currentClass:id,name', 'tahfidzSummary', 'violationSummary'])
+            ->with(['currentClass:id,name', 'violationSummary'])
             ->where('status', Student::STATUS_ACTIVE)
             ->orderBy('full_name')
             ->get();

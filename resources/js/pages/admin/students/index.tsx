@@ -48,7 +48,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 type Props = {
     students: PaginatedData<Student>;
-    classes: Pick<DiniyahClass, 'id' | 'name' | 'level'>[];
+    classes: Pick<DiniyahClass, 'id' | 'name' | 'grade_level_id'>[];
     filters: {
         search?: string;
         status?: string;
@@ -351,7 +351,7 @@ export default function StudentIndex({
                                 <option value="all">Semua Kelas</option>
                                 {classes.map((c) => (
                                     <option key={c.id} value={String(c.id)}>
-                                        {c.name} ({c.level})
+                                        {c.name}
                                     </option>
                                 ))}
                             </select>
@@ -432,14 +432,13 @@ export default function StudentIndex({
                                 <th>Kelas</th>
                                 <th>Status</th>
                                 <th>Akun</th>
-                                <th>Progress Hafalan</th>
                                 <th style={{ textAlign: 'right' }}>Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
                             {students.data.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8}>
+                                    <td colSpan={7}>
                                         <CrudEmptyState
                                             title="Tidak ada data santri"
                                             description="Coba ubah filter atau tambah data santri baru."
@@ -449,11 +448,6 @@ export default function StudentIndex({
                             ) : (
                                 students.data.map((student) => {
                                     const status = statusMap[student.status];
-                                    const tahfidz = student.tahfidz_summary?.total_juz_completed ?? 0;
-                                    const hafalanPct = Math.max(
-                                        0,
-                                        Math.min(100, Math.round((tahfidz / 30) * 100)),
-                                    );
                                     return (
                                         <tr key={student.id}>
                                             <td>
@@ -501,12 +495,6 @@ export default function StudentIndex({
                                                 >
                                                     {student.user_id ? 'Aktif' : 'Belum'}
                                                 </span>
-                                            </td>
-                                            <td>
-                                                {tahfidz} juz
-                                                <div className="mcr-mini-progress">
-                                                    <span style={{ width: `${hafalanPct}%` }} />
-                                                </div>
                                             </td>
                                             <td>
                                                 <div className="mcr-action-group">
@@ -795,7 +783,7 @@ export default function StudentIndex({
                                 <option value="">-- Pilih kelas --</option>
                                 {classes.map((kelas) => (
                                     <option key={kelas.id} value={String(kelas.id)}>
-                                        {kelas.name} ({kelas.level})
+                                        {kelas.name}
                                     </option>
                                 ))}
                             </select>

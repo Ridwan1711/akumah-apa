@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Diniyyah\ClassSubject;
+use App\Models\Diniyyah\GradeLevel;
 use App\Models\Diniyyah\LevelSubjectDefault;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Subject;
@@ -29,20 +30,26 @@ class ClassSubjectRuleController extends Controller
             $selectedPeriodId = (int) (DB::table('academic_periods')->value('id') ?? 0);
         }
         $selectedSemesterId = (int) (DB::table('academic_periods')->where('id', $selectedPeriodId)->value('semester_id') ?? 0);
-        $validLevelTags = SchoolClass::LEVELS;
-        $selectedLevelTag = (string) $request->input('level_tag', '');
-        if (! in_array($selectedLevelTag, $validLevelTags, true)) {
-            $selectedLevelTag = SchoolClass::LEVEL_IBTIDA;
+        $gradeLevels = GradeLevel::query()
+            ->orderBy('order')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $validLevelIds = $gradeLevels->pluck('id')->map(fn ($id) => (string) $id)->all();
+        $selectedLevelId = (string) $request->input('level_id', '');
+        if (! in_array($selectedLevelId, $validLevelIds, true)) {
+            $selectedLevelId = (string) ($validLevelIds[0] ?? '');
         }
 
         return Inertia::render('admin/class-subject-rules/index', [
-            'classes' => SchoolClass::orderBy('level_order')->orderBy('name')->get(['id', 'name', 'level']),
+            'classes' => SchoolClass::query()
+                ->orderBy('order')
+                ->orderBy('name')
+                ->get(['id', 'name', 'grade_level_id']),
             'subjects' => Subject::query()
-                ->with('fan:id,name')
-                ->orderBy('fan_id')
                 ->orderBy('sort_order')
                 ->orderBy('name')
-                ->get(['id', 'name', 'fan_id']),
+                ->get(['id', 'name']),
             'semesters' => Semester::query()
                 ->with('academicYear:id,name')
                 ->orderByDesc('is_active')
@@ -61,11 +68,11 @@ class ClassSubjectRuleController extends Controller
                 ->get(['id', 'class_id', 'subject_id', 'period_id', 'has_score', 'is_active']),
             'levelDefaults' => LevelSubjectDefault::query()
                 ->when($selectedPeriodId > 0, fn ($query) => $query->where('period_id', $selectedPeriodId))
-                ->get(['id', 'level_tag', 'subject_id', 'period_id', 'has_score_default', 'target_jam_default', 'is_mandatory_teaching']),
-            'selectedLevelTag' => $selectedLevelTag,
-            'levelTagOptions' => collect($validLevelTags)->map(fn ($tag) => [
-                'value' => $tag,
-                'label' => $this->labelLevelTag($tag),
+                ->get(['id', 'level_id', 'subject_id', 'period_id', 'has_score_default', 'target_jam_default', 'is_mandatory_teaching']),
+            'selectedLevelId' => $selectedLevelId,
+            'levelOptions' => $gradeLevels->map(fn (GradeLevel $level) => [
+                'value' => (string) $level->id,
+                'label' => $level->name,
             ])->values(),
         ]);
     }
@@ -108,38 +115,29 @@ class ClassSubjectRuleController extends Controller
 
     public function bulkStore(Request $request): RedirectResponse
     {
-        $validLevelTags = array_merge(SchoolClass::LEVELS, ['__untagged']);
+        $validLevelIds = GradeLevel::query()
+            ->pluck('id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
 
         $payload = $request->validate([
             'subject_id' => ['required', 'exists:subjects,id'],
             'semester_id' => ['required', 'exists:semesters,id'],
             'mode' => ['required', 'in:include,exclude'],
-            'level_tags' => ['array'],
-            'level_tags.*' => ['string', 'in:'.implode(',', $validLevelTags)],
+            'level_ids' => ['array'],
+            'level_ids.*' => ['string', 'in:'.implode(',', $validLevelIds)],
         ]);
 
-        $selectedLevelTags = collect($payload['level_tags'] ?? [])
-            ->map(fn ($tag) => trim((string) $tag))
-            ->filter(fn ($tag) => $tag !== '')
+        $selectedLevelIds = collect($payload['level_ids'] ?? [])
+            ->map(fn ($id) => trim((string) $id))
+            ->filter(fn ($id) => $id !== '')
             ->unique()
+            ->map(fn ($value) => (int) $value)
+            ->filter(fn ($value) => $value > 0)
             ->values();
 
         $selectedClassIds = SchoolClass::query()
-            ->when($selectedLevelTags->contains('__untagged'), function ($query) use ($selectedLevelTags) {
-                $nonUntaggedTags = $selectedLevelTags->reject(fn ($tag) => $tag === '__untagged')->values();
-
-                if ($nonUntaggedTags->isEmpty()) {
-                    return $query->where(function ($inner) {
-                        $inner->whereNull('level')->orWhere('level', '');
-                    });
-                }
-
-                return $query->where(function ($inner) use ($nonUntaggedTags) {
-                    $inner->whereIn('level', $nonUntaggedTags->all())
-                        ->orWhereNull('level')
-                        ->orWhere('level', '');
-                });
-            }, fn ($query) => $query->whereIn('level', $selectedLevelTags->all()))
+            ->when($selectedLevelIds->isNotEmpty(), fn ($query) => $query->whereIn('grade_level_id', $selectedLevelIds->all()))
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->values();
@@ -178,20 +176,4 @@ class ClassSubjectRuleController extends Controller
             ->value('id');
     }
 
-    protected function labelLevelTag(string $tag): string
-    {
-        return match ($tag) {
-            SchoolClass::LEVEL_IBTIDA => 'Ibtida',
-            SchoolClass::LEVEL_SALAFY1 => 'Salafy 1',
-            SchoolClass::LEVEL_SALAFY2 => 'Salafy 2',
-            SchoolClass::LEVEL_SALAFY3 => 'Salafy 3',
-            SchoolClass::LEVEL_SALAFY4 => 'Salafy 4',
-            SchoolClass::LEVEL_SALAFY5 => 'Salafy 5',
-            SchoolClass::LEVEL_SALAFY6 => 'Salafy 6',
-            SchoolClass::LEVEL_SALAFY7 => 'Salafy 7',
-            SchoolClass::LEVEL_SALAFY8 => 'Salafy 8',
-            SchoolClass::LEVEL_SALAFY9 => 'Salafy 9',
-            default => $tag,
-        };
-    }
 }

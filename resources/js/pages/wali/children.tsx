@@ -33,10 +33,6 @@ export default function WaliChildren({ children }: Props) {
                                 <p className="mb-4 text-sm text-muted-foreground">NIS: {child.nis} | Kelas: {child.current_class?.name ?? '-'}</p>
                                 <div className="mb-4 grid grid-cols-2 gap-3">
                                     <div className="rounded-lg bg-muted/30 p-3 text-center">
-                                        <p className="text-2xl font-bold text-green-600">{child.tahfidz_summary?.total_juz_completed ?? 0}</p>
-                                        <p className="text-xs text-muted-foreground">Juz Hafalan</p>
-                                    </div>
-                                    <div className="rounded-lg bg-muted/30 p-3 text-center">
                                         <p className="text-2xl font-bold text-red-600">{child.violation_summary?.total_points ?? 0}</p>
                                         <p className="text-xs text-muted-foreground">Poin Pelanggaran</p>
                                     </div>

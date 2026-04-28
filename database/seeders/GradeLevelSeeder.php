@@ -10,9 +10,16 @@ class GradeLevelSeeder extends Seeder
     public function run(): void
     {
         $rows = [
-            ['name' => 'Ula', 'order' => 1],
-            ['name' => 'Wustho', 'order' => 2],
-            ['name' => 'Ulya', 'order' => 3],
+            ['name' => 'Ibtida', 'order' => 1],
+            ['name' => '1 Salafy', 'order' => 2],
+            ['name' => '2 Salafy', 'order' => 3],
+            ['name' => '3 Salafy', 'order' => 4],
+            ['name' => '4 Salafy', 'order' => 5],
+            ['name' => '5 Salafy', 'order' => 6],
+            ['name' => '6 Salafy', 'order' => 7],
+            ['name' => '7 Salafy', 'order' => 8],
+            ['name' => '8 Salafy', 'order' => 9],
+            ['name' => '9 Salafy', 'order' => 10],
         ];
 
         foreach ($rows as $row) {

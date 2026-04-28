@@ -20,7 +20,7 @@ class DiniyahClassDataExport implements FromQuery, WithHeadings, WithMapping
             ->when($this->filters['search'] ?? null, function ($query, $search) {
                 $query->where('name', 'ilike', "%{$search}%");
             })
-            ->orderBy('level_order')
+            ->orderBy('order')
             ->orderBy('name');
     }
 
@@ -30,8 +30,7 @@ class DiniyahClassDataExport implements FromQuery, WithHeadings, WithMapping
             'name',
             'grade_level_id',
             'grade_level_name',
-            'level_order',
-            'level',
+            'order',
             'student_gender',
         ];
     }
@@ -42,8 +41,7 @@ class DiniyahClassDataExport implements FromQuery, WithHeadings, WithMapping
             $row->name,
             $row->grade_level_id,
             $row->gradeLevel?->name,
-            $row->level_order,
-            $row->level,
+            $row->order,
             $row->student_gender,
         ];
     }

@@ -5,7 +5,6 @@ namespace App\Models;
 use App\Models\Diniyyah\ClassWali;
 use App\Models\Diniyyah\Score;
 use App\Models\Diniyyah\TeacherAssignment;
-use App\Support\Authorization\Permissions;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -90,9 +89,51 @@ class User extends Authenticatable
         return $this->hasOne(Student::class);
     }
 
+    /**
+     * Backward-compatibility accessor used by existing controllers (`$user->guardian`).
+     * Returns the primary guardian row linked by `guardians.user_id`.
+     */
     public function guardian(): HasOne
     {
         return $this->hasOne(Guardian::class);
+    }
+
+    /**
+     * All guardians directly linked by legacy `guardians.user_id`.
+     */
+    public function guardianRecords(): HasMany
+    {
+        return $this->hasMany(Guardian::class);
+    }
+
+    /**
+     * New many-to-many mapping (one account can be attached to multiple guardians).
+     */
+    public function guardians(): BelongsToMany
+    {
+        return $this->belongsToMany(Guardian::class, 'guardian_user')
+            ->withTimestamps();
+    }
+
+    /**
+     * Resolve guardian record for wali account from new/legacy mappings.
+     */
+    public function primaryGuardian(): ?Guardian
+    {
+        if ($this->relationLoaded('guardians') && $this->guardians->isNotEmpty()) {
+            return $this->guardians->first();
+        }
+
+        $mapped = $this->guardians()->first();
+        if ($mapped) {
+            return $mapped;
+        }
+
+        if ($this->relationLoaded('guardian')) {
+            return $this->guardian;
+        }
+
+        return $this->guardian()->first();
     }
 
     public function teacherAssignments(): HasMany

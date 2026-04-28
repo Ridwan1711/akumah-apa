@@ -67,22 +67,6 @@ class SantriController extends Controller
         ]);
     }
 
-    public function tahfidz(Request $request): Response
-    {
-        $student = $this->getStudent($request);
-        $student->load('tahfidzSummary');
-
-        $progress = $student->tahfidzProgress()
-            ->orderByDesc('created_at')
-            ->paginate(15);
-
-        return Inertia::render('santri/tahfidz', [
-            'student' => $student->only('id', 'full_name', 'nis'),
-            'summary' => $student->tahfidzSummary,
-            'progress' => $progress,
-        ]);
-    }
-
     public function violations(Request $request): Response
     {
         $student = $this->getStudent($request);
@@ -218,7 +202,7 @@ class SantriController extends Controller
         ksort($week);
 
         return Inertia::render('santri/schedule', [
-            'class' => $class->only(['id', 'name', 'level']),
+            'class' => $class->only(['id', 'name', 'grade_level_id']),
             'semester' => $activeSemester ? $activeSemester->only(['id', 'name']) : null,
             'week' => array_values($week),
         ]);

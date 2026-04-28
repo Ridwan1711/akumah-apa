@@ -6,7 +6,6 @@ use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\ClassPromotion;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\StudentClassEnrollment;
-use App\Models\FeeSchedule;
 use App\Models\Guardian;
 use App\Models\ImportRun;
 use App\Models\Invoice;
@@ -115,6 +114,7 @@ class ProcessBulkRun implements ShouldQueue, ShouldBeUnique
         $run->update(['total_rows' => $students->count()]);
 
         foreach ($students as $student) {
+            /** @var Student $student */
             if ($resendOnly) {
                 $existingInvoice = Invoice::query()
                     ->where('student_id', $student->id)
@@ -129,7 +129,11 @@ class ProcessBulkRun implements ShouldQueue, ShouldBeUnique
                 continue;
             }
 
-            $amount = $this->resolveAmount($paymentType, $academicYearId, $student->currentClass?->level);
+            $amount = $this->resolveAmount($paymentType, $student);
+            if ($amount === null) {
+                $this->incrementRunCounters($run, 'skipped');
+                continue;
+            }
             $discount = $this->resolveDiscount($student->id, $paymentTypeId, $academicYearId, $amount);
 
             try {
@@ -402,18 +406,13 @@ class ProcessBulkRun implements ShouldQueue, ShouldBeUnique
         $run->update($updates);
     }
 
-    protected function resolveAmount(PaymentType $type, int $academicYearId, ?string $classLevel): float
+    protected function resolveAmount(PaymentType $type, Student $student): ?float
     {
-        $schedule = FeeSchedule::query()
-            ->where('payment_type_id', $type->id)
-            ->where('academic_year_id', $academicYearId)
-            ->where(function ($q) use ($classLevel) {
-                $q->where('class_level', $classLevel)->orWhereNull('class_level');
-            })
-            ->orderByRaw('class_level IS NULL ASC')
-            ->first();
+        if ($student->is_kuliah) {
+            return $type->kuliah_amount !== null ? (float) $type->kuliah_amount : null;
+        }
 
-        return (float) ($schedule?->amount ?? $type->default_amount);
+        return (float) $type->default_amount;
     }
 
     protected function resolveDiscount(int $studentId, int $paymentTypeId, int $academicYearId, float $amount): float

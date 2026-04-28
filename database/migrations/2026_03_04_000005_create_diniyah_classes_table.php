@@ -17,13 +17,12 @@ return new class extends Migration
 
         Schema::create('academic_periods', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
-            $table->string('type'); // semester_1, semester_2
-            $table->boolean('is_active')->default(false);
+            $table->foreignId('academic_year_id')->constrained('academic_years')->cascadeOnDelete();
             $table->foreignId('semester_id')->nullable()->constrained('semesters')->nullOnDelete();
+            $table->boolean('is_active')->default(false);
             $table->timestamps();
 
-            $table->index('type');
+            $table->index(['academic_year_id', 'semester_id'], 'year_semester_index');
             $table->index('is_active');
         });
 
@@ -31,12 +30,11 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->foreignId('grade_level_id')->constrained('grade_levels')->cascadeOnDelete();
-            $table->unsignedSmallInteger('level_order')->default(0);
-            /** @var string|null Matches fee_schedules.class_level (ibtida, 1salafy, …) */
-            $table->string('level', 32)->nullable()->index();
+            $table->string('student_gender');
+            $table->unsignedSmallInteger('order')->default(0)->unique();
             $table->timestamps();
 
-            $table->index(['grade_level_id', 'level_order']);
+            $table->index(['grade_level_id', 'order']);
         });
     }
 

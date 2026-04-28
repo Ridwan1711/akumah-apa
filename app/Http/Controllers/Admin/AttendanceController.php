@@ -16,7 +16,7 @@ class AttendanceController extends Controller
     public function index(Request $request): Response
     {
         $query = LessonAttendance::with([
-            'lessonSession.schedule.schoolClass:id,name,level',
+            'lessonSession.schedule.schoolClass:id,name,grade_level_id',
             'lessonSession.schedule.subject:id,name',
             'student:id,nis,full_name',
         ])
@@ -34,7 +34,7 @@ class AttendanceController extends Controller
 
         return Inertia::render('admin/attendances/index', [
             'attendances' => $query->paginate(25)->withQueryString(),
-            'classes' => SchoolClass::orderBy('level_order')->orderBy('name')->get(['id', 'name', 'level']),
+            'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'grade_level_id']),
             'filters' => $request->only(['class_id', 'student_id', 'status', 'date_from', 'date_to']),
         ]);
     }

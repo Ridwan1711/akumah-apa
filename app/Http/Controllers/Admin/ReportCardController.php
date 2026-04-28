@@ -10,7 +10,6 @@ use App\Models\ReportCardTemplate;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Models\StudentViolation;
-use App\Models\TahfidzProgress;
 use App\Notifications\ReportCardPublishedNotification;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Endroid\QrCode\Encoding\Encoding;
@@ -45,7 +44,7 @@ class ReportCardController extends Controller
         }
 
         return Inertia::render('admin/report-cards/index', [
-            'classes' => SchoolClass::orderBy('level_order')->orderBy('name')->get(['id', 'name', 'level']),
+            'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'grade_level_id']),
             'semesters' => Semester::with('academicYear:id,name')->orderByDesc('id')->get(['id', 'name', 'academic_year_id']),
             'students' => $students,
             'filters' => $request->only(['class_id', 'semester_id']),
@@ -131,11 +130,6 @@ class ReportCardController extends Controller
             ->with(['subject:id,name', 'component:id,name'])
             ->get();
 
-        $tahfidzProgress = TahfidzProgress::where('student_id', $studentId)
-            ->whereBetween('created_at', [$semester->start_date, $semester->end_date])
-            ->orderBy('juz')->orderBy('surah_from')
-            ->get();
-
         $violations = StudentViolation::where('student_id', $studentId)
             ->whereBetween('date', [$semester->start_date, $semester->end_date])
             ->with('violationType:id,name,points,category')
@@ -163,7 +157,6 @@ class ReportCardController extends Controller
             'student' => $student,
             'semester' => $semester,
             'grades' => $grades,
-            'tahfidzProgress' => $tahfidzProgress,
             'violations' => $violations,
             'reportCard' => $reportCard,
             'avgScore' => $avgScore,

@@ -36,19 +36,6 @@ const studentGenderLabels: Record<string, string> = {
     P: 'Santriyah',
 };
 
-const optionalLevelLabels: Record<string, string> = {
-    ibtida: 'Ibtida',
-    '1salafy': 'Salafy 1',
-    '2salafy': 'Salafy 2',
-    '3salafy': 'Salafy 3',
-    '4salafy': 'Salafy 4',
-    '5salafy': 'Salafy 5',
-    '6salafy': 'Salafy 6',
-    '7salafy': 'Salafy 7',
-    '8salafy': 'Salafy 8',
-    '9salafy': 'Salafy 9',
-};
-
 type Props = {
     classes: PaginatedData<ClassRow>;
     gradeLevels: GradeLevel[];
@@ -73,8 +60,7 @@ export default function DiniyahClassIndex({
     const form = useForm({
         name: '',
         grade_level_id: '',
-        level_order: '0',
-        level: '' as string,
+        order: '0',
         student_gender: '' as string,
     });
     const importForm = useForm<{
@@ -103,8 +89,7 @@ export default function DiniyahClassIndex({
         form.setData({
             name: cls.name,
             grade_level_id: String(cls.grade_level_id ?? cls.grade_level?.id ?? ''),
-            level_order: String(cls.level_order ?? 0),
-            level: cls.level ?? '',
+            order: String((cls as ClassRow & { order?: number; level_order?: number }).order ?? cls.level_order ?? 0),
             student_gender: cls.student_gender ?? '',
         });
     }
@@ -161,8 +146,7 @@ export default function DiniyahClassIndex({
         form.setData({
             name: '',
             grade_level_id: '',
-            level_order: '0',
-            level: '',
+            order: '0',
             student_gender: '',
         });
         setDialogOpen(true);
@@ -320,7 +304,6 @@ export default function DiniyahClassIndex({
                                     <th>Nama Kelas</th>
                                     <th>Jenjang</th>
                                     <th>Urutan</th>
-                                    <th>Tag Tingkat</th>
                                     <th>Jenis Santri</th>
                                     <th>Jumlah Santri</th>
                                     <th style={{ textAlign: 'right' }}>Aksi</th>
@@ -346,16 +329,7 @@ export default function DiniyahClassIndex({
                                             </div>
                                         </td>
                                         <td>{cls.grade_level?.name ?? '-'}</td>
-                                        <td>{cls.level_order ?? '-'}</td>
-                                        <td>
-                                            {cls.level ? (
-                                                <span className="mcr-dot-badge alumni">
-                                                    {optionalLevelLabels[cls.level] ?? cls.level}
-                                                </span>
-                                            ) : (
-                                                <span className="mcr-dot-badge keluar">Belum ditetapkan</span>
-                                            )}
-                                        </td>
+                                        <td>{(cls as ClassRow & { order?: number; level_order?: number }).order ?? cls.level_order ?? '-'}</td>
                                         <td>
                                             {cls.student_gender ? (
                                                 <span className="mcr-dot-badge active">
@@ -451,29 +425,10 @@ export default function DiniyahClassIndex({
                                 type="number"
                                 min={0}
                                 max={1000}
-                                value={form.data.level_order}
-                                onChange={(e) => form.setData('level_order', e.target.value)}
+                                value={form.data.order}
+                                onChange={(e) => form.setData('order', e.target.value)}
                             />
-                            <InputError message={form.errors.level_order} />
-                        </div>
-                        <div className="mcr-form-group">
-                            <label htmlFor="class-level-tag">Tag tingkat (opsional)</label>
-                            <select
-                                id="class-level-tag"
-                                className="mcr-form-select"
-                                value={form.data.level ? form.data.level : '_none'}
-                                onChange={(e) =>
-                                    form.setData('level', e.target.value === '_none' ? '' : e.target.value)
-                                }
-                            >
-                                <option value="_none">— Opsional —</option>
-                                {Object.entries(optionalLevelLabels).map(([value, label]) => (
-                                    <option key={value} value={value}>
-                                        {label}
-                                    </option>
-                                ))}
-                            </select>
-                            <InputError message={form.errors.level} />
+                            <InputError message={form.errors.order} />
                         </div>
                         <div className="mcr-form-group">
                             <label htmlFor="class-gender">Jenis kelamin santri</label>

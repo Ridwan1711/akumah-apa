@@ -10,7 +10,6 @@ import {
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
 import type {
-    AcademicPeriod,
     AssessmentComponent,
     BreadcrumbItem,
     SchoolClass,
@@ -24,9 +23,9 @@ type GradeRow = {
 };
 
 type Props = {
-    academicPeriod: Pick<AcademicPeriod, 'id' | 'name' | 'type'>;
+    academicPeriod: { id: number; name: string };
     subject: Pick<Subject, 'id' | 'name'>;
-    schoolClass: Pick<SchoolClass, 'id' | 'name' | 'level'>;
+    schoolClass: Pick<SchoolClass, 'id' | 'name' | 'grade_level_id'>;
     assessmentComponents: Pick<AssessmentComponent, 'id' | 'name' | 'type'>[];
     students: Pick<Student, 'id' | 'nis' | 'full_name'>[];
     gradeMatrix: Record<number, Record<number, number>>;

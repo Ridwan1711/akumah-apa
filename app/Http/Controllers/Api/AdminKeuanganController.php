@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Jobs\ProcessBulkRun;
 use App\Models\AcademicYear;
 use App\Models\Diniyyah\SchoolClass;
-use App\Models\FeeSchedule;
 use App\Models\ImportRun;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -53,7 +52,7 @@ class AdminKeuanganController extends Controller
             'invoices' => $invoices,
             'payment_types' => PaymentType::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
             'academic_years' => AcademicYear::orderByDesc('start_date')->get(['id', 'name']),
-            'classes' => SchoolClass::orderBy('level_order')->orderBy('name')->get(['id', 'name']),
+            'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name']),
             'filters' => $request->only(['status', 'payment_type_id', 'academic_year_id', 'month', 'search', 'class_id']),
             'status_counts' => [
                 'all' => (clone $query)->count(),
@@ -72,7 +71,7 @@ class AdminKeuanganController extends Controller
         return response()->json([
             'payment_types' => PaymentType::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code', 'category', 'is_recurring']),
             'academic_years' => AcademicYear::orderByDesc('start_date')->get(['id', 'name']),
-            'classes' => SchoolClass::orderBy('level_order')->orderBy('name')->get(['id', 'name', 'level']),
+            'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'grade_level_id']),
         ]);
     }
 
@@ -321,15 +320,20 @@ class AdminKeuanganController extends Controller
     {
         abort_unless($request->user()?->hasPermission(Permissions::PAYMENT_REPORT_VIEW), 403, 'Anda tidak memiliki izin untuk melihat laporan tunggakan.');
 
-        $query = Invoice::with([
+        $query = Invoice::query();
+        $query->with([
             'student:id,nis,full_name,current_class_id',
             'student.currentClass:id,name',
             'paymentType:id,name,code',
-        ])
-            ->whereIn('status', [Invoice::STATUS_OVERDUE, Invoice::STATUS_PENDING, Invoice::STATUS_PARTIAL])
-            ->when($request->class_id, fn ($q, $id) => $q->whereHas('student', fn ($sq) => $sq->where('current_class_id', $id)))
-            ->when($request->payment_type_id, fn ($q, $id) => $q->where('payment_type_id', $id))
-            ->orderBy('due_date');
+        ]);
+        $query->whereIn('status', [Invoice::STATUS_OVERDUE, Invoice::STATUS_PENDING, Invoice::STATUS_PARTIAL]);
+        if ($request->class_id) {
+            $query->whereHas('student', fn (Builder $studentQuery) => $studentQuery->where('current_class_id', $request->class_id));
+        }
+        if ($request->payment_type_id) {
+            $query->where('payment_type_id', $request->payment_type_id);
+        }
+        $query->orderBy('due_date');
         $query = $this->invoiceVisibilityScope->applyToInvoiceQuery($query, $request->user());
 
         $invoices = $query->paginate($request->input('per_page', 20))->withQueryString();
@@ -342,17 +346,13 @@ class AdminKeuanganController extends Controller
         ]);
     }
 
-    private function resolveAmount(PaymentType $type, int $academicYearId, ?string $classLevel): float
+    private function resolveAmount(PaymentType $type, Student $student): ?float
     {
-        $schedule = FeeSchedule::where('payment_type_id', $type->id)
-            ->where('academic_year_id', $academicYearId)
-            ->where(function ($q) use ($classLevel) {
-                $q->where('class_level', $classLevel)->orWhereNull('class_level');
-            })
-            ->orderByRaw('class_level IS NULL ASC')
-            ->first();
+        if ($student->is_kuliah) {
+            return $type->kuliah_amount !== null ? (float) $type->kuliah_amount : null;
+        }
 
-        return (float) ($schedule?->amount ?? $type->default_amount);
+        return (float) $type->default_amount;
     }
 
     private function resolveDiscount(int $studentId, int $paymentTypeId, int $academicYearId, float $amount): float

@@ -211,7 +211,11 @@ export default function ScheduleSetsIndex({ sets, semesters, selectedPeriodId, s
                                 sets.map((set) => (
                                     <TableRow key={set.id}>
                                         <TableCell className="font-medium">{set.name}</TableCell>
-                                        <TableCell>{set.period?.name ?? '-'}</TableCell>
+                                        <TableCell>
+                                            {[set.period?.academic_year?.name, set.period?.semester?.name]
+                                                .filter(Boolean)
+                                                .join(' ') || '-'}
+                                        </TableCell>
                                         <TableCell className="text-center">{set.day_count}</TableCell>
                                         <TableCell className="text-center">{set.jam_count}</TableCell>
                                         <TableCell className="text-center">{set.cells_count ?? 0}</TableCell>

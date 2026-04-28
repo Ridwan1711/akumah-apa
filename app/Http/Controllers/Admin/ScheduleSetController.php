@@ -35,7 +35,7 @@ class ScheduleSetController extends Controller
         $sets = ScheduleSet::query()
             ->when($selectedPeriodId > 0, fn ($q) => $q->where('period_id', $selectedPeriodId))
             ->withCount('schedules as cells_count')
-            ->with(['period:id,name,type', 'creator:id,name'])
+            ->with(['period:id,academic_year_id,semester_id,is_active', 'creator:id,name'])
             ->orderByDesc('is_active')
             ->orderBy('name')
             ->get();

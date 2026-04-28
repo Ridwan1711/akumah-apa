@@ -8,7 +8,6 @@ use App\Models\Diniyyah\Score;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Models\StudentViolation;
-use App\Models\TahfidzProgress;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -31,11 +30,11 @@ class WaliSantriController extends Controller
 
     public function children(Request $request): Response
     {
-        $guardian = $request->user()->guardian;
+        $guardian = $request->user()->primaryGuardian();
         abort_unless($guardian, 404, 'Data wali tidak ditemukan.');
 
         $children = $guardian->students()
-            ->with(['currentClass:id,name', 'tahfidzSummary', 'violationSummary'])
+            ->with(['currentClass:id,name', 'violationSummary'])
             ->where('status', Student::STATUS_ACTIVE)
             ->orderBy('full_name')
             ->get();
@@ -47,10 +46,10 @@ class WaliSantriController extends Controller
 
     public function childDetail(Request $request, Student $student): Response
     {
-        $guardian = $request->user()->guardian;
+        $guardian = $request->user()->primaryGuardian();
         abort_unless($guardian && $guardian->students()->where('students.id', $student->id)->exists(), 403, 'Anda tidak memiliki akses ke data santri ini.');
 
-        $student->load(['currentClass:id,name', 'tahfidzSummary', 'violationSummary']);
+        $student->load(['currentClass:id,name', 'violationSummary']);
 
         $activeSemester = Semester::where('is_active', true)->first();
         $semesterId = $request->semester_id ?? $activeSemester?->id;
@@ -65,10 +64,6 @@ class WaliSantriController extends Controller
                 ->get();
         }
 
-        $recentTahfidz = TahfidzProgress::where('student_id', $student->id)
-            ->orderByDesc('created_at')
-            ->limit(10)->get();
-
         $recentViolations = StudentViolation::where('student_id', $student->id)
             ->with('violationType:id,name,points,category')
             ->orderByDesc('date')
@@ -82,17 +77,16 @@ class WaliSantriController extends Controller
             'currentSemesterId' => $semesterId,
             'semester' => $semester,
             'grades' => $grades,
-            'recentTahfidz' => $recentTahfidz,
             'recentViolations' => $recentViolations,
         ]);
     }
 
     public function childSchedule(Request $request, Student $student): Response
     {
-        $guardian = $request->user()->guardian;
+        $guardian = $request->user()->primaryGuardian();
         abort_unless($guardian && $guardian->students()->where('students.id', $student->id)->exists(), 403, 'Anda tidak memiliki akses ke data santri ini.');
 
-        $student->load('currentClass:id,name,level');
+        $student->load('currentClass:id,name,grade_level_id');
         abort_unless($student->currentClass, 404, 'Kelas santri tidak ditemukan.');
 
         $activeSemester = Semester::where('is_active', true)->first();

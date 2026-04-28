@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
-import type { BreadcrumbItem, DiniyyahScore, Semester, Student, StudentViolation, TahfidzProgress } from '@/types';
+import type { BreadcrumbItem, DiniyyahScore, Semester, Student, StudentViolation } from '@/types';
 
 type Props = {
     student: Student;
@@ -14,11 +14,10 @@ type Props = {
     currentSemesterId: number | null;
     semester: (Semester & { academic_year?: { id: number; name: string } }) | null;
     grades: DiniyyahScore[];
-    recentTahfidz: TahfidzProgress[];
     recentViolations: StudentViolation[];
 };
 
-export default function WaliChildDetail({ student, semesters, currentSemesterId, grades, recentTahfidz, recentViolations }: Props) {
+export default function WaliChildDetail({ student, semesters, currentSemesterId, grades, recentViolations }: Props) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Dashboard', href: '/dashboard' },
         { title: 'Data Anak', href: '/wali/children' },
@@ -47,11 +46,7 @@ export default function WaliChildDetail({ student, semesters, currentSemesterId,
                     </Link>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-3">
-                    <div className="rounded-xl border p-4 text-center">
-                        <p className="text-3xl font-bold text-green-600">{student.tahfidz_summary?.total_juz_completed ?? 0}</p>
-                        <p className="text-sm text-muted-foreground">Juz Hafalan</p>
-                    </div>
+                <div className="grid gap-4 sm:grid-cols-2">
                     <div className="rounded-xl border p-4 text-center">
                         <p className="text-3xl font-bold text-red-600">{student.violation_summary?.total_points ?? 0}</p>
                         <p className="text-sm text-muted-foreground">Poin Pelanggaran</p>
@@ -91,32 +86,6 @@ export default function WaliChildDetail({ student, semesters, currentSemesterId,
                                         <td className="px-3 py-2">{g.subject?.name}</td>
                                         <td className="px-3 py-2 text-center font-bold">{g.score}</td>
                                         <td className="px-3 py-2 text-center"><Badge variant="outline">{g.grade_letter}</Badge></td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-
-                {recentTahfidz.length > 0 && (
-                    <div className="rounded-xl border p-4">
-                        <h3 className="mb-3 font-semibold">Tahfidz Terbaru</h3>
-                        <table className="w-full text-sm">
-                            <thead className="border-b bg-muted/50">
-                                <tr>
-                                    <th className="px-3 py-2 text-left font-medium">Juz</th>
-                                    <th className="px-3 py-2 text-left font-medium">Surah</th>
-                                    <th className="px-3 py-2 text-left font-medium">Tipe</th>
-                                    <th className="px-3 py-2 text-left font-medium">Nilai</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {recentTahfidz.map((t) => (
-                                    <tr key={t.id} className="border-b last:border-0">
-                                        <td className="px-3 py-2">{t.juz}</td>
-                                        <td className="px-3 py-2">{t.surah_to && t.surah_to !== t.surah_from ? `${t.surah_from} - ${t.surah_to}` : t.surah_from}</td>
-                                        <td className="px-3 py-2"><Badge variant={t.type === 'ziyadah' ? 'default' : 'secondary'}>{t.type}</Badge></td>
-                                        <td className="px-3 py-2">{t.grade}</td>
                                     </tr>
                                 ))}
                             </tbody>

@@ -27,45 +27,11 @@ class SchoolClass extends Model
         self::STUDENT_GENDER_SANTRIYYAH,
     ];
 
-    public const LEVEL_IBTIDA = 'ibtida';
-
-    public const LEVEL_SALAFY1 = '1salafy';
-
-    public const LEVEL_SALAFY2 = '2salafy';
-
-    public const LEVEL_SALAFY3 = '3salafy';
-
-    public const LEVEL_SALAFY4 = '4salafy';
-
-    public const LEVEL_SALAFY5 = '5salafy';
-
-    public const LEVEL_SALAFY6 = '6salafy';
-
-    public const LEVEL_SALAFY7 = '7salafy';
-
-    public const LEVEL_SALAFY8 = '8salafy';
-
-    public const LEVEL_SALAFY9 = '9salafy';
-
-    public const LEVELS = [
-        self::LEVEL_IBTIDA,
-        self::LEVEL_SALAFY1,
-        self::LEVEL_SALAFY2,
-        self::LEVEL_SALAFY3,
-        self::LEVEL_SALAFY4,
-        self::LEVEL_SALAFY5,
-        self::LEVEL_SALAFY6,
-        self::LEVEL_SALAFY7,
-        self::LEVEL_SALAFY8,
-        self::LEVEL_SALAFY9,
-    ];
-
     protected $fillable = [
         'name',
         'grade_level_id',
-        'level_order',
-        'level',
         'student_gender',
+        'order',
     ];
 
     protected $appends = [
@@ -75,7 +41,7 @@ class SchoolClass extends Model
     protected function casts(): array
     {
         return [
-            'level_order' => 'integer',
+            'order' => 'integer',
         ];
     }
 

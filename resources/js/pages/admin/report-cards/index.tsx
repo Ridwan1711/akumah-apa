@@ -18,7 +18,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 type StudentWithReport = Student & { report_card?: { id: number; wali_kelas_notes: string | null; generated_at: string | null } | null };
 
 type Props = {
-    classes: Pick<DiniyahClass, 'id' | 'name' | 'level'>[];
+    classes: Pick<DiniyahClass, 'id' | 'name' | 'grade_level_id'>[];
     semesters: (Pick<Semester, 'id' | 'name' | 'academic_year_id'> & { academic_year?: { id: number; name: string } })[];
     students: StudentWithReport[];
     filters: { class_id?: string; semester_id?: string };

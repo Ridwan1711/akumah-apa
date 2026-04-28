@@ -37,11 +37,12 @@ type Props = {
     paymentTypes: Pick<PaymentType, 'id' | 'name' | 'code'>[];
     academicYears: Pick<AcademicYear, 'id' | 'name'>[];
     classes: Pick<SchoolClass, 'id' | 'name'>[];
+    divisionOptions: string[];
     filters: Record<string, string | undefined>;
     statusCounts: Record<string, number>;
 };
 
-export default function InvoiceIndex({ invoices, paymentTypes, academicYears, classes, filters, statusCounts }: Props) {
+export default function InvoiceIndex({ invoices, paymentTypes, academicYears, classes, divisionOptions, filters, statusCounts }: Props) {
     const { auth } = usePage<{ auth?: Auth }>().props;
     const canCreateInvoice = can(auth, 'invoice.create');
 
@@ -100,6 +101,12 @@ export default function InvoiceIndex({ invoices, paymentTypes, academicYears, cl
                                 <option value="">Semua Kelas</option>
                                 {classes.map((item) => (
                                     <option key={item.id} value={String(item.id)}>{item.name}</option>
+                                ))}
+                            </select>
+                            <select className="mcr-filter-select" value={filters.division_code ?? ''} onChange={(e) => handleFilter('division_code', e.target.value)}>
+                                <option value="">Semua Divisi Pengurus</option>
+                                {divisionOptions.map((code) => (
+                                    <option key={code} value={code}>{code}</option>
                                 ))}
                             </select>
                         </>

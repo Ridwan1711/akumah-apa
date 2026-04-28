@@ -18,7 +18,7 @@ type ScheduleDay = {
 };
 
 type Props = {
-    class: { id: number; name: string; level: string | null };
+    class: { id: number; name: string; grade_level_id: number | null };
     semester: { id: number; name: string } | null;
     week: ScheduleDay[];
 };

@@ -186,7 +186,7 @@ class GuruAttendanceController extends Controller
     {
         try {
             $subject = $schedule->subject()->first(['id', 'name']);
-            $class = $schedule->schoolClass()->first(['id', 'name', 'level']);
+            $class = $schedule->schoolClass()->first(['id', 'name', 'grade_level_id']);
 
             $students = Student::query()
                 ->whereIn('id', $absentStudentIds)

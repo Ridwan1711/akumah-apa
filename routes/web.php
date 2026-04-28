@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AcademicYearController;
 use App\Http\Controllers\Admin\AccountGeneratorController;
+use App\Http\Controllers\Admin\AdminStudentPositionController;
 use App\Http\Controllers\Admin\AsramaController;
 use App\Http\Controllers\Admin\AssessmentComponentController;
 use App\Http\Controllers\Admin\AttendanceController;
@@ -9,11 +10,9 @@ use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\ClassPromotionController;
 use App\Http\Controllers\Admin\ClassSubjectRuleController;
 use App\Http\Controllers\Admin\DiniyahClassController;
-use App\Http\Controllers\Admin\FeeScheduleController;
 use App\Http\Controllers\Admin\GuardianController;
 use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\KitabGradeController;
-use App\Http\Controllers\Admin\KitabCurriculumMatrixController;
 use App\Http\Controllers\Admin\KitabSubjectController;
 use App\Http\Controllers\Admin\KitabTeachingAssignmentController;
 use App\Http\Controllers\Admin\LeavePermissionController;
@@ -31,7 +30,6 @@ use App\Http\Controllers\Admin\StudentDataTransferController;
 use App\Http\Controllers\Admin\StudentDiscountController;
 use App\Http\Controllers\Admin\StudentEnrollmentController;
 use App\Http\Controllers\Admin\StudentEnrollmentTransferController;
-use App\Http\Controllers\Admin\TahfidzController;
 use App\Http\Controllers\Admin\TeacherDataTransferController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\ViolationController;
@@ -41,6 +39,7 @@ use App\Http\Controllers\Guru\GuruAcademicController;
 use App\Http\Controllers\Guru\GuruAttendanceController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentGatewayController;
+use App\Http\Controllers\QueueRunController;
 use App\Http\Controllers\ReportCardVerificationController;
 use App\Http\Controllers\Santri\SantriController;
 use App\Http\Controllers\Wali\WaliPaymentController;
@@ -70,6 +69,8 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::post('notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
     Route::post('notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('notifications.read-all');
+    Route::get('queue-runs', [QueueRunController::class, 'index'])->name('queue-runs.index');
+    Route::post('queue-runs/{importRun}/retry', [QueueRunController::class, 'retry'])->name('queue-runs.retry');
 });
 
 // Admin routes (super_admin + admin_akademik)
@@ -82,6 +83,13 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
     ->group(function () {
         // Students & Guardians
         Route::resource('students', StudentController::class);
+        Route::get('student-positions', [AdminStudentPositionController::class, 'index'])->name('student-positions.index');
+        Route::post('student-positions', [AdminStudentPositionController::class, 'store'])->name('student-positions.store');
+        Route::put('student-positions/{studentPosition}', [AdminStudentPositionController::class, 'update'])->name('student-positions.update');
+        Route::delete('student-positions/{studentPosition}', [AdminStudentPositionController::class, 'destroy'])->name('student-positions.destroy');
+        Route::patch('student-positions/{studentPosition}/activate', [AdminStudentPositionController::class, 'activate'])->name('student-positions.activate');
+        Route::patch('student-positions/{studentPosition}/deactivate', [AdminStudentPositionController::class, 'deactivate'])->name('student-positions.deactivate');
+        Route::put('student-positions/division-access/{user}', [AdminStudentPositionController::class, 'updateDivisionAccess'])->name('student-positions.division-access.update');
         Route::get('student-enrollments', [StudentEnrollmentController::class, 'index'])->name('student-enrollments.index');
         Route::post('student-enrollments/preview', [StudentEnrollmentController::class, 'preview'])->name('student-enrollments.preview');
         Route::post('student-enrollments/bulk-assign', [StudentEnrollmentController::class, 'bulkAssign'])->name('student-enrollments.bulk-assign');
@@ -120,10 +128,6 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::get('diniyah-classes-template', [DiniyahClassController::class, 'template'])->name('diniyah-classes.template');
         Route::post('diniyah-classes-import', [DiniyahClassController::class, 'import'])->name('diniyah-classes.import');
 
-        // Kitab curriculum matrix (fan + mapel per tingkat + default jadwal/penilaian)
-        Route::get('kitab-curriculum-matrix', [KitabCurriculumMatrixController::class, 'index'])->name('kitab-curriculum-matrix.index');
-        Route::post('kitab-curriculum-matrix', [KitabCurriculumMatrixController::class, 'save'])->name('kitab-curriculum-matrix.save');
-
         // Kitab Subjects
         Route::resource('kitab-subjects', KitabSubjectController::class)->except(['create', 'show', 'edit']);
         Route::get('kitab-subjects-export', [KitabSubjectController::class, 'export'])->name('kitab-subjects.export');
@@ -159,16 +163,6 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::post('schedule-sets/{scheduleSet}/cells/preflight', [ScheduleMatrixController::class, 'preflight'])->name('schedule-sets.cells.preflight');
         Route::post('schedule-sets/{scheduleSet}/cells', [ScheduleMatrixController::class, 'assign'])->name('schedule-sets.cells.assign');
         Route::delete('schedule-sets/{scheduleSet}/cells/{schedule}', [ScheduleMatrixController::class, 'destroyCell'])->name('schedule-sets.cells.destroy');
-
-        // Tahfidz
-        Route::get('tahfidz', [TahfidzController::class, 'index'])->name('tahfidz.index');
-        Route::get('tahfidz/{student}', [TahfidzController::class, 'show'])->name('tahfidz.show');
-        Route::post('tahfidz/targets', [TahfidzController::class, 'storeTarget'])->name('tahfidz.targets.store');
-        Route::put('tahfidz/targets/{target}', [TahfidzController::class, 'updateTarget'])->name('tahfidz.targets.update');
-        Route::delete('tahfidz/targets/{target}', [TahfidzController::class, 'destroyTarget'])->name('tahfidz.targets.destroy');
-        Route::post('tahfidz/progress', [TahfidzController::class, 'storeProgress'])->name('tahfidz.progress.store');
-        Route::put('tahfidz/progress/{progress}', [TahfidzController::class, 'updateProgress'])->name('tahfidz.progress.update');
-        Route::delete('tahfidz/progress/{progress}', [TahfidzController::class, 'destroyProgress'])->name('tahfidz.progress.destroy');
 
         // Asrama
         Route::get('asrama', [AsramaController::class, 'index'])->name('asrama.index');
@@ -253,7 +247,6 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
     ->name('admin.')
     ->group(function () {
         Route::resource('payment-types', PaymentTypeController::class)->except(['create', 'show', 'edit']);
-        Route::resource('fee-schedules', FeeScheduleController::class)->except(['create', 'show', 'edit']);
 
         Route::get('student-discounts', [StudentDiscountController::class, 'index'])->name('student-discounts.index');
         Route::post('student-discounts', [StudentDiscountController::class, 'store'])->name('student-discounts.store');
@@ -310,7 +303,6 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.Role::SANTRI]
         Route::get('grades', [SantriController::class, 'grades'])->name('grades');
         Route::get('schedule', [SantriController::class, 'schedule'])->name('schedule');
         Route::get('attendances', [SantriController::class, 'attendances'])->name('attendances');
-        Route::get('tahfidz', [SantriController::class, 'tahfidz'])->name('tahfidz');
         Route::get('violations', [SantriController::class, 'violations'])->name('violations');
         Route::get('profile', [SantriController::class, 'profile'])->name('profile');
         Route::get('profile/edit', [SantriController::class, 'editProfile'])->name('profile.edit');

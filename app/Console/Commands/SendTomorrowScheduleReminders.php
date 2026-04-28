@@ -32,7 +32,7 @@ class SendTomorrowScheduleReminders extends Command
         $schedules = AcademicSchedule::query()
             ->where('day', $dayOfWeek)
             ->with([
-                'schoolClass:id,name,level',
+                'schoolClass:id,name,grade_level_id',
                 'subject:id,name',
                 'teacher:id,name',
             ])

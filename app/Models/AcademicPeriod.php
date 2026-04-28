@@ -8,15 +8,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AcademicPeriod extends Model
 {
-    public const TYPE_SEMESTER_1 = 'semester_1';
-
-    public const TYPE_SEMESTER_2 = 'semester_2';
-
+    // Gabungan Dari AcademicYear dan Semester dan Status Aktif atau tidaknya
     protected $fillable = [
-        'name',
-        'type',
-        'is_active',
+        'academic_year_id',
         'semester_id',
+        'is_active',
     ];
 
     protected function casts(): array
@@ -31,6 +27,11 @@ class AcademicPeriod extends Model
         return $this->belongsTo(Semester::class);
     }
 
+    public function academicYear(): BelongsTo
+    {
+        return $this->belongsTo(AcademicYear::class);
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
@@ -38,6 +39,6 @@ class AcademicPeriod extends Model
 
     public function isSemesterTwo(): bool
     {
-        return $this->type === self::TYPE_SEMESTER_2;
+        return $this->semester_id === 2;
     }
 }

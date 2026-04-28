@@ -26,7 +26,7 @@ type PromotionRow = {
 };
 
 type Props = {
-    classes: Pick<SchoolClass, 'id' | 'name' | 'level'>[];
+    classes: Pick<SchoolClass, 'id' | 'name' | 'grade_level_id'>[];
     students: PaginatedData<StudentRow> | null;
     filters: { source_class_id?: string; run_uploader_id?: string; per_page?: string };
     bulkRuns: ImportRun[];
@@ -164,7 +164,7 @@ export default function ClassPromotionIndex({
                                 <option value="">Pilih kelas asal</option>
                                 {classes.map((item) => (
                                     <option key={item.id} value={String(item.id)}>
-                                        {item.name} ({item.level})
+                                        {item.name}
                                     </option>
                                 ))}
                             </select>
@@ -264,7 +264,7 @@ export default function ClassPromotionIndex({
                                                                 <option value="">Pilih kelas tujuan</option>
                                                                 {classes.map((item) => (
                                                                     <option key={item.id} value={String(item.id)}>
-                                                                        {item.name} ({item.level})
+                                                                        {item.name}
                                                                     </option>
                                                                 ))}
                                                             </select>

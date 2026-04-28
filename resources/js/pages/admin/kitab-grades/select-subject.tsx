@@ -3,10 +3,10 @@ import { BookOpen, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { CrudCard, CrudPageHeader, CrudToolbar } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
-import type { AcademicPeriod, BreadcrumbItem, Semester, Subject } from '@/types';
+import type { BreadcrumbItem, Semester, Subject } from '@/types';
 
 type Props = {
-    academicPeriod: Pick<AcademicPeriod, 'id' | 'name' | 'type'>;
+    academicPeriod: { id: number; name: string };
     semesters: (Pick<Semester, 'id' | 'name'> & { is_active?: boolean })[];
     subjects: Pick<Subject, 'id' | 'name'>[];
     activeSemester?: Pick<Semester, 'id' | 'name'> | null;

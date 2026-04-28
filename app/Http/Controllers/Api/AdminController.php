@@ -49,8 +49,8 @@ class AdminController extends Controller
             ->latest()->limit(5)->get();
 
         $classCounts = SchoolClass::withCount(['students' => fn ($q) => $q->where('status', Student::STATUS_ACTIVE)])
-            ->orderBy('level_order')->orderBy('name')
-            ->get(['id', 'name', 'level']);
+            ->orderBy('order')->orderBy('name')
+            ->get(['id', 'name', 'grade_level_id']);
 
         $incompleteStudentProfiles = Student::query()
             ->where('status', Student::STATUS_ACTIVE)
@@ -146,7 +146,7 @@ class AdminController extends Controller
                     ->with('teacher:id,name')
                     ->orderByDesc('id'),
             ])
-            ->orderBy('level_order')
+            ->orderBy('order')
             ->orderBy('name')
             ->get();
 
@@ -289,7 +289,7 @@ class AdminController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100'],
-            'level' => ['nullable', Rule::in(SchoolClass::LEVELS)],
+            'grade_level_id' => ['nullable', 'exists:grade_levels,id'],
             'student_gender' => ['nullable', 'string', 'size:1', Rule::in(SchoolClass::STUDENT_GENDERS)],
             'wali_kelas_teacher_id' => ['nullable', 'integer', 'exists:users,id'],
         ]);
@@ -310,7 +310,7 @@ class AdminController extends Controller
 
         $class->update([
             'name' => $validated['name'],
-            'level' => $validated['level'] ?? null,
+            'grade_level_id' => $validated['grade_level_id'] ?? null,
             'student_gender' => $validated['student_gender'] ?? null,
         ]);
 
@@ -638,7 +638,7 @@ class AdminController extends Controller
             ->with([
                 'student' => fn ($q) => $q
                     ->select('id', 'user_id', 'full_name', 'nik', 'birth_date', 'address', 'photo', 'gender', 'current_class_id')
-                    ->with('currentClass:id,name,level')
+                    ->with('currentClass:id,name,grade_level_id')
                     ->with('emisProfile'),
             ])
             ->get();
@@ -988,7 +988,7 @@ class AdminController extends Controller
 
     public function studentFormOptions(Request $request): JsonResponse
     {
-        $classes = SchoolClass::orderBy('level_order')->orderBy('name')->get(['id', 'name', 'level']);
+        $classes = SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'grade_level_id']);
 
         $buildings = DormBuilding::with([
             'rooms' => fn ($q) => $q
@@ -1061,7 +1061,7 @@ class AdminController extends Controller
 
         $students->getCollection()->transform(function (Student $student) {
             $payload = $student->toArray();
-            $payload['em_profile_complete'] = $student->emisProfile?->isDataComplete() ?? false;
+            $payload['em_profile_complete'] = $student->emisProfile?->isDataComplete() ?? ! empty($student->emProfilePayload());
 
             return $payload;
         });
@@ -1245,6 +1245,7 @@ class AdminController extends Controller
                 $waliAddress,
                 $santriAddress,
             );
+            $student->forceFill(['em_profile' => $emPayload])->save();
             $student->emisProfile()->create(EmProfile::fromPayload($emPayload));
 
             if (! empty($placement['class_id'])) {
@@ -1279,7 +1280,7 @@ class AdminController extends Controller
             }
 
             $student->load([
-                'currentClass:id,name,level',
+                'currentClass:id,name,grade_level_id',
                 'guardians' => fn ($q) => $q->withPivot('relationship'),
                 'currentDormAssignment.room.building',
                 'emisProfile',
@@ -1311,8 +1312,7 @@ class AdminController extends Controller
     public function studentDetail(Request $request, Student $student): JsonResponse
     {
         $student->load([
-            'currentClass:id,name,level',
-            'tahfidzSummary',
+            'currentClass:id,name,grade_level_id',
             'violationSummary',
             'currentDormAssignment.room.building',
             'guardians' => fn ($q) => $q->withPivot('relationship'),
@@ -1332,10 +1332,6 @@ class AdminController extends Controller
                 ->get();
         }
 
-        $recentTahfidz = \App\Models\TahfidzProgress::where('student_id', $student->id)
-            ->orderByDesc('created_at')
-            ->limit(10)->get();
-
         $recentViolations = StudentViolation::where('student_id', $student->id)
             ->with('violationType:id,name,points,category')
             ->orderByDesc('date')
@@ -1350,7 +1346,6 @@ class AdminController extends Controller
             'currentSemesterId' => $semesterId,
             'semester' => $semester,
             'grades' => $grades,
-            'recentTahfidz' => $recentTahfidz,
             'recentViolations' => $recentViolations,
         ]);
     }
@@ -1401,8 +1396,7 @@ class AdminController extends Controller
         $student->save();
 
         $student->load([
-            'currentClass:id,name,level',
-            'tahfidzSummary',
+            'currentClass:id,name,grade_level_id',
             'violationSummary',
             'currentDormAssignment.room.building',
             'guardians' => fn ($q) => $q->withPivot('relationship'),
@@ -1419,10 +1413,11 @@ class AdminController extends Controller
     private function upsertEmProfile(Student $student, array $incoming): void
     {
         $student->loadMissing('emisProfile');
-        $current = $student->emisProfile?->toPayload() ?? [];
+        $current = $student->emProfilePayload();
         $merged = array_replace_recursive($current, $incoming);
         $attributes = EmProfile::fromPayload($merged);
         $student->emisProfile()->updateOrCreate([], $attributes);
+        $student->forceFill(['em_profile' => $merged])->save();
         $student->unsetRelation('emisProfile');
         $student->load('emisProfile');
     }
@@ -1430,7 +1425,7 @@ class AdminController extends Controller
     private function studentPayload(Student $student): array
     {
         $payload = $student->toArray();
-        $payload['em_profile'] = $student->emisProfile?->toPayload() ?? [
+        $payload['em_profile'] = $student->emProfilePayload() ?: [
             'santri' => [],
             'alamat' => [],
         ];
@@ -1557,7 +1552,7 @@ class AdminController extends Controller
 
     public function kitabGrades(Request $request): JsonResponse
     {
-        $classesQuery = SchoolClass::orderBy('level_order')->orderBy('name');
+        $classesQuery = SchoolClass::query()->orderBy('order')->orderBy('name');
         $subjectsQuery = Subject::query()->orderBy('name');
 
         $grades = [];
@@ -1585,10 +1580,10 @@ class AdminController extends Controller
         }
 
         return response()->json([
-            'classes' => $classesQuery->get(['id', 'name', 'level']),
+            'classes' => $classesQuery->get(['id', 'name', 'grade_level_id']),
             'subjects' => $subjectsQuery->get(['id', 'name']),
             'semesters' => Semester::with('academicYear:id,name')->orderByDesc('id')->get(['id', 'name', 'academic_year_id']),
-            'academicPeriods' => AcademicPeriod::orderByDesc('id')->get(['id', 'name', 'type', 'semester_id']),
+            'academicPeriods' => AcademicPeriod::query()->orderByDesc('id')->get(['id', 'academic_year_id', 'semester_id', 'is_active']),
             'assessmentComponents' => AssessmentComponent::orderBy('type')->orderBy('name')->get(['id', 'name', 'type']),
             'students' => $students,
             'grades' => $grades,

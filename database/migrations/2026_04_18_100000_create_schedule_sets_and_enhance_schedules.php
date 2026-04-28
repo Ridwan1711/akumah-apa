@@ -83,7 +83,24 @@ return new class extends Migration
             ->pluck('period_id');
 
         foreach ($periods as $periodId) {
-            $periodName = DB::table('academic_periods')->where('id', $periodId)->value('name') ?? ('Periode #'.$periodId);
+            $period = DB::table('academic_periods as ap')
+                ->leftJoin('academic_years as ay', 'ay.id', '=', 'ap.academic_year_id')
+                ->leftJoin('semesters as s', 's.id', '=', 'ap.semester_id')
+                ->where('ap.id', $periodId)
+                ->select([
+                    'ay.name as year_name',
+                    's.name as semester_name',
+                ])
+                ->first();
+
+            $periodName = trim(implode(' ', array_filter([
+                $period->year_name ?? null,
+                $period->semester_name ?? null,
+            ])));
+
+            if ($periodName === '') {
+                $periodName = 'Periode #'.$periodId;
+            }
 
             $setName = 'Jadwal Default '.$periodName;
             $existing = DB::table('schedule_sets')

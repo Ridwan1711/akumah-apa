@@ -33,7 +33,7 @@ class DiniyahClassController extends Controller
             ->when($search !== '', function ($query) use ($search) {
                 $query->where('name', 'ilike', "%{$search}%");
             })
-            ->orderBy('level_order')
+            ->orderBy('order')
             ->orderBy('name');
 
         return Inertia::render('admin/diniyah-classes/index', [

@@ -25,7 +25,7 @@ type AttendanceRow = {
         start_time: string;
         end_time: string;
         schedule: {
-            school_class: { id: number; name: string; level: string | null };
+            school_class: { id: number; name: string; grade_level_id: number | null };
             subject: { id: number; name: string };
         };
     };

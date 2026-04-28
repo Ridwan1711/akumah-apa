@@ -2,6 +2,7 @@ import { Link, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import {
     Bell,
+    Clock3,
     Check,
     ChevronDown,
     HelpCircle,
@@ -42,6 +43,31 @@ type NotificationListResponse = {
     };
 };
 
+type QueueRunItem = {
+    id: number;
+    uuid: string;
+    title: string;
+    type: string;
+    job_type: string | null;
+    status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+    progress_percent: number;
+    processed_rows: number;
+    total_rows: number;
+    error_message: string | null;
+    created_at: string | null;
+    requested_by?: string | null;
+    can_retry?: boolean;
+};
+
+type QueueRunResponse = {
+    data: QueueRunItem[];
+    meta?: {
+        active_count?: number;
+        can_view_all?: boolean;
+        current_scope?: 'my' | 'all';
+    };
+};
+
 function formatRelativeTime(value: string | undefined): string {
     if (!value) return '';
     const date = new Date(value);
@@ -74,9 +100,17 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
     const [notifOpen, setNotifOpen] = useState(false);
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [notifLoading, setNotifLoading] = useState(false);
+    const [queueOpen, setQueueOpen] = useState(false);
+    const [queueLoading, setQueueLoading] = useState(false);
+    const [queueRuns, setQueueRuns] = useState<QueueRunItem[]>([]);
+    const [activeQueueCount, setActiveQueueCount] = useState(0);
+    const [queueScope, setQueueScope] = useState<'my' | 'all'>('my');
+    const [queueCanViewAll, setQueueCanViewAll] = useState(false);
+    const [retryingRunId, setRetryingRunId] = useState<number | null>(null);
 
     const userRef = useRef<HTMLDivElement | null>(null);
     const notifRef = useRef<HTMLDivElement | null>(null);
+    const queueRef = useRef<HTMLDivElement | null>(null);
 
     const unread = unreadNotificationsCount ?? 0;
 
@@ -97,11 +131,44 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
         }
     }, []);
 
+    const fetchQueueRuns = useCallback(async () => {
+        setQueueLoading(true);
+        try {
+            const { data } = await axios.get<QueueRunResponse>('/queue-runs', {
+                params: { scope: queueScope },
+            });
+            setQueueRuns(Array.isArray(data?.data) ? data.data : []);
+            setActiveQueueCount(data?.meta?.active_count ?? 0);
+            setQueueCanViewAll(Boolean(data?.meta?.can_view_all));
+            if (data?.meta?.current_scope) {
+                setQueueScope(data.meta.current_scope);
+            }
+        } catch {
+            setQueueRuns([]);
+            setActiveQueueCount(0);
+        } finally {
+            setQueueLoading(false);
+        }
+    }, [queueScope]);
+
     useEffect(() => {
         if (notifOpen && user) {
             fetchNotifications();
         }
     }, [notifOpen, user, fetchNotifications]);
+
+    useEffect(() => {
+        if (queueOpen && user) {
+            fetchQueueRuns();
+        }
+    }, [queueOpen, user, fetchQueueRuns]);
+
+    useEffect(() => {
+        if (!user) return;
+        fetchQueueRuns();
+        const timer = window.setInterval(fetchQueueRuns, 15000);
+        return () => window.clearInterval(timer);
+    }, [user, fetchQueueRuns]);
 
     useEffect(() => {
         function onClick(e: MouseEvent) {
@@ -112,11 +179,15 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
             if (notifOpen && notifRef.current && !notifRef.current.contains(target)) {
                 setNotifOpen(false);
             }
+            if (queueOpen && queueRef.current && !queueRef.current.contains(target)) {
+                setQueueOpen(false);
+            }
         }
         function onKey(e: KeyboardEvent) {
             if (e.key === 'Escape') {
                 setUserOpen(false);
                 setNotifOpen(false);
+                setQueueOpen(false);
             }
         }
         window.addEventListener('mousedown', onClick);
@@ -125,7 +196,7 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
             window.removeEventListener('mousedown', onClick);
             window.removeEventListener('keydown', onKey);
         };
-    }, [userOpen, notifOpen]);
+    }, [userOpen, notifOpen, queueOpen]);
 
     function handleNotifClick(item: NotificationItem) {
         axios
@@ -152,6 +223,19 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
 
     function handleLogout() {
         router.flushAll();
+    }
+
+    async function handleRetryQueueRun(runId: number) {
+        if (retryingRunId !== null) return;
+        setRetryingRunId(runId);
+        try {
+            await axios.post(`/queue-runs/${runId}/retry`);
+            await fetchQueueRuns();
+        } catch {
+            // noop
+        } finally {
+            setRetryingRunId(null);
+        }
     }
 
     return (
@@ -237,6 +321,112 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
                                             <span className="mhs-notif-time">{formatRelativeTime(item.created_at)}</span>
                                         </span>
                                     </button>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mhs-user-dropdown-wrap" ref={queueRef}>
+                    <button
+                        type="button"
+                        className="mhs-icon-btn"
+                        onClick={() => {
+                            setUserOpen(false);
+                            setNotifOpen(false);
+                            setQueueOpen((v) => !v);
+                        }}
+                        aria-label="Aktivitas Queue"
+                        aria-expanded={queueOpen}
+                    >
+                        <Clock3 size={17} />
+                        {activeQueueCount > 0 ? (
+                            <span className="mhs-notif-count-badge">{activeQueueCount > 9 ? '9+' : activeQueueCount}</span>
+                        ) : null}
+                    </button>
+                    <div className={`mhs-notif-panel${queueOpen ? ' mhs-open' : ''}`} role="menu">
+                        <div className="mhs-notif-header">
+                            <h4>Aktivitas Queue</h4>
+                            {queueCanViewAll ? (
+                                <div style={{ display: 'inline-flex', gap: 6 }}>
+                                    <button
+                                        type="button"
+                                        className="mhs-notif-clear"
+                                        style={{
+                                            opacity: queueScope === 'my' ? 1 : 0.65,
+                                            textDecoration: queueScope === 'my' ? 'underline' : 'none',
+                                        }}
+                                        onClick={() => setQueueScope('my')}
+                                    >
+                                        My Runs
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="mhs-notif-clear"
+                                        style={{
+                                            opacity: queueScope === 'all' ? 1 : 0.65,
+                                            textDecoration: queueScope === 'all' ? 'underline' : 'none',
+                                        }}
+                                        onClick={() => setQueueScope('all')}
+                                    >
+                                        All Runs
+                                    </button>
+                                </div>
+                            ) : null}
+                        </div>
+                        <div className="mhs-notif-list">
+                            {queueLoading ? (
+                                <div className="mhs-notif-loading">
+                                    <Loader2 size={20} className="mhs-spin" />
+                                    <div style={{ marginTop: 8 }}>Memuat proses queue…</div>
+                                </div>
+                            ) : queueRuns.length === 0 ? (
+                                <div className="mhs-notif-empty">Belum ada proses queue</div>
+                            ) : (
+                                queueRuns.map((run) => (
+                                    <div key={run.id} className="mhs-notif-item" style={{ cursor: 'default' }}>
+                                        <span className="mhs-notif-icon" aria-hidden="true">
+                                            <Clock3 size={16} />
+                                        </span>
+                                        <span className="mhs-notif-content">
+                                            <span className="mhs-notif-title">{run.title}</span>
+                                            <span className="mhs-notif-msg">
+                                                {run.processed_rows}/{run.total_rows || '?'} baris - {run.status}
+                                            </span>
+                                            {queueScope === 'all' && run.requested_by ? (
+                                                <span className="mhs-notif-time">By: {run.requested_by}</span>
+                                            ) : null}
+                                            <span className="mhs-notif-time">{run.created_at || '-'}</span>
+                                            <span style={{ marginTop: 6, display: 'block', height: 5, borderRadius: 999, background: 'var(--mhs-bg-2)' }}>
+                                                <span
+                                                    style={{
+                                                        display: 'block',
+                                                        height: '100%',
+                                                        width: `${Math.max(0, Math.min(100, run.progress_percent))}%`,
+                                                        borderRadius: 999,
+                                                        background: run.status === 'failed' ? '#ef4444' : 'var(--mhs-accent)',
+                                                    }}
+                                                />
+                                            </span>
+                                            {run.error_message ? (
+                                                <span className="mhs-notif-time" style={{ color: '#ef4444' }}>
+                                                    {run.error_message}
+                                                </span>
+                                            ) : null}
+                                            {run.can_retry ? (
+                                                <span style={{ marginTop: 8, display: 'inline-flex' }}>
+                                                    <button
+                                                        type="button"
+                                                        className="mhs-notif-clear"
+                                                        disabled={retryingRunId === run.id}
+                                                        onClick={() => handleRetryQueueRun(run.id)}
+                                                    >
+                                                        {retryingRunId === run.id ? 'Retrying...' : 'Retry'}
+                                                    </button>
+                                                </span>
+                                            ) : null}
+                                        </span>
+                                    </div>
                                 ))
                             )}
                         </div>

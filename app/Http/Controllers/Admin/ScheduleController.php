@@ -37,10 +37,10 @@ class ScheduleController extends Controller
 
         $query = AcademicSchedule::query()
             ->with([
-                'schoolClass:id,name,level',
+                'schoolClass:id,name,grade_level_id',
                 'subject:id,name',
                 'teacher:id,name',
-                'period:id,name,type',
+                'period:id,academic_year_id,semester_id,is_active',
             ])
             ->when($selectedPeriodId > 0, fn ($q) => $q->where('period_id', $selectedPeriodId))
             ->when($request->filled('class_id'), fn ($q) => $q->where('class_id', (int) $request->class_id))
@@ -51,7 +51,7 @@ class ScheduleController extends Controller
 
         return Inertia::render('admin/schedules/index', [
             'schedules' => $query->paginate(25)->withQueryString(),
-            'classes' => SchoolClass::orderBy('level_order')->orderBy('name')->get(['id', 'name', 'level']),
+            'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'grade_level_id']),
             'subjects' => Subject::query()->orderBy('name')->get(['id', 'name']),
             'teachers' => User::query()
                 ->where('is_active', true)

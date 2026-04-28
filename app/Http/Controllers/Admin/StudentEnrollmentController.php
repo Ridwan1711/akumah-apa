@@ -21,19 +21,7 @@ class StudentEnrollmentController extends Controller
 {
     public function index(Request $request): Response
     {
-        $selectedSemesterId = (int) $request->input('semester_id', 0);
-        $selectedPeriodId = $selectedSemesterId > 0
-            ? (int) (DB::table('academic_periods')->where('semester_id', $selectedSemesterId)->value('id') ?? 0)
-            : (int) $request->input('period_id', 0);
-        if ($selectedPeriodId <= 0) {
-            $selectedPeriodId = (int) (DB::table('academic_periods')->where('is_active', true)->value('id') ?? 0);
-        }
-        if ($selectedPeriodId <= 0) {
-            $selectedPeriodId = (int) (DB::table('academic_periods')->value('id') ?? 0);
-        }
-        $selectedSemesterId = (int) (DB::table('academic_periods')
-            ->where('id', $selectedPeriodId)
-            ->value('semester_id') ?? 0);
+        $selectedPeriodId = (int) $request->input('period_id', AcademicPeriod::query()->where('is_active', true)->value('id'));
 
         $students = Student::query()
             ->with([
@@ -55,20 +43,9 @@ class StudentEnrollmentController extends Controller
 
         return Inertia::render('admin/student-enrollments/index', [
             'students' => $students,
-            'classes' => SchoolClass::orderBy('level_order')->orderBy('name')->get(['id', 'name', 'level']),
-            'semesters' => Semester::query()
-                ->with('academicYear:id,name')
-                ->orderByDesc('is_active')
-                ->orderByDesc('id')
-                ->get(['id', 'name', 'academic_year_id', 'is_active'])
-                ->map(fn (Semester $semester) => [
-                    'id' => $semester->id,
-                    'name' => $semester->name,
-                    'academic_year_name' => $semester->academicYear?->name,
-                    'is_active' => $semester->is_active,
-                ]),
+            'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'grade_level_id']),
+            'academicPeriods' => AcademicPeriod::query()->orderByDesc('id')->with('academicYear:id,name', 'semester:id,name')->get(['id', 'academic_year_id', 'semester_id', 'is_active']),
             'selectedPeriodId' => $selectedPeriodId,
-            'selectedSemesterId' => $selectedSemesterId,
             'filters' => $request->only(['search', 'status', 'class_id']),
             'importRuns' => ImportRun::query()
                 ->with('requestedBy:id,name')
@@ -82,7 +59,7 @@ class StudentEnrollmentController extends Controller
     public function preview(BulkStudentEnrollmentRequest $request, StudentEnrollmentService $service): JsonResponse
     {
         $data = $request->validated();
-        $periodId = $this->resolvePeriodIdBySemesterId((int) $data['semester_id']);
+        $periodId = $data['semester_id'];
         $summary = $service->preview(
             $data['student_ids'],
             isset($data['class_id']) ? (int) $data['class_id'] : null,
@@ -127,30 +104,5 @@ class StudentEnrollmentController extends Controller
             ->with('success', "Bulk {$forcedMode} selesai. Created: {$summary['created']}, Updated: {$summary['updated']}, Cleared: {$summary['cleared']}, Skipped: {$summary['skipped']}, Failed: {$summary['failed']}");
     }
 
-    protected function resolvePeriodIdBySemesterId(int $semesterId): int
-    {
-        $periodId = (int) DB::table('academic_periods')
-            ->where('semester_id', $semesterId)
-            ->value('id');
-
-        if ($periodId > 0) {
-            return $periodId;
-        }
-
-        $semester = Semester::query()->findOrFail($semesterId);
-        $normalizedName = strtolower($semester->name);
-        $isSemesterTwo = str_contains($normalizedName, 'genap')
-            || str_contains($normalizedName, '2')
-            || str_contains($normalizedName, 'ii');
-
-        $period = AcademicPeriod::query()->create([
-            'name' => $semester->name,
-            'type' => $isSemesterTwo ? AcademicPeriod::TYPE_SEMESTER_2 : AcademicPeriod::TYPE_SEMESTER_1,
-            'is_active' => (bool) $semester->is_active,
-            'semester_id' => $semester->id,
-        ]);
-
-        return (int) $period->id;
-    }
 }
 

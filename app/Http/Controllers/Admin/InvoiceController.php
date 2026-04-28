@@ -6,11 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Jobs\ProcessBulkRun;
 use App\Models\AcademicYear;
 use App\Models\Diniyyah\SchoolClass;
-use App\Models\FeeSchedule;
 use App\Models\ImportRun;
 use App\Models\Invoice;
 use App\Models\PaymentType;
 use App\Models\Student;
+use App\Models\StudentPosition;
 use App\Models\StudentDiscount;
 use App\Models\User;
 use App\Notifications\InvoiceCreatedNotification;
@@ -38,14 +38,28 @@ class InvoiceController extends Controller
             ->when($request->month, fn ($q, $m) => $q->where('month', $m))
             ->when($request->search, fn ($q, $s) => $q->whereHas('student', fn ($sq) => $sq->where('full_name', 'ilike', "%{$s}%")->orWhere('nis', 'like', "%{$s}%")))
             ->when($request->class_id, fn ($q, $id) => $q->whereHas('student', fn ($sq) => $sq->where('current_class_id', $id)))
+            ->when(
+                $request->filled('division_code'),
+                fn ($q) => $q->whereHas(
+                    'student.activePositions',
+                    fn ($positionQuery) => $positionQuery->where('division_code', (string) $request->string('division_code'))
+                )
+            )
             ->orderByDesc('created_at');
 
         return Inertia::render('admin/invoices/index', [
             'invoices' => $query->paginate(20)->withQueryString(),
             'paymentTypes' => PaymentType::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
             'academicYears' => AcademicYear::orderByDesc('start_date')->get(['id', 'name']),
-            'classes' => SchoolClass::orderBy('level_order')->orderBy('name')->get(['id', 'name']),
-            'filters' => $request->only(['status', 'payment_type_id', 'academic_year_id', 'month', 'search', 'class_id']),
+            'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name']),
+            'divisionOptions' => StudentPosition::query()
+                ->whereNotNull('division_code')
+                ->where('division_code', '!=', '')
+                ->distinct()
+                ->orderBy('division_code')
+                ->pluck('division_code')
+                ->values(),
+            'filters' => $request->only(['status', 'payment_type_id', 'academic_year_id', 'month', 'search', 'class_id', 'division_code']),
             'statusCounts' => [
                 'all' => Invoice::count(),
                 'pending' => Invoice::where('status', Invoice::STATUS_PENDING)->count(),
@@ -276,17 +290,13 @@ class InvoiceController extends Controller
         return redirect()->back()->with('success', 'Tagihan berhasil dibatalkan.');
     }
 
-    private function resolveAmount(PaymentType $type, int $academicYearId, ?string $classLevel): float
+    private function resolveAmount(PaymentType $type, Student $student): ?float
     {
-        $schedule = FeeSchedule::where('payment_type_id', $type->id)
-            ->where('academic_year_id', $academicYearId)
-            ->where(function ($q) use ($classLevel) {
-                $q->where('class_level', $classLevel)->orWhereNull('class_level');
-            })
-            ->orderByRaw('class_level IS NULL ASC')
-            ->first();
+        if ($student->is_kuliah) {
+            return $type->kuliah_amount !== null ? (float) $type->kuliah_amount : null;
+        }
 
-        return (float) ($schedule?->amount ?? $type->default_amount);
+        return (float) $type->default_amount;
     }
 
     private function resolveDiscount(int $studentId, int $paymentTypeId, int $academicYearId, float $amount): float

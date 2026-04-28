@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'ppdb_sync' => [
+        'api_key' => env('PPDB_SYNC_API_KEY'),
+    ],
+
 ];

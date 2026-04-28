@@ -134,7 +134,6 @@ final class AuditLogHumanizer
 
         return match ($log->module) {
             'student' => self::summarizeStudent($log->action, $new, $old, $studentName($new, $old, $sid)),
-            'tahfidzprogress' => self::summarizeTahfidz($log->action, $new, $old, $studentName($new, $old, 0)),
             'leavepermission' => self::summarizeLeave($log->action, $new, $old, $studentName($new, $old, 0)),
             'studentviolation' => self::summarizeViolation($log->action, $studentName($new, $old, 0)),
             'dormassignment' => self::summarizeDorm($log->action, $new, $studentName($new, $old, 0)),
@@ -175,30 +174,6 @@ final class AuditLogHumanizer
             'wafat' => 'Wafat',
             default => (string) $status,
         };
-    }
-
-    private static function summarizeTahfidz(string $action, array $new, array $old, string $studentName): string
-    {
-        $juz = isset($new['juz']) ? (int) $new['juz'] : (isset($old['juz']) ? (int) $old['juz'] : null);
-        $juzText = $juz !== null ? 'Juz '.$juz : 'hafalan';
-        $type = isset($new['type']) ? (string) $new['type'] : (isset($old['type']) ? (string) $old['type'] : '');
-        $typeLabel = match ($type) {
-            'murojaah' => 'murojaah',
-            'ziyadah' => 'ziyadah',
-            default => $type !== '' ? $type : 'tahfidz',
-        };
-
-        if ($action === 'create') {
-            return $studentName.' menyelesaikan setoran '.$juzText.' ('.$typeLabel.')';
-        }
-        if ($action === 'update') {
-            return 'Setoran '.$juzText.' milik '.$studentName.' diperbarui ('.$typeLabel.')';
-        }
-        if ($action === 'delete') {
-            return 'Catatan setoran '.$juzText.' untuk '.$studentName.' dihapus';
-        }
-
-        return 'Catatan tahfidz untuk '.$studentName.' diubah';
     }
 
     private static function summarizeLeave(string $action, array $new, array $old, string $studentName): string

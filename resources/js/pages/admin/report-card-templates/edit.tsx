@@ -19,14 +19,13 @@ const BLOCK_LABELS: Record<string, string> = {
     header: 'Header & Logo',
     info: 'Info Santri',
     grades: 'Nilai Kitab',
-    tahfidz: 'Progress Tahfidz',
     violations: 'Pelanggaran',
     notes: 'Catatan Wali Kelas',
     footer: 'Footer & Tanda Tangan',
     qr: 'QR Code Verifikasi',
 };
 
-const DEFAULT_LAYOUT = ['header', 'info', 'grades', 'tahfidz', 'violations', 'notes', 'footer', 'qr'];
+const DEFAULT_LAYOUT = ['header', 'info', 'grades', 'violations', 'notes', 'footer', 'qr'];
 
 type ReportCardTemplate = {
     id: number;
