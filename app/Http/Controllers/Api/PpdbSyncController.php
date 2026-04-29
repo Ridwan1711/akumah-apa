@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\PpdbStudentSyncService;
+use App\Services\SystemLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -49,7 +50,9 @@ class PpdbSyncController extends Controller
                 'data' => $result,
             ]);
         } catch (\Throwable $e) {
-            Log::error('PPDB sync failed in SIAKAD', [
+            $log = new SystemLogService();
+
+            $log->error('PPDB sync failed in SIAKAD', [
                 'payload_application_id' => $validated['ppdb_application_id'] ?? null,
                 'error' => $e->getMessage(),
             ]);

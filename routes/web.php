@@ -30,6 +30,7 @@ use App\Http\Controllers\Admin\StudentDataTransferController;
 use App\Http\Controllers\Admin\StudentDiscountController;
 use App\Http\Controllers\Admin\StudentEnrollmentController;
 use App\Http\Controllers\Admin\StudentEnrollmentTransferController;
+use App\Http\Controllers\Admin\SystemLogController;
 use App\Http\Controllers\Admin\TeacherDataTransferController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\ViolationController;
@@ -228,6 +229,7 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::post('teachers-import-runs/{importRun}/retry', [TeacherDataTransferController::class, 'retry'])->name('teachers.import-runs.retry');
         Route::post('users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
         Route::post('users/{user}/toggle-active', [UserController::class, 'toggleActive'])->name('users.toggle-active');
+        Route::get('system-logs', [SystemLogController::class, 'index'])->name('system-logs.index');
     });
 
 // Audit log: super_admin (semua modul), admin_keuangan (keuangan), admin_akademik (akademik & operasional)

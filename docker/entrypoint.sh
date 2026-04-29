@@ -7,6 +7,11 @@ if [ ! -f .env ]; then
   cp .env.example .env
 fi
 
+mkdir -p storage/logs storage/framework/cache/data storage/framework/sessions storage/framework/views bootstrap/cache
+touch storage/logs/laravel.log
+chown -R www-data:www-data storage bootstrap/cache public
+chmod -R ug+rwx storage bootstrap/cache public
+
 php artisan config:clear --no-interaction || true
 php artisan route:clear --no-interaction || true
 php artisan view:clear --no-interaction || true

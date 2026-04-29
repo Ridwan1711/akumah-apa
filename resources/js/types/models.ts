@@ -549,6 +549,24 @@ export type AuditLog = {
     technical_target?: string;
 };
 
+export type SystemLog = {
+    id: number;
+    channel: string;
+    level: string;
+    message: string;
+    context?: Record<string, unknown> | null;
+    extra?: Record<string, unknown> | null;
+    user_id?: number | null;
+    user?: Pick<User, 'id' | 'name'> | null;
+    ip_address?: string | null;
+    method?: string | null;
+    url?: string | null;
+    trace?: string | null;
+    logged_at: string;
+    created_at: string;
+    updated_at: string;
+};
+
 // --- Pagination ---
 
 export type PaginatedData<T> = {

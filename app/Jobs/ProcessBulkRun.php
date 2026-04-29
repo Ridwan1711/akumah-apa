@@ -16,6 +16,7 @@ use App\Models\StudentDiscount;
 use App\Models\User;
 use App\Notifications\BulkRunFinishedNotification;
 use App\Notifications\InvoiceCreatedNotification;
+use App\Services\SystemLogService;
 use Illuminate\Database\QueryException;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -441,7 +442,8 @@ class ProcessBulkRun implements ShouldQueue, ShouldBeUnique
         $invoice->loadMissing('student.user', 'student.guardians.user');
         $student = $invoice->student;
         if (! $student) {
-            Log::warning('invoice_notification_skipped', [
+            $log = new SystemLogService();
+            $log->warning('invoice_notification_skipped', [
                 'reason' => 'missing_student',
                 'invoice_id' => $invoice->id,
             ]);
@@ -455,7 +457,7 @@ class ProcessBulkRun implements ShouldQueue, ShouldBeUnique
             ->unique('id');
         $hasStudentUser = (bool) $student->user;
 
-        Log::info('invoice_notification_targets', [
+        app(SystemLogService::class)->info('invoice_notification_targets', [
             'invoice_id' => $invoice->id,
             'student_id' => $student->id,
             'student_user_id' => $student->user?->id,

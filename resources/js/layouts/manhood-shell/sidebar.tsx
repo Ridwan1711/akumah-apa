@@ -124,13 +124,17 @@ function buildSections(auth: Auth, userRoleNames: string[], hasGuruRecord: boole
                 label: 'Sistem',
                 items: [
                     { title: 'Manajemen User', href: '/admin/users', icon: Shield },
+                    { title: 'Log Sistem', href: '/admin/system-logs', icon: FileText },
                     { title: 'Log Aktivitas', href: '/admin/audit-logs', icon: FileText },
                 ],
             });
         } else if (can(auth, 'audit_log.view_akademik')) {
             sections.push({
                 label: 'Sistem',
-                items: [{ title: 'Log Aktivitas', href: '/admin/audit-logs', icon: FileText }],
+                items: [
+                    { title: 'Log Sistem', href: '/admin/system-logs', icon: FileText },
+                    { title: 'Log Aktivitas', href: '/admin/audit-logs', icon: FileText },
+                ],
             });
         }
     }

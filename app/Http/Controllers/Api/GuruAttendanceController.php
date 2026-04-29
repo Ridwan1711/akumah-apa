@@ -215,6 +215,7 @@ class GuruAttendanceController extends Controller
                 );
             }
         } catch (\Throwable $e) {
+
             Log::warning('Failed to send StudentAbsentNotification', [
                 'error' => $e->getMessage(),
                 'session_id' => $session->id,

@@ -4,6 +4,7 @@ namespace App\Imports;
 
 use App\Models\Diniyyah\GradeLevel;
 use App\Models\Diniyyah\SchoolClass;
+use App\Services\SystemLogService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
 use Maatwebsite\Excel\Concerns\ToCollection;
@@ -64,7 +65,7 @@ class DiniyahClassDataImport implements ToCollection, WithHeadingRow
                     'row' => $rowNumber,
                     'message' => $validator->errors()->first(),
                 ];
-                \Log::error($validator->errors()->first());
+                app(SystemLogService::class)->error($validator->errors()->first());
                 continue;
             }
 

@@ -3,6 +3,7 @@
 namespace App\Services\Firebase;
 
 use App\Models\User;
+use App\Services\SystemLogService;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -20,7 +21,8 @@ class AccountLinkSyncService
                 'updated_at' => now()->toIso8601String(),
             ]);
         } catch (Throwable $e) {
-            Log::warning('Firebase account link sync failed', [
+            $log = new SystemLogService();
+            $log->warning('Firebase account link sync failed', [
                 'user_id' => $user->id,
                 'error' => $e->getMessage(),
             ]);
