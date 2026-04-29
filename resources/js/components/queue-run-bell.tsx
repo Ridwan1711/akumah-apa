@@ -1,40 +1,16 @@
 import { usePage } from '@inertiajs/react';
 import { Clock3, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { type QueueRunListItem, useQueueRunsPoll } from '@/hooks/use-queue-runs-poll';
 import { cn } from '@/lib/utils';
-import axios from 'axios';
 
-type QueueRunItem = {
-    id: number;
-    uuid: string;
-    title: string;
-    status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
-    file_name: string | null;
-    progress_percent: number;
-    processed_rows: number;
-    total_rows: number;
-    created_count: number;
-    updated_count: number;
-    skipped_count: number;
-    failed_count: number;
-    error_message: string | null;
-    created_at: string | null;
-};
-
-type QueueRunsResponse = {
-    data: QueueRunItem[];
-    meta?: {
-        active_count?: number;
-    };
-};
-
-const statusLabel: Record<QueueRunItem['status'], string> = {
+const statusLabel: Record<QueueRunListItem['status'], string> = {
     queued: 'Menunggu',
     processing: 'Diproses',
     completed: 'Selesai',
@@ -44,47 +20,22 @@ const statusLabel: Record<QueueRunItem['status'], string> = {
 
 export function QueueRunBell() {
     const { auth } = usePage<{ auth: { user?: { id: number } } }>().props;
-    const [runs, setRuns] = useState<QueueRunItem[]>([]);
-    const [loading, setLoading] = useState(false);
     const [open, setOpen] = useState(false);
-    const [activeCount, setActiveCount] = useState(0);
 
-    const fetchRuns = useCallback(async () => {
-        setLoading(true);
-        try {
-            const { data } = await axios.get<QueueRunsResponse>('/queue-runs', {
-                params: { limit: 15 },
-            });
-            setRuns(Array.isArray(data.data) ? data.data : []);
-            setActiveCount(data.meta?.active_count ?? 0);
-        } catch {
-            setRuns([]);
-            setActiveCount(0);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        if (open && auth?.user) {
-            fetchRuns();
-        }
-    }, [open, auth?.user, fetchRuns]);
-
-    useEffect(() => {
-        if (!auth?.user) return;
-        fetchRuns();
-        const timer = window.setInterval(fetchRuns, 15000);
-
-        return () => window.clearInterval(timer);
-    }, [auth?.user, fetchRuns]);
+    const { runs, activeCount, queueLoading: loading } = useQueueRunsPoll({
+        enabled: Boolean(auth?.user),
+        limit: 15,
+        panelOpen: open,
+    });
 
     const hasProcessing = useMemo(
         () => runs.some((run) => run.status === 'queued' || run.status === 'processing'),
         [runs]
     );
 
-    if (!auth?.user) return null;
+    if (!auth?.user) {
+        return null;
+    }
 
     return (
         <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -108,9 +59,7 @@ export function QueueRunBell() {
                             <Loader2 className="size-8 animate-spin text-muted-foreground" />
                         </div>
                     ) : runs.length === 0 ? (
-                        <div className="py-12 text-center text-sm text-muted-foreground">
-                            Belum ada proses queue
-                        </div>
+                        <div className="py-12 text-center text-sm text-muted-foreground">Belum ada proses queue</div>
                     ) : (
                         <div className="divide-y">
                             {runs.map((run) => (

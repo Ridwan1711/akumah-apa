@@ -24,41 +24,42 @@ class QueueRunController extends Controller
         $user = $request->user();
         $canViewAll = $user->isAdmin();
 
+        $applyUserScope = function ($query) use ($user, $canViewAll, $scope): void {
+            if (! $canViewAll || $scope !== 'all') {
+                $query->where('requested_by', $user->id);
+            }
+        };
+
+        $activeCount = ImportRun::query()
+            ->whereIn('status', [ImportRun::STATUS_QUEUED, ImportRun::STATUS_PROCESSING])
+            ->tap($applyUserScope)
+            ->count();
+
         $runsQuery = ImportRun::query()
             ->with('requestedBy:id,name')
             ->latest('id')
-            ->limit($limit);
-
-        if (! $canViewAll || $scope !== 'all') {
-            $runsQuery->where('requested_by', $user->id);
-        }
+            ->limit($limit)
+            ->tap($applyUserScope);
 
         $runs = $runsQuery->get([
-                'id',
-                'uuid',
-                'type',
-                'job_type',
-                'status',
-                'requested_by',
-                'file_name',
-                'file_path',
-                'strategy',
-                'meta',
-                'total_rows',
-                'processed_rows',
-                'created_count',
-                'updated_count',
-                'skipped_count',
-                'failed_count',
-                'error_message',
-                'started_at',
-                'finished_at',
-                'created_at',
-            ]);
-
-        $activeCount = $runs
-            ->whereIn('status', [ImportRun::STATUS_QUEUED, ImportRun::STATUS_PROCESSING])
-            ->count();
+            'id',
+            'uuid',
+            'type',
+            'job_type',
+            'status',
+            'requested_by',
+            'file_name',
+            'total_rows',
+            'processed_rows',
+            'created_count',
+            'updated_count',
+            'skipped_count',
+            'failed_count',
+            'error_message',
+            'started_at',
+            'finished_at',
+            'created_at',
+        ]);
 
         return response()->json([
             'data' => $runs->map(fn (ImportRun $run) => [

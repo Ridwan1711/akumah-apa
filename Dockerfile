@@ -1,0 +1,76 @@
+FROM composer:2 AS vendor
+
+WORKDIR /app
+
+COPY composer.json composer.lock ./
+
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --no-progress \
+    --prefer-dist \
+    --optimize-autoloader \
+    --no-scripts
+
+FROM node:22-alpine AS assets
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+FROM dunglas/frankenphp:1-php8.4-bookworm AS app
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    unzip \
+    libpq-dev \
+    libzip-dev \
+    libicu-dev \
+    libpng-dev \
+    libjpeg62-turbo-dev \
+    libfreetype6-dev \
+    supervisor \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j"$(nproc)" \
+        bcmath \
+        exif \
+        gd \
+        intl \
+        pcntl \
+        pdo_pgsql \
+        zip \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=vendor /app/vendor ./vendor
+COPY . .
+COPY --from=assets /app/public/build ./public/build
+
+RUN mkdir -p /app/storage/framework/cache/data \
+    /app/storage/framework/sessions \
+    /app/storage/framework/views \
+    /app/storage/logs \
+    /var/log/supervisor \
+    /var/run/supervisor \
+    && chown -R www-data:www-data /app/storage /app/bootstrap/cache \
+    && chmod -R ug+rwx /app/storage /app/bootstrap/cache
+
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENV APP_ENV=production
+ENV APP_DEBUG=false
+ENV OCTANE_SERVER=frankenphp
+ENV OCTANE_HTTPS=true
+ENV APP_PORT=8000
+
+EXPOSE 8000
+
+ENTRYPOINT ["/entrypoint.sh"]

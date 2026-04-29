@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppearance } from '@/hooks/use-appearance';
+import { useQueueRunsPoll } from '@/hooks/use-queue-runs-poll';
 import { useInitials } from '@/hooks/use-initials';
 import { logout } from '@/routes';
 import { edit as editProfile } from '@/routes/profile';
@@ -40,31 +41,6 @@ type NotificationListResponse = {
         per_page?: number;
         total?: number;
         unread_count?: number;
-    };
-};
-
-type QueueRunItem = {
-    id: number;
-    uuid: string;
-    title: string;
-    type: string;
-    job_type: string | null;
-    status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
-    progress_percent: number;
-    processed_rows: number;
-    total_rows: number;
-    error_message: string | null;
-    created_at: string | null;
-    requested_by?: string | null;
-    can_retry?: boolean;
-};
-
-type QueueRunResponse = {
-    data: QueueRunItem[];
-    meta?: {
-        active_count?: number;
-        can_view_all?: boolean;
-        current_scope?: 'my' | 'all';
     };
 };
 
@@ -101,12 +77,19 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [notifLoading, setNotifLoading] = useState(false);
     const [queueOpen, setQueueOpen] = useState(false);
-    const [queueLoading, setQueueLoading] = useState(false);
-    const [queueRuns, setQueueRuns] = useState<QueueRunItem[]>([]);
-    const [activeQueueCount, setActiveQueueCount] = useState(0);
     const [queueScope, setQueueScope] = useState<'my' | 'all'>('my');
-    const [queueCanViewAll, setQueueCanViewAll] = useState(false);
     const [retryingRunId, setRetryingRunId] = useState<number | null>(null);
+
+    const onQueueServerScope = useCallback((next: 'my' | 'all') => {
+        setQueueScope(next);
+    }, []);
+
+    const { runs: queueRuns, activeCount: activeQueueCount, canViewAll: queueCanViewAll, queueLoading, refetch: refetchQueueRuns } = useQueueRunsPoll({
+        enabled: Boolean(user),
+        scope: queueScope,
+        panelOpen: queueOpen,
+        onServerScope: onQueueServerScope,
+    });
 
     const userRef = useRef<HTMLDivElement | null>(null);
     const notifRef = useRef<HTMLDivElement | null>(null);
@@ -131,44 +114,11 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
         }
     }, []);
 
-    const fetchQueueRuns = useCallback(async () => {
-        setQueueLoading(true);
-        try {
-            const { data } = await axios.get<QueueRunResponse>('/queue-runs', {
-                params: { scope: queueScope },
-            });
-            setQueueRuns(Array.isArray(data?.data) ? data.data : []);
-            setActiveQueueCount(data?.meta?.active_count ?? 0);
-            setQueueCanViewAll(Boolean(data?.meta?.can_view_all));
-            if (data?.meta?.current_scope) {
-                setQueueScope(data.meta.current_scope);
-            }
-        } catch {
-            setQueueRuns([]);
-            setActiveQueueCount(0);
-        } finally {
-            setQueueLoading(false);
-        }
-    }, [queueScope]);
-
     useEffect(() => {
         if (notifOpen && user) {
             fetchNotifications();
         }
     }, [notifOpen, user, fetchNotifications]);
-
-    useEffect(() => {
-        if (queueOpen && user) {
-            fetchQueueRuns();
-        }
-    }, [queueOpen, user, fetchQueueRuns]);
-
-    useEffect(() => {
-        if (!user) return;
-        fetchQueueRuns();
-        const timer = window.setInterval(fetchQueueRuns, 15000);
-        return () => window.clearInterval(timer);
-    }, [user, fetchQueueRuns]);
 
     useEffect(() => {
         function onClick(e: MouseEvent) {
@@ -230,7 +180,7 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
         setRetryingRunId(runId);
         try {
             await axios.post(`/queue-runs/${runId}/retry`);
-            await fetchQueueRuns();
+            await refetchQueueRuns({ silent: true });
         } catch {
             // noop
         } finally {
