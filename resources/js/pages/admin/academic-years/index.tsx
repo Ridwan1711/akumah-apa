@@ -29,7 +29,6 @@ type YearForm = {
     name: string;
     start_date: string;
     end_date: string;
-    is_active: boolean;
 };
 
 type SemesterForm = {
@@ -44,7 +43,6 @@ const initialYearForm: YearForm = {
     name: '',
     start_date: '',
     end_date: '',
-    is_active: false,
 };
 
 const initialSemesterForm: SemesterForm = {
@@ -88,7 +86,6 @@ export default function AcademicYearIndex({ academicYears }: Props) {
             name: item.name,
             start_date: item.start_date,
             end_date: item.end_date,
-            is_active: item.is_active,
         });
         yearForm.clearErrors();
         setYearModalOpen(true);
@@ -303,13 +300,6 @@ export default function AcademicYearIndex({ academicYears }: Props) {
                             <label htmlFor="academic-year-end">Tanggal Selesai</label>
                             <input id="academic-year-end" type="date" className="mcr-input" value={yearForm.data.end_date} onChange={(e) => yearForm.setData('end_date', e.target.value)} />
                             <InputError message={yearForm.errors.end_date} />
-                        </div>
-                        <div className="mcr-form-group full">
-                            <label className="mcr-checkline">
-                                <input type="checkbox" checked={yearForm.data.is_active} onChange={(e) => yearForm.setData('is_active', e.target.checked)} />
-                                <span>Set sebagai tahun ajaran aktif</span>
-                            </label>
-                            <InputError message={yearForm.errors.is_active} />
                         </div>
                     </div>
                     <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

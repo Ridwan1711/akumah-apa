@@ -37,6 +37,17 @@ class AcademicPeriod extends Model
         return $query->where('is_active', true);
     }
 
+    public static function current(?array $with = null): ?self
+    {
+        $query = static::query()->active()->latest('id');
+
+        if ($with !== null) {
+            $query->with($with);
+        }
+
+        return $query->first();
+    }
+
     public function isSemesterTwo(): bool
     {
         return $this->semester_id === 2;

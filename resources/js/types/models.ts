@@ -5,7 +5,7 @@ export type AcademicYear = {
     name: string;
     start_date: string;
     end_date: string;
-    is_active: boolean;
+    is_active?: boolean;
     semesters?: Semester[];
     created_at: string;
     updated_at: string;
@@ -17,7 +17,7 @@ export type Semester = {
     name: string;
     start_date: string;
     end_date: string;
-    is_active: boolean;
+    is_active?: boolean;
     academic_year?: AcademicYear;
     created_at: string;
     updated_at: string;

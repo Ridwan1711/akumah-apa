@@ -2,9 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Models\AcademicPeriod;
 use App\Models\Invoice;
 use App\Models\PaymentType;
-use App\Models\Semester;
 use App\Models\Student;
 use App\Models\StudentDiscount;
 use Illuminate\Console\Command;
@@ -21,9 +21,10 @@ class GenerateMonthlyInvoices extends Command
         $month = (int) ($this->option('month') ?: now()->month);
         $year = (int) ($this->option('year') ?: now()->year);
 
-        $activeSemester = Semester::where('is_active', true)->first();
-        if (! $activeSemester) {
+        $activePeriod = AcademicPeriod::query()->active()->first();
+        if (! $activePeriod) {
             $this->error('Tidak ada semester aktif.');
+
             return self::FAILURE;
         }
 
@@ -33,6 +34,7 @@ class GenerateMonthlyInvoices extends Command
 
         if ($recurringTypes->isEmpty()) {
             $this->info('Tidak ada jenis pembayaran berulang yang aktif.');
+
             return self::SUCCESS;
         }
 
@@ -45,34 +47,36 @@ class GenerateMonthlyInvoices extends Command
         $created = 0;
         $skipped = 0;
 
-        DB::transaction(function () use ($students, $recurringTypes, $activeSemester, $month, $dueDate, &$created, &$skipped) {
+        DB::transaction(function () use ($students, $recurringTypes, $activePeriod, $month, $dueDate, &$created, &$skipped) {
             foreach ($recurringTypes as $type) {
                 foreach ($students as $student) {
                     $exists = Invoice::where('student_id', $student->id)
                         ->where('payment_type_id', $type->id)
-                        ->where('academic_year_id', $activeSemester->academic_year_id)
+                        ->where('academic_year_id', $activePeriod->academic_year_id)
                         ->where('month', $month)
                         ->whereNotIn('status', [Invoice::STATUS_CANCELLED])
                         ->exists();
 
                     if ($exists) {
                         $skipped++;
+
                         continue;
                     }
 
                     $amount = $this->resolveAmount($type, $student);
                     if ($amount === null) {
                         $skipped++;
+
                         continue;
                     }
-                    $discount = $this->resolveDiscount($student->id, $type->id, $activeSemester->academic_year_id, $amount);
+                    $discount = $this->resolveDiscount($student->id, $type->id, $activePeriod->academic_year_id, $amount);
 
                     Invoice::create([
                         'invoice_number' => Invoice::generateNumber(),
                         'student_id' => $student->id,
                         'payment_type_id' => $type->id,
-                        'academic_year_id' => $activeSemester->academic_year_id,
-                        'semester_id' => $activeSemester->id,
+                        'academic_year_id' => $activePeriod->academic_year_id,
+                        'semester_id' => $activePeriod->semester_id,
                         'month' => $month,
                         'amount' => $amount,
                         'discount_amount' => $discount,

@@ -5,16 +5,17 @@ namespace App\Http\Controllers\Santri;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Santri\UpdateOwnGuardianRequest;
 use App\Http\Requests\Santri\UpdateOwnProfileRequest;
+use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AcademicSchedule;
-use App\Models\Guardian;
 use App\Models\Diniyyah\Score;
+use App\Models\Guardian;
 use App\Models\LessonAttendance;
 use App\Models\Semester;
+use App\Services\Firebase\AccountLinkSyncService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-use App\Services\Firebase\AccountLinkSyncService;
 
 class SantriController extends Controller
 {
@@ -161,7 +162,7 @@ class SantriController extends Controller
         $class = $student->currentClass;
         abort_unless($class, 404, 'Kelas santri tidak ditemukan.');
 
-        $activeSemester = Semester::where('is_active', true)->first();
+        $activeSemester = AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester;
 
         $schedules = AcademicSchedule::query()
             ->where('class_id', $class->id)

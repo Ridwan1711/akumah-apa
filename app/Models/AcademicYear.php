@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -14,7 +15,6 @@ class AcademicYear extends Model
         'name', // ex. 25/26 for 2025/2026
         'start_date', // ex. 2025-01-01
         'end_date', // ex. 2026-12-31
-        'is_active', // boolean true or false
     ];
 
     protected function casts(): array
@@ -22,7 +22,6 @@ class AcademicYear extends Model
         return [
             'start_date' => 'date',
             'end_date' => 'date',
-            'is_active' => 'boolean',
         ];
     }
 
@@ -31,8 +30,12 @@ class AcademicYear extends Model
         return $this->hasMany(Semester::class);
     }
 
-    public static function getActive(): ?self
+    public function scopeWithActivePeriodFlag(Builder $query): Builder
     {
-        return static::where('is_active', true)->first();
+        return $query->addSelect([
+            'is_active' => AcademicPeriod::query()
+                ->selectRaw('MAX(CASE WHEN is_active THEN 1 ELSE 0 END)')
+                ->whereColumn('academic_periods.academic_year_id', 'academic_years.id'),
+        ]);
     }
 }

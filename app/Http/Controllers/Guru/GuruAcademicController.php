@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Guru;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AcademicSchedule;
-use App\Models\Semester;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -28,7 +28,7 @@ class GuruAcademicController extends Controller
     public function schedule(Request $request): Response
     {
         $user = $request->user();
-        $activeSemester = Semester::where('is_active', true)->first();
+        $activeSemester = AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester;
 
         $schedules = AcademicSchedule::query()
             ->where('teacher_id', $user->id)

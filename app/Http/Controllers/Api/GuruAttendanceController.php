@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\LessonAttendance;
 use App\Models\LessonSession;
-use App\Models\Semester;
 use App\Models\Student;
 use App\Notifications\StudentAbsentNotification;
 use Illuminate\Http\JsonResponse;
@@ -22,7 +22,7 @@ class GuruAttendanceController extends Controller
         $user = $request->user();
         $date = $request->date ? Carbon::parse($request->date)->toDateString() : now()->toDateString();
         $dayOfWeek = (int) Carbon::parse($date)->isoWeekday();
-        $activeSemester = Semester::where('is_active', true)->first();
+        $activeSemester = AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester;
 
         $schedules = AcademicSchedule::query()
             ->where('day', $dayOfWeek)

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Wali;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\Diniyyah\Score;
 use App\Models\Semester;
@@ -51,7 +52,7 @@ class WaliSantriController extends Controller
 
         $student->load(['currentClass:id,name', 'violationSummary']);
 
-        $activeSemester = Semester::where('is_active', true)->first();
+        $activeSemester = AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester;
         $semesterId = $request->semester_id ?? $activeSemester?->id;
 
         $grades = [];
@@ -89,7 +90,7 @@ class WaliSantriController extends Controller
         $student->load('currentClass:id,name,grade_level_id');
         abort_unless($student->currentClass, 404, 'Kelas santri tidak ditemukan.');
 
-        $activeSemester = Semester::where('is_active', true)->first();
+        $activeSemester = AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester;
         $schedules = AcademicSchedule::query()
             ->where('class_id', $student->currentClass->id)
             ->with([

@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Guru;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\LessonAttendance;
 use App\Models\LessonSession;
-use App\Models\Semester;
 use App\Models\Student;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -24,7 +24,7 @@ class GuruAttendanceController extends Controller
             ? Carbon::parse($request->string('date'))->toDateString()
             : now()->toDateString();
         $dayOfWeek = (int) Carbon::parse($date)->isoWeekday();
-        $activeSemester = Semester::where('is_active', true)->first();
+        $activeSemester = AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester;
 
         $schedules = AcademicSchedule::query()
             ->where('day', $dayOfWeek)

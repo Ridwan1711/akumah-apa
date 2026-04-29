@@ -132,11 +132,10 @@ class StudentEnrollmentTransferController extends Controller
         $period = AcademicPeriod::query()->create([
             'name' => $semester->name,
             'type' => $isSemesterTwo ? AcademicPeriod::TYPE_SEMESTER_2 : AcademicPeriod::TYPE_SEMESTER_1,
-            'is_active' => (bool) $semester->is_active,
+            'is_active' => false,
             'semester_id' => $semester->id,
         ]);
 
         return (int) $period->id;
     }
 }
-

@@ -51,15 +51,16 @@ class ClassSubjectRuleController extends Controller
                 ->orderBy('name')
                 ->get(['id', 'name']),
             'semesters' => Semester::query()
+                ->withActivePeriodFlag()
                 ->with('academicYear:id,name')
                 ->orderByDesc('is_active')
                 ->orderByDesc('id')
-                ->get(['id', 'name', 'academic_year_id', 'is_active'])
+                ->get(['id', 'name', 'academic_year_id'])
                 ->map(fn (Semester $semester) => [
                     'id' => $semester->id,
                     'name' => $semester->name,
                     'academic_year_name' => $semester->academicYear?->name,
-                    'is_active' => $semester->is_active,
+                    'is_active' => (bool) $semester->is_active,
                 ]),
             'selectedPeriodId' => $selectedPeriodId,
             'selectedSemesterId' => $selectedSemesterId,
@@ -175,5 +176,4 @@ class ClassSubjectRuleController extends Controller
             ->where('semester_id', $semesterId)
             ->value('id');
     }
-
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AssessmentComponent;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Score;
@@ -70,9 +71,18 @@ class KitabGradeController extends Controller
 
         return Inertia::render('admin/kitab-grades/select-subject', [
             'academicPeriod' => ['id' => $academic_period->id, 'name' => $academic_period->name, 'type' => null],
-            'semesters' => Semester::query()->orderByDesc('id')->get(['id', 'name', 'is_active']),
+            'semesters' => Semester::query()
+                ->withActivePeriodFlag()
+                ->orderByDesc('is_active')
+                ->orderByDesc('id')
+                ->get(['id', 'name'])
+                ->map(fn (Semester $semester) => [
+                    'id' => $semester->id,
+                    'name' => $semester->name,
+                    'is_active' => (bool) $semester->is_active,
+                ]),
             'subjects' => $subjects,
-            'activeSemester' => Semester::where('is_active', true)->first(['id', 'name']),
+            'activeSemester' => AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester?->only(['id', 'name']),
         ]);
     }
 
@@ -285,6 +295,7 @@ class KitabGradeController extends Controller
     protected function resolveDefaultAcademicPeriod(): Semester
     {
         return Semester::query()
+            ->withActivePeriodFlag()
             ->orderByDesc('is_active')
             ->orderByDesc('id')
             ->firstOrFail();

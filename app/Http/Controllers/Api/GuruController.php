@@ -116,7 +116,7 @@ class GuruController extends Controller
     public function schedule(Request $request): JsonResponse
     {
         $user = $request->user();
-        $activeSemester = Semester::where('is_active', true)->first();
+        $activeSemester = AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester;
 
         $schedulesQuery = AcademicSchedule::query()
             ->where('teacher_id', $user->id)
@@ -235,7 +235,7 @@ class GuruController extends Controller
             'filters' => $request->only(['class_id', 'kitab_subject_id', 'subject_id', 'semester_id', 'period_id', 'component_id']),
             'isGuru' => $hasLimitedView,
             'classSubjectMap' => $classSubjectMap,
-            'activeSemester' => Semester::where('is_active', true)->first(['id', 'name']),
+            'activeSemester' => AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester?->only(['id', 'name']),
         ]);
     }
 
@@ -502,7 +502,7 @@ class GuruController extends Controller
 
     private function generateQrCodeBase64(string $url): string
     {
-        $writer = new PngWriter();
+        $writer = new PngWriter;
         $qrCode = new QrCode(
             data: $url,
             encoding: new Encoding('UTF-8'),

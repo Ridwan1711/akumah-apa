@@ -3,22 +3,22 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\DormAssignment;
-use App\Models\DormBuilding;
 use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AssessmentComponent;
 use App\Models\Diniyyah\ClassWali;
-use App\Models\Diniyyah\Score;
 use App\Models\Diniyyah\SchoolClass;
+use App\Models\Diniyyah\Score;
 use App\Models\Diniyyah\StudentClassEnrollment;
 use App\Models\Diniyyah\Subject;
 use App\Models\Diniyyah\TeacherAssignment;
-use App\Models\EmProfile;
-use App\Models\Semester;
-use App\Models\LeavePermission;
-use App\Models\Guardian;
-use App\Models\Role;
+use App\Models\DormAssignment;
+use App\Models\DormBuilding;
 use App\Models\DormRoom;
+use App\Models\EmProfile;
+use App\Models\Guardian;
+use App\Models\LeavePermission;
+use App\Models\Role;
+use App\Models\Semester;
 use App\Models\Student;
 use App\Models\StudentViolation;
 use App\Models\User;
@@ -123,12 +123,7 @@ class AdminController extends Controller
 
     public function classes(Request $request): JsonResponse
     {
-        $activePeriodId = AcademicPeriod::query()
-            ->whereHas('semester', fn ($q) => $q->where('is_active', true))
-            ->value('id');
-        if (! $activePeriodId) {
-            $activePeriodId = AcademicPeriod::query()->where('is_active', true)->value('id');
-        }
+        $activePeriodId = (int) (AcademicPeriod::query()->active()->value('id') ?? 0);
 
         $classes = SchoolClass::query()
             ->withCount([
@@ -192,12 +187,7 @@ class AdminController extends Controller
 
     public function classHomeroomCandidates(Request $request, SchoolClass $class): JsonResponse
     {
-        $activePeriodId = AcademicPeriod::query()
-            ->whereHas('semester', fn ($q) => $q->where('is_active', true))
-            ->value('id');
-        if (! $activePeriodId) {
-            $activePeriodId = AcademicPeriod::query()->where('is_active', true)->value('id');
-        }
+        $activePeriodId = (int) (AcademicPeriod::query()->active()->value('id') ?? 0);
         if (! $activePeriodId) {
             return response()->json([
                 'message' => 'Belum ada periode akademik aktif.',
@@ -225,12 +215,7 @@ class AdminController extends Controller
 
     public function setClassHomeroomTeacher(Request $request, SchoolClass $class): JsonResponse
     {
-        $activePeriodId = AcademicPeriod::query()
-            ->whereHas('semester', fn ($q) => $q->where('is_active', true))
-            ->value('id');
-        if (! $activePeriodId) {
-            $activePeriodId = AcademicPeriod::query()->where('is_active', true)->value('id');
-        }
+        $activePeriodId = (int) (AcademicPeriod::query()->active()->value('id') ?? 0);
         if (! $activePeriodId) {
             return response()->json([
                 'message' => 'Belum ada periode akademik aktif.',
@@ -275,12 +260,7 @@ class AdminController extends Controller
 
     public function updateClassSettings(Request $request, SchoolClass $class): JsonResponse
     {
-        $activePeriodId = AcademicPeriod::query()
-            ->whereHas('semester', fn ($q) => $q->where('is_active', true))
-            ->value('id');
-        if (! $activePeriodId) {
-            $activePeriodId = AcademicPeriod::query()->where('is_active', true)->value('id');
-        }
+        $activePeriodId = (int) (AcademicPeriod::query()->active()->value('id') ?? 0);
         if (! $activePeriodId) {
             return response()->json([
                 'message' => 'Belum ada periode akademik aktif.',
@@ -350,12 +330,7 @@ class AdminController extends Controller
 
     public function classTeachers(Request $request, SchoolClass $class): JsonResponse
     {
-        $activePeriodId = AcademicPeriod::query()
-            ->whereHas('semester', fn ($q) => $q->where('is_active', true))
-            ->value('id');
-        if (! $activePeriodId) {
-            $activePeriodId = AcademicPeriod::query()->where('is_active', true)->value('id');
-        }
+        $activePeriodId = (int) (AcademicPeriod::query()->active()->value('id') ?? 0);
         if (! $activePeriodId) {
             return response()->json([
                 'message' => 'Belum ada periode akademik aktif.',
@@ -1249,9 +1224,7 @@ class AdminController extends Controller
             $student->emisProfile()->create(EmProfile::fromPayload($emPayload));
 
             if (! empty($placement['class_id'])) {
-                $activePeriodId = AcademicPeriod::query()
-                    ->whereHas('semester', fn ($q) => $q->where('is_active', true))
-                    ->value('id');
+                $activePeriodId = AcademicPeriod::query()->active()->value('id');
                 if ($activePeriodId) {
                     StudentClassEnrollment::updateOrCreate(
                         [
@@ -1319,7 +1292,7 @@ class AdminController extends Controller
             'emisProfile',
         ]);
 
-        $activeSemester = Semester::where('is_active', true)->first();
+        $activeSemester = AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester;
         $semesterId = $request->semester_id ?? $activeSemester?->id;
 
         $grades = [];
@@ -1588,7 +1561,7 @@ class AdminController extends Controller
             'students' => $students,
             'grades' => $grades,
             'filters' => $request->only(['class_id', 'kitab_subject_id', 'subject_id', 'semester_id', 'period_id', 'component_id']),
-            'activeSemester' => Semester::where('is_active', true)->first(['id', 'name']),
+            'activeSemester' => AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester?->only(['id', 'name']),
         ]);
     }
 

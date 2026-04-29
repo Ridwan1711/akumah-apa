@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\StoreAcademicYearRequest;
 use App\Http\Requests\Admin\StoreSemesterRequest;
 use App\Http\Requests\Admin\UpdateAcademicYearRequest;
 use App\Http\Requests\Admin\UpdateSemesterRequest;
+use App\Models\AcademicPeriod;
 use App\Models\AcademicYear;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Semester;
@@ -20,7 +21,9 @@ class AcademicYearController extends Controller
     public function index(): Response
     {
         return Inertia::render('admin/academic-years/index', [
-            'academicYears' => AcademicYear::with('semesters')
+            'academicYears' => AcademicYear::query()
+                ->withActivePeriodFlag()
+                ->with(['semesters' => fn ($query) => $query->withActivePeriodFlag()])
                 ->orderByDesc('start_date')
                 ->get(),
         ]);
@@ -28,13 +31,7 @@ class AcademicYearController extends Controller
 
     public function store(StoreAcademicYearRequest $request): RedirectResponse
     {
-        DB::transaction(function () use ($request) {
-            if ($request->boolean('is_active')) {
-                AcademicYear::where('is_active', true)->update(['is_active' => false]);
-            }
-
-            AcademicYear::create($request->validated());
-        });
+        AcademicYear::create($request->validated());
 
         return redirect()->route('admin.academic-years.index')
             ->with('success', 'Tahun ajaran berhasil ditambahkan.');
@@ -42,15 +39,7 @@ class AcademicYearController extends Controller
 
     public function update(UpdateAcademicYearRequest $request, AcademicYear $academicYear): RedirectResponse
     {
-        DB::transaction(function () use ($request, $academicYear) {
-            if ($request->boolean('is_active')) {
-                AcademicYear::where('is_active', true)
-                    ->where('id', '!=', $academicYear->id)
-                    ->update(['is_active' => false]);
-            }
-
-            $academicYear->update($request->validated());
-        });
+        $academicYear->update($request->validated());
 
         return redirect()->route('admin.academic-years.index')
             ->with('success', 'Tahun ajaran berhasil diperbarui.');
@@ -67,12 +56,19 @@ class AcademicYearController extends Controller
     public function storeSemester(StoreSemesterRequest $request): RedirectResponse
     {
         DB::transaction(function () use ($request) {
-            if ($request->boolean('is_active')) {
-                Semester::where('is_active', true)->update(['is_active' => false]);
+            $semester = Semester::create($request->validated());
+            $isActive = $request->boolean('is_active');
+
+            if ($isActive) {
+                AcademicPeriod::query()->where('is_active', true)->update(['is_active' => false]);
                 $this->resetClassGenderRulesForNewSemester();
             }
 
-            Semester::create($request->validated());
+            AcademicPeriod::create([
+                'academic_year_id' => $request->academic_year_id,
+                'semester_id' => $semester->id,
+                'is_active' => $isActive,
+            ]);
         });
 
         return redirect()->route('admin.academic-years.index')
@@ -90,17 +86,28 @@ class AcademicYearController extends Controller
     public function updateSemester(UpdateSemesterRequest $request, Semester $semester): RedirectResponse
     {
         DB::transaction(function () use ($request, $semester) {
-            $wasActive = (bool) $semester->is_active;
-            if ($request->boolean('is_active')) {
-                Semester::where('is_active', true)
-                    ->where('id', '!=', $semester->id)
+            $semester->update($request->validated());
+
+            $period = AcademicPeriod::query()->firstOrNew(['semester_id' => $semester->id]);
+            $wasActive = (bool) $period->is_active;
+            $isActive = $request->boolean('is_active');
+
+            if ($isActive) {
+                AcademicPeriod::query()
+                    ->where('is_active', true)
+                    ->where('semester_id', '!=', $semester->id)
                     ->update(['is_active' => false]);
+
                 if (! $wasActive) {
                     $this->resetClassGenderRulesForNewSemester();
                 }
             }
 
-            $semester->update($request->validated());
+            $period->fill([
+                'academic_year_id' => $semester->academic_year_id,
+                'is_active' => $isActive,
+            ]);
+            $period->save();
         });
 
         return redirect()->route('admin.academic-years.index')

@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreKitabTeachingAssignmentRequest;
-use App\Models\AcademicYear;
+use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\LevelSubjectDefault;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Subject;
@@ -50,19 +50,20 @@ class KitabTeachingAssignmentController extends Controller
                 ->whereHas('roles', fn ($query) => $query->whereNotIn('name', [Role::SANTRI]))
                 ->orderBy('name')
                 ->get(['id', 'name']),
-            'activeAcademicYear' => AcademicYear::where('is_active', true)->first(['id', 'name']),
+            'activeAcademicYear' => AcademicPeriod::query()->active()->with('academicYear:id,name')->first()?->academicYear?->only(['id', 'name']),
             'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'grade_level_id']),
             'subjects' => Subject::query()->orderBy('name')->get(['id', 'name']),
             'semesters' => Semester::query()
+                ->withActivePeriodFlag()
                 ->with('academicYear:id,name')
                 ->orderByDesc('is_active')
                 ->orderByDesc('id')
-                ->get(['id', 'name', 'academic_year_id', 'is_active'])
+                ->get(['id', 'name', 'academic_year_id'])
                 ->map(fn (Semester $semester) => [
                     'id' => $semester->id,
                     'name' => $semester->name,
                     'academic_year_name' => $semester->academicYear?->name,
-                    'is_active' => $semester->is_active,
+                    'is_active' => (bool) $semester->is_active,
                 ]),
             'selectedPeriodId' => $selectedPeriodId,
             'selectedSemesterId' => $selectedSemesterId,

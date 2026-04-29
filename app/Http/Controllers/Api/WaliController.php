@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\PaymentGatewayController;
+use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\Diniyyah\Score;
 use App\Models\EmProfile;
@@ -80,7 +81,7 @@ class WaliController extends Controller
             'emisProfile',
         ]);
 
-        $activeSemester = \App\Models\Semester::where('is_active', true)->first();
+        $activeSemester = AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester;
         $semesterId = $request->semester_id ?? $activeSemester?->id;
 
         $grades = [];

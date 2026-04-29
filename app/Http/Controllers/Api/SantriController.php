@@ -3,15 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\Diniyyah\Score;
 use App\Models\EmProfile;
 use App\Models\Invoice;
-use App\Models\LessonAttendance;
-use App\Models\Student;
-use App\Models\LessonSession;
 use App\Models\LeavePermission;
+use App\Models\LessonAttendance;
 use App\Models\Semester;
+use App\Models\Student;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -249,7 +249,7 @@ class SantriController extends Controller
         $class = $student->currentClass;
         abort_unless($class, 404, 'Kelas santri tidak ditemukan.');
 
-        $activeSemester = Semester::where('is_active', true)->first();
+        $activeSemester = AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester;
 
         $schedulesQuery = AcademicSchedule::query()
             ->where('class_id', $class->id)

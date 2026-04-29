@@ -4,11 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ScheduleFormRequest;
-use App\Models\Semester;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Subject;
 use App\Models\Role;
+use App\Models\Semester;
 use App\Models\User;
 use App\Services\Schedule\ScheduleMatrixService;
 use Illuminate\Http\RedirectResponse;
@@ -59,15 +59,16 @@ class ScheduleController extends Controller
                 ->orderBy('name')
                 ->get(['id', 'name']),
             'semesters' => Semester::query()
+                ->withActivePeriodFlag()
                 ->with('academicYear:id,name')
                 ->orderByDesc('is_active')
                 ->orderByDesc('id')
-                ->get(['id', 'name', 'academic_year_id', 'is_active'])
+                ->get(['id', 'name', 'academic_year_id'])
                 ->map(fn (Semester $semester) => [
                     'id' => $semester->id,
                     'name' => $semester->name,
                     'academic_year_name' => $semester->academicYear?->name,
-                    'is_active' => $semester->is_active,
+                    'is_active' => (bool) $semester->is_active,
                 ]),
             'selectedPeriodId' => $selectedPeriodId,
             'selectedSemesterId' => $selectedSemesterId,
