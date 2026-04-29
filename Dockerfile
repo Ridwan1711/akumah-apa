@@ -28,8 +28,16 @@ FROM node:22-bookworm-slim AS assets
 
 WORKDIR /app
 
+COPY --from=vendor /usr/local/bin/php /usr/local/bin/php
+COPY --from=vendor /usr/local/etc/php /usr/local/etc/php
+COPY --from=vendor /usr/local/lib/php /usr/local/lib/php
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    php-cli \
+    libzip4 \
+    libpng16-16 \
+    libjpeg62-turbo \
+    libfreetype6 \
+    zlib1g \
+    && ldconfig \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
