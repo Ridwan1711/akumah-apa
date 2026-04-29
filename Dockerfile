@@ -24,13 +24,19 @@ RUN composer install \
     --optimize-autoloader \
     --no-scripts
 
-FROM node:22-alpine AS assets
+FROM node:22-bookworm-slim AS assets
 
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    php-cli \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 RUN npm ci
 
+COPY --from=vendor /app/vendor ./vendor
 COPY . .
 RUN npm run build
 
