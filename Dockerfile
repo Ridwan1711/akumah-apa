@@ -32,6 +32,13 @@ COPY --from=vendor /usr/local/bin/php /usr/local/bin/php
 COPY --from=vendor /usr/local/etc/php /usr/local/etc/php
 COPY --from=vendor /usr/local/lib/php /usr/local/lib/php
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    libreadline8 \
+    libxml2 \
+    libssl3 \
+    libcurl4 \
+    libonig5 \
+    libsodium23 \
+    libsqlite3-0 \
     libzip4 \
     libpng16-16 \
     libjpeg62-turbo \
