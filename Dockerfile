@@ -92,8 +92,8 @@ RUN mkdir -p /app/storage/framework/cache/data \
     /app/storage/logs \
     /var/log/supervisor \
     /var/run/supervisor \
-    && chown -R www-data:www-data /app/storage /app/bootstrap/cache \
-    && chmod -R ug+rwx /app/storage /app/bootstrap/cache
+    && chown -R www-data:www-data /app/storage /app/bootstrap/cache /app/public \
+    && chmod -R ug+rwx /app/storage /app/bootstrap/cache /app/public
 
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/entrypoint.sh /entrypoint.sh
