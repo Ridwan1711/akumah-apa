@@ -2,6 +2,15 @@ FROM composer:2 AS vendor
 
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpng-dev \
+    libjpeg62-turbo-dev \
+    libfreetype6-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j"$(nproc)" gd \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY composer.json composer.lock ./
 
 RUN composer install \
