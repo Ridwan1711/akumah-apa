@@ -1536,7 +1536,7 @@ class AdminController extends Controller
         if (! $periodId && $request->semester_id) {
             $periodId = AcademicPeriod::where('semester_id', $request->semester_id)->value('id');
         }
-        $componentId = $request->input('component_id') ?? AssessmentComponent::query()->orderBy('id')->value('id');
+        $componentId = $request->input('component_id') ?? AssessmentComponent::query()->orderByDesc('is_core_required')->orderBy('id')->value('id');
 
         if ($request->class_id && $subjectId && $periodId && $componentId) {
             $students = Student::where('current_class_id', $request->class_id)
@@ -1557,7 +1557,7 @@ class AdminController extends Controller
             'subjects' => $subjectsQuery->get(['id', 'name']),
             'semesters' => Semester::with('academicYear:id,name')->orderByDesc('id')->get(['id', 'name', 'academic_year_id']),
             'academicPeriods' => AcademicPeriod::query()->orderByDesc('id')->get(['id', 'academic_year_id', 'semester_id', 'is_active']),
-            'assessmentComponents' => AssessmentComponent::orderBy('type')->orderBy('name')->get(['id', 'name', 'type']),
+            'assessmentComponents' => AssessmentComponent::orderByDesc('is_core_required')->orderBy('type')->orderBy('name')->get(['id', 'name', 'type', 'is_core_required']),
             'students' => $students,
             'grades' => $grades,
             'filters' => $request->only(['class_id', 'kitab_subject_id', 'subject_id', 'semester_id', 'period_id', 'component_id']),

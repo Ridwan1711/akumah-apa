@@ -22,7 +22,6 @@ import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -60,8 +59,9 @@ type Props = {
     assignments: TeacherAssignment[];
     teachers: Pick<User, 'id' | 'name'>[];
     activeAcademicYear: Pick<AcademicYear, 'id' | 'name'> | null;
-    classes: Pick<SchoolClass, 'id' | 'name'>[];
+    classes: Pick<SchoolClass, 'id' | 'name' | 'grade_level_id'>[];
     subjects: Pick<Subject, 'id' | 'name'>[];
+    gradeSubjects: Array<{ grade_level_id: number; subject_id: number }>;
     semesters: (Pick<Semester, 'id' | 'name'> & { academic_year_name?: string | null; is_active?: boolean })[];
     selectedPeriodId: number;
     selectedSemesterId: number;
@@ -126,12 +126,14 @@ function StatCard({
 function CellContent({
     assignment,
     isBusy,
+    isMapped,
     onAssign,
     onRemove,
     hasTeacherSelected,
 }: {
     assignment?: TeacherAssignment;
     isBusy: boolean;
+    isMapped: boolean;
     onAssign: () => void;
     onRemove: (a: TeacherAssignment) => void;
     hasTeacherSelected: boolean;
@@ -142,6 +144,24 @@ function CellContent({
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 <span className="text-xs text-muted-foreground">Memproses...</span>
             </div>
+        );
+    }
+
+    if (!isMapped) {
+        return (
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <div className="flex h-[72px] w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-amber-300 bg-amber-50/70 px-2 text-center text-amber-800">
+                            <span className="text-[10px] font-medium">Tidak tersedia</span>
+                            <span className="text-[10px] leading-tight">Pelajaran ini gak dipelajari di sini</span>
+                        </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        Pelajaran ini gak dipelajari di sini
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
         );
     }
 
@@ -229,6 +249,7 @@ function AssignmentMatrixTable({
     filteredClasses,
     filteredSubjects,
     assignmentMap,
+    mappedPairSet,
     busyKey,
     onAssign,
     onRemove,
@@ -237,9 +258,10 @@ function AssignmentMatrixTable({
     onDragEnterCell,
     onDragEnd,
 }: {
-    filteredClasses: Pick<SchoolClass, 'id' | 'name'>[];
+    filteredClasses: Pick<SchoolClass, 'id' | 'name' | 'grade_level_id'>[];
     filteredSubjects: Pick<Subject, 'id' | 'name'>[];
     assignmentMap: Map<string, TeacherAssignment>;
+    mappedPairSet: Set<string>;
     busyKey: string | null;
     onAssign: (classId: number, subjectId: number) => void;
     onRemove: (assignment: TeacherAssignment) => void;
@@ -289,28 +311,30 @@ function AssignmentMatrixTable({
                             const key = `${subject.id}:${cls.id}`;
                             const assignment = assignmentMap.get(key);
                             const isBusy = busyKey === key;
+                            const isMapped = mappedPairSet.has(`${cls.grade_level_id}:${subject.id}`);
 
                             return (
                                 <TableCell
                                     key={key}
-                                    className={`p-2 align-top ${hasTeacherSelected ? 'cursor-crosshair select-none' : ''}`}
+                                    className={`p-2 align-top ${hasTeacherSelected && isMapped ? 'cursor-crosshair select-none' : ''}`}
                                     onMouseDown={(e) => {
-                                        if (!hasTeacherSelected) return;
+                                        if (!hasTeacherSelected || !isMapped) return;
                                         e.preventDefault();
                                         onDragStartCell(cls.id, subject.id);
                                     }}
                                     onMouseEnter={() => {
-                                        if (!hasTeacherSelected) return;
+                                        if (!hasTeacherSelected || !isMapped) return;
                                         onDragEnterCell(cls.id, subject.id);
                                     }}
                                     onMouseUp={() => {
-                                        if (!hasTeacherSelected) return;
+                                        if (!hasTeacherSelected || !isMapped) return;
                                         onDragEnd();
                                     }}
                                 >
                                     <CellContent
                                         assignment={assignment}
                                         isBusy={isBusy}
+                                        isMapped={isMapped}
                                         onAssign={() => onAssign(cls.id, subject.id)}
                                         onRemove={onRemove}
                                         hasTeacherSelected={hasTeacherSelected}
@@ -331,6 +355,7 @@ export default function TeachingAssignmentIndex({
     teachers,
     classes,
     subjects,
+    gradeSubjects,
     semesters,
     activeAcademicYear,
     selectedPeriodId,
@@ -342,7 +367,6 @@ export default function TeachingAssignmentIndex({
     const [semesterId, setSemesterId] = useState(String(selectedSemesterId));
     const [busyKey, setBusyKey] = useState<string | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
-    const [targetJam, setTargetJam] = useState('1');
     const [searchSubject, setSearchSubject] = useState('');
     const [searchClass, setSearchClass] = useState('');
     const [toast, setToast] = useState<ToastState>(null);
@@ -373,6 +397,10 @@ export default function TeachingAssignmentIndex({
         assignments.forEach((a) => map.set(`${a.subject_id}:${a.class_id}`, a));
         return map;
     }, [assignments]);
+    const mappedPairSet = useMemo(
+        () => new Set(gradeSubjects.map((item) => `${item.grade_level_id}:${item.subject_id}`)),
+        [gradeSubjects],
+    );
 
     const selectedTeacher = teachers.find(t => String(t.id) === selectedTeacherId);
     const totalAssignments = assignments.length;
@@ -408,11 +436,6 @@ export default function TeachingAssignmentIndex({
             setToast({ message: 'Pilih guru terlebih dahulu sebelum assign.', type: 'error' });
             return;
         }
-        const parsedTargetJam = Number(targetJam);
-        if (!Number.isInteger(parsedTargetJam) || parsedTargetJam < 1) {
-            setToast({ message: 'Target jam wajib angka minimal 1.', type: 'error' });
-            return;
-        }
 
         const key = `${subjectId}:${classId}`;
         setBusyKey(key);
@@ -422,7 +445,6 @@ export default function TeachingAssignmentIndex({
             class_id: classId,
             subject_id: subjectId,
             semester_id: semesterId || defaultPeriodId,
-            target_jam: parsedTargetJam,
         }, {
             preserveScroll: true,
             onFinish: () => setBusyKey(null),
@@ -433,8 +455,6 @@ export default function TeachingAssignmentIndex({
 
     function queueBulkAssign(classId: number, subjectId: number) {
         if (!selectedTeacherId) return;
-        const parsedTargetJam = Number(targetJam);
-        if (!Number.isInteger(parsedTargetJam) || parsedTargetJam < 1) return;
 
         const key = `${subjectId}:${classId}`;
         if (dragVisitedRef.current.has(key)) return;
@@ -444,8 +464,7 @@ export default function TeachingAssignmentIndex({
         const selectedTeacherNum = Number(selectedTeacherId);
         if (
             current &&
-            current.teacher_id === selectedTeacherNum &&
-            Number(current.target_jam) === parsedTargetJam
+            current.teacher_id === selectedTeacherNum
         ) {
             bulkStatsRef.current.skipped += 1;
             return;
@@ -476,7 +495,6 @@ export default function TeachingAssignmentIndex({
             class_id: item.classId,
             subject_id: item.subjectId,
             semester_id: semesterId || defaultPeriodId,
-            target_jam: Number(targetJam),
         }, {
             preserveScroll: true,
             preserveState: true,
@@ -498,11 +516,6 @@ export default function TeachingAssignmentIndex({
     function handleDragStartCell(classId: number, subjectId: number) {
         if (!selectedTeacherId) return;
         if (isBulkAssigning) return;
-        const parsedTargetJam = Number(targetJam);
-        if (!Number.isInteger(parsedTargetJam) || parsedTargetJam < 1) {
-            setToast({ message: 'Target jam wajib angka minimal 1.', type: 'error' });
-            return;
-        }
         dragActiveRef.current = true;
         setIsBulkAssigning(true);
         dragVisitedRef.current = new Set();
@@ -613,7 +626,7 @@ export default function TeachingAssignmentIndex({
                         </CardContent>
                     </Card>
 
-                    {/* Teacher & Jam Selector */}
+                    {/* Teacher Selector */}
                     <Card className={`shadow-sm transition-all lg:col-span-2 ${selectedTeacher ? 'ring-2 ring-primary/30' : ''}`}>
                         <CardHeader className="pb-3 pt-4 px-4">
                             <CardTitle className="flex items-center gap-2 text-sm font-semibold">
@@ -633,8 +646,7 @@ export default function TeachingAssignmentIndex({
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="px-4 pb-4">
-                            <div className="grid gap-3 sm:grid-cols-3">
-                                <div className="sm:col-span-2 space-y-1.5">
+                            <div className="space-y-1.5">
                                     <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
                                         <SelectTrigger className={selectedTeacher ? 'border-primary/50' : ''}>
                                             <SelectValue placeholder="Pilih guru..." />
@@ -648,21 +660,8 @@ export default function TeachingAssignmentIndex({
                                         </SelectContent>
                                     </Select>
                                     <p className="text-xs text-muted-foreground">
-                                        Sumber guru hanya dari halaman Manajemen Guru · klik/geser untuk assign
+                                        Sumber guru hanya dari halaman Manajemen Guru · target jam otomatis dari setting default/override
                                     </p>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs text-muted-foreground">Target Jam/Minggu</Label>
-                                    <Input
-                                        type="number"
-                                        min={1}
-                                        max={20}
-                                        value={targetJam}
-                                        onChange={(e) => setTargetJam(e.target.value)}
-                                        className="text-center font-semibold"
-                                    />
-                                    <p className="text-xs text-muted-foreground">Maks. slot jadwal</p>
-                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -745,6 +744,7 @@ export default function TeachingAssignmentIndex({
                                 filteredClasses={filteredClasses}
                                 filteredSubjects={filteredSubjects}
                                 assignmentMap={assignmentMap}
+                                mappedPairSet={mappedPairSet}
                                 busyKey={busyKey}
                                 onAssign={assignTeacher}
                                 onRemove={removeAssignment}

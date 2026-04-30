@@ -3,6 +3,7 @@
 use App\Models\AcademicPeriod;
 use App\Models\AcademicYear;
 use App\Models\Diniyyah\GradeLevel;
+use App\Models\Diniyyah\GradeSubject;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Subject;
 use App\Models\Role;
@@ -60,6 +61,8 @@ beforeEach(function () {
     ]);
     $this->subjectA = Subject::query()->create(['name' => 'Nahwu SK']);
     $this->subjectB = Subject::query()->create(['name' => 'Fiqih SK']);
+    GradeSubject::query()->create(['grade_level_id' => $level->id, 'subject_id' => $this->subjectA->id]);
+    GradeSubject::query()->create(['grade_level_id' => $level->id, 'subject_id' => $this->subjectB->id]);
 });
 
 test('teacher assignment auto issues certificate and remains idempotent for same teacher period', function () {
@@ -68,7 +71,6 @@ test('teacher assignment auto issues certificate and remains idempotent for same
         'class_id' => $this->class->id,
         'subject_id' => $this->subjectA->id,
         'semester_id' => $this->semester->id,
-        'target_jam' => 2,
     ])->assertRedirect();
 
     $this->actingAs($this->admin)->post(route('admin.teaching-assignments.store'), [
@@ -76,7 +78,6 @@ test('teacher assignment auto issues certificate and remains idempotent for same
         'class_id' => $this->class->id,
         'subject_id' => $this->subjectB->id,
         'semester_id' => $this->semester->id,
-        'target_jam' => 3,
     ])->assertRedirect();
 
     $certificates = RoleCertificate::query()
@@ -95,7 +96,6 @@ test('manual regenerate creates a new issued certificate and marks old one reiss
         'class_id' => $this->class->id,
         'subject_id' => $this->subjectA->id,
         'semester_id' => $this->semester->id,
-        'target_jam' => 2,
     ])->assertRedirect();
 
     $this->actingAs($this->admin)->post(route('admin.role-certificates.store'), [
@@ -117,4 +117,22 @@ test('manual regenerate creates a new issued certificate and marks old one reiss
     expect($all->first()->status)->toBe(RoleCertificate::STATUS_REISSUED);
     expect($all->last()->issuance_mode)->toBe(RoleCertificate::MODE_MANUAL);
     expect($all->last()->status)->toBe(RoleCertificate::STATUS_ISSUED);
+});
+
+test('cannot assign teacher when subject is not mapped to class level', function () {
+    $unmappedSubject = Subject::query()->create(['name' => 'Mantiq SK']);
+
+    $response = $this->actingAs($this->admin)->post(route('admin.teaching-assignments.store'), [
+        'teacher_id' => $this->teacher->id,
+        'class_id' => $this->class->id,
+        'subject_id' => $unmappedSubject->id,
+        'semester_id' => $this->semester->id,
+    ]);
+
+    $response->assertStatus(422);
+    $this->assertDatabaseMissing('teacher_assignments', [
+        'class_id' => $this->class->id,
+        'subject_id' => $unmappedSubject->id,
+        'period_id' => $this->period->id,
+    ]);
 });

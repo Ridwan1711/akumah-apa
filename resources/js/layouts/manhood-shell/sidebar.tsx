@@ -205,7 +205,10 @@ function buildSections(auth: Auth, userRoleNames: string[], hasGuruRecord: boole
     if (canAccessRaportKelas) {
         sections.push({
             label: 'Wali Kelas',
-            items: [{ title: 'Raport Kelas', href: '/wali-kelas/report-cards', icon: ScrollText }],
+            items: [
+                { title: 'Review Nilai Kelas', href: '/wali-kelas/grade-reviews', icon: ClipboardList },
+                { title: 'Raport Kelas', href: '/wali-kelas/report-cards', icon: ScrollText },
+            ],
         });
     }
 

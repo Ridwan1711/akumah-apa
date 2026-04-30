@@ -25,6 +25,7 @@ type ComponentForm = {
     name: string;
     type: string;
     weight: string;
+    is_core_required: boolean;
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -42,14 +43,14 @@ export default function AssessmentComponentIndex({ components }: Props) {
     const [editing, setEditing] = useState<AssessmentComponent | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<AssessmentComponent | null>(null);
 
-    const form = useForm<ComponentForm>({ name: '', type: 'daily', weight: '' });
+    const form = useForm<ComponentForm>({ name: '', type: 'daily', weight: '', is_core_required: false });
 
     const dailyCount = useMemo(() => components.filter((item) => item.type === 'daily').length, [components]);
     const examCount = useMemo(() => components.filter((item) => item.type === 'exam').length, [components]);
 
     function openCreate() {
         setEditing(null);
-        form.setData({ name: '', type: 'daily', weight: '' });
+        form.setData({ name: '', type: 'daily', weight: '', is_core_required: false });
         form.clearErrors();
         setModalOpen(true);
     }
@@ -60,6 +61,7 @@ export default function AssessmentComponentIndex({ components }: Props) {
             name: item.name,
             type: item.type,
             weight: item.weight === null || item.weight === undefined ? '' : String(item.weight),
+            is_core_required: !!item.is_core_required,
         });
         form.clearErrors();
         setModalOpen(true);
@@ -109,6 +111,7 @@ export default function AssessmentComponentIndex({ components }: Props) {
                         { key: 'daily', label: 'Harian', value: dailyCount, icon: <Percent size={18} />, tone: 'green' },
                         { key: 'exam', label: 'Ujian', value: examCount, icon: <Scale size={18} />, tone: 'amber' },
                         { key: 'weighted', label: 'Punya Bobot', value: components.filter((x) => x.weight !== null && x.weight !== undefined).length, icon: <Percent size={18} />, tone: 'purple' },
+                        { key: 'core', label: 'Komponen Inti', value: components.filter((x) => !!x.is_core_required).length, icon: <Scale size={18} />, tone: 'blue' },
                     ]}
                 />
 
@@ -131,18 +134,24 @@ export default function AssessmentComponentIndex({ components }: Props) {
                                     <th>Nama</th>
                                     <th>Tipe</th>
                                     <th>Bobot</th>
+                                    <th>Inti Wajib</th>
                                     <th style={{ textAlign: 'right' }}>Aksi</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {components.length === 0 ? (
-                                    <tr><td colSpan={4}><CrudEmptyState title="Belum ada komponen" description="Tambahkan komponen pertama untuk penilaian." /></td></tr>
+                                    <tr><td colSpan={5}><CrudEmptyState title="Belum ada komponen" description="Tambahkan komponen pertama untuk penilaian." /></td></tr>
                                 ) : (
                                     components.map((item) => (
                                         <tr key={item.id}>
                                             <td>{item.name}</td>
                                             <td><span className="mcr-dot-badge alumni">{typeLabels[item.type] ?? item.type}</span></td>
                                             <td>{item.weight ?? '-'}</td>
+                                            <td>
+                                                <span className={`mcr-dot-badge ${item.is_core_required ? 'active' : 'keluar'}`}>
+                                                    {item.is_core_required ? 'Ya' : 'Tidak'}
+                                                </span>
+                                            </td>
                                             <td>
                                                 <div className="mcr-action-group">
                                                     <button type="button" className="mcr-icon-action" onClick={() => openEdit(item)} title="Edit">
@@ -182,6 +191,17 @@ export default function AssessmentComponentIndex({ components }: Props) {
                             <label htmlFor="component-weight">Bobot (Opsional)</label>
                             <input id="component-weight" className="mcr-input" type="number" step="0.01" min={0} value={form.data.weight} onChange={(e) => form.setData('weight', e.target.value)} />
                             <InputError message={form.errors.weight} />
+                        </div>
+                        <div className="mcr-form-group full">
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <input
+                                    type="checkbox"
+                                    checked={form.data.is_core_required}
+                                    onChange={(e) => form.setData('is_core_required', e.target.checked)}
+                                />
+                                Komponen inti wajib (harus aktif saat guru input nilai)
+                            </label>
+                            <InputError message={form.errors.is_core_required} />
                         </div>
                     </div>
                     <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

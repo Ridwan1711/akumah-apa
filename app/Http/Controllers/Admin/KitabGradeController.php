@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AssessmentComponent;
+use App\Models\Diniyyah\KitabGradeSession;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Score;
 use App\Models\Diniyyah\Subject;
@@ -26,7 +27,7 @@ class KitabGradeController extends Controller
     public function entry(Request $request): RedirectResponse
     {
         if ($request->filled('class_id') && $request->filled('subject_id') && $request->filled('period_id')) {
-            $url = route('guru.admin.kitab-grades.input', [
+            $url = route('guru.admin.kitab-grades.setting', [
                 'academic_period' => (int) $request->query('period_id'),
                 'kitab_subject' => (int) $request->query('subject_id'),
                 'diniyah_class' => (int) $request->query('class_id'),
@@ -125,7 +126,7 @@ class KitabGradeController extends Controller
         ]);
     }
 
-    public function input(Request $request, Semester $academic_period, Subject $kitab_subject, SchoolClass $diniyah_class): Response|RedirectResponse
+    public function setting(Request $request, Semester $academic_period, Subject $kitab_subject, SchoolClass $diniyah_class): Response
     {
         $period = $this->resolvePeriodBySemesterId((int) $academic_period->id);
         $user = $request->user();
@@ -150,7 +151,172 @@ class KitabGradeController extends Controller
         $assessmentComponents = AssessmentComponent::query()
             ->orderBy('type')
             ->orderBy('name')
-            ->get(['id', 'name', 'type']);
+            ->get(['id', 'name', 'type', 'is_core_required']);
+        $lockedSession = KitabGradeSession::query()
+            ->where('teacher_id', $user->id)
+            ->where('subject_id', $kitab_subject->id)
+            ->where('class_id', $diniyah_class->id)
+            ->where('period_id', $period->id)
+            ->first();
+        $lockedActiveComponentIds = collect($lockedSession?->active_component_ids ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->values()
+            ->all();
+
+        return Inertia::render('admin/kitab-grades/setting', [
+            'academicPeriod' => ['id' => $academic_period->id, 'name' => $academic_period->name, 'type' => null],
+            'subject' => $kitab_subject->only(['id', 'name']),
+            'schoolClass' => $diniyah_class->only(['id', 'name', 'grade_level_id']),
+            'assessmentComponents' => $assessmentComponents,
+            'defaultActiveComponentIds' => ! empty($lockedActiveComponentIds)
+                ? $lockedActiveComponentIds
+                : $assessmentComponents->pluck('id')->map(fn ($id) => (int) $id)->all(),
+            'isComponentLocked' => ! empty($lockedActiveComponentIds),
+            'inputUrl' => route('guru.admin.kitab-grades.input', [
+                'academic_period' => $academic_period->id,
+                'kitab_subject' => $kitab_subject->id,
+                'diniyah_class' => $diniyah_class->id,
+            ]),
+        ]);
+    }
+
+    public function saveSetting(Request $request, Semester $academic_period, Subject $kitab_subject, SchoolClass $diniyah_class): RedirectResponse
+    {
+        $period = $this->resolvePeriodBySemesterId((int) $academic_period->id);
+        $request->merge([
+            'class_id' => $diniyah_class->id,
+            'subject_id' => $kitab_subject->id,
+            'period_id' => $period->id,
+        ]);
+        $request->validate([
+            'active_component_ids' => ['required', 'array', 'min:1'],
+            'active_component_ids.*' => ['integer', 'exists:assessment_components,id'],
+            'subject_id' => ['required', 'exists:subjects,id'],
+            'period_id' => ['required', 'exists:academic_periods,id'],
+            'class_id' => ['required', 'exists:classes,id'],
+        ]);
+
+        $user = $request->user();
+        $resolver = app(ClassSubjectGradingResolver::class);
+        if (! $resolver->gradingEnabled((int) $request->class_id, (int) $request->subject_id, (int) $request->period_id)) {
+            throw ValidationException::withMessages([
+                'subject_id' => ['Mata pelajaran ini tidak dinilai untuk kelas/periode ini.'],
+            ]);
+        }
+        if (! $user->hasPermission('kitab_grades.view_all')) {
+            $allowed = TeacherAssignment::where('teacher_id', $user->id)
+                ->where('class_id', $request->class_id)
+                ->where('subject_id', $request->subject_id)
+                ->where('period_id', $request->period_id)
+                ->exists();
+            if (! $allowed) {
+                throw ValidationException::withMessages([
+                    'subject_id' => ['Anda tidak ditugaskan untuk mengajar mata pelajaran ini di kelas ini.'],
+                ]);
+            }
+        }
+
+        $allComponentIds = AssessmentComponent::query()->pluck('id')->map(fn ($id) => (int) $id);
+        $activeComponentIds = collect($request->input('active_component_ids', []))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->intersect($allComponentIds)
+            ->values();
+        if ($activeComponentIds->isEmpty()) {
+            throw ValidationException::withMessages([
+                'active_component_ids' => ['Minimal satu komponen harus diaktifkan.'],
+            ]);
+        }
+
+        $coreRequiredComponentIds = AssessmentComponent::query()
+            ->where('is_core_required', true)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values();
+        $missingCoreComponents = $coreRequiredComponentIds->diff($activeComponentIds);
+        if ($missingCoreComponents->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'active_component_ids' => ['Komponen inti wajib harus tetap aktif saat input nilai.'],
+            ]);
+        }
+
+        $gradeSession = KitabGradeSession::query()
+            ->where('teacher_id', $user->id)
+            ->where('subject_id', (int) $request->subject_id)
+            ->where('class_id', (int) $request->class_id)
+            ->where('period_id', (int) $request->period_id)
+            ->first();
+        if ($gradeSession) {
+            throw ValidationException::withMessages([
+                'active_component_ids' => ['Komponen sudah ditentukan dan tidak dapat diubah sampai semester ini berakhir.'],
+            ]);
+        }
+
+        KitabGradeSession::query()->create([
+            'teacher_id' => $user->id,
+            'subject_id' => (int) $request->subject_id,
+            'class_id' => (int) $request->class_id,
+            'period_id' => (int) $request->period_id,
+            'active_component_ids' => $activeComponentIds->all(),
+            'status' => KitabGradeSession::STATUS_SUBMITTED,
+            'submitted_at' => now(),
+        ]);
+
+        return redirect()->route('guru.admin.kitab-grades.input', [
+            'academic_period' => $academic_period->id,
+            'kitab_subject' => $kitab_subject->id,
+            'diniyah_class' => $diniyah_class->id,
+        ])->with('success', 'Komponen penilaian berhasil dikunci untuk semester ini.');
+    }
+
+    public function input(Request $request, Semester $academic_period, Subject $kitab_subject, SchoolClass $diniyah_class): Response|RedirectResponse
+    {
+        $period = $this->resolvePeriodBySemesterId((int) $academic_period->id);
+        $user = $request->user();
+        $hasLimitedView = ! $user->hasPermission('kitab_grades.view_all');
+        $resolver = app(ClassSubjectGradingResolver::class);
+
+        if (! $resolver->gradingEnabled($diniyah_class->id, $kitab_subject->id, (int) $period->id)) {
+            abort(403, 'Mata pelajaran ini tidak dinilai untuk kelas/periode ini.');
+        }
+
+        if ($hasLimitedView) {
+            $allowed = TeacherAssignment::where('teacher_id', $user->id)
+                ->where('class_id', $diniyah_class->id)
+                ->where('subject_id', $kitab_subject->id)
+                ->where('period_id', $period->id)
+                ->exists();
+            if (! $allowed) {
+                abort(403, 'Anda tidak ditugaskan untuk mengajar mata pelajaran ini di kelas ini.');
+            }
+        }
+
+        $lockedSession = KitabGradeSession::query()
+            ->where('teacher_id', $user->id)
+            ->where('subject_id', $kitab_subject->id)
+            ->where('class_id', $diniyah_class->id)
+            ->where('period_id', $period->id)
+            ->first();
+        if (! $lockedSession) {
+            return redirect()->route('guru.admin.kitab-grades.setting', [
+                'academic_period' => $academic_period->id,
+                'kitab_subject' => $kitab_subject->id,
+                'diniyah_class' => $diniyah_class->id,
+            ])->with('error', 'Tentukan komponen penilaian terlebih dahulu sebelum input nilai.');
+        }
+        $lockedActiveComponentIds = collect($lockedSession?->active_component_ids ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->values()
+            ->all();
+        $assessmentComponents = AssessmentComponent::query()
+            ->whereIn('id', $lockedActiveComponentIds)
+            ->orderBy('type')
+            ->orderBy('name')
+            ->get(['id', 'name', 'type', 'is_core_required']);
 
         $students = Student::where('current_class_id', $diniyah_class->id)
             ->where('status', Student::STATUS_ACTIVE)
@@ -183,6 +349,9 @@ class KitabGradeController extends Controller
             'subject' => $kitab_subject->only(['id', 'name']),
             'schoolClass' => $diniyah_class->only(['id', 'name', 'grade_level_id']),
             'assessmentComponents' => $assessmentComponents,
+            'defaultActiveComponentIds' => $lockedActiveComponentIds,
+            'lockedActiveComponentIds' => $lockedActiveComponentIds,
+            'isComponentLocked' => true,
             'students' => $students,
             'gradeMatrix' => $gradeMatrix,
             'isGuru' => $hasLimitedView,
@@ -202,7 +371,7 @@ class KitabGradeController extends Controller
             'grades' => ['required', 'array'],
             'grades.*.student_id' => ['required', 'exists:students,id'],
             'grades.*.components' => ['required', 'array'],
-            'grades.*.components.*' => ['required', 'numeric', 'min:0', 'max:100'],
+            'grades.*.components.*' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'subject_id' => ['required', 'exists:subjects,id'],
             'period_id' => ['required', 'exists:academic_periods,id'],
             'class_id' => ['required', 'exists:classes,id'],
@@ -232,13 +401,43 @@ class KitabGradeController extends Controller
             }
         }
 
+        $gradeSession = KitabGradeSession::query()
+            ->where('teacher_id', $user->id)
+            ->where('subject_id', (int) $request->subject_id)
+            ->where('class_id', (int) $request->class_id)
+            ->where('period_id', (int) $request->period_id)
+            ->first();
+        if (! $gradeSession) {
+            throw ValidationException::withMessages([
+                'grades' => ['Komponen penilaian belum ditentukan. Silakan atur komponen terlebih dahulu.'],
+            ]);
+        }
+        $activeComponentIds = collect($gradeSession->active_component_ids ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->values();
+
         foreach ($request->grades as $gradeData) {
-            foreach ($gradeData['components'] as $componentId => $scoreValue) {
+            $componentScores = collect($gradeData['components'] ?? []);
+            foreach ($activeComponentIds as $activeComponentId) {
+                $scoreValue = $componentScores->get((string) $activeComponentId);
+                if ($scoreValue === null || $scoreValue === '') {
+                    throw ValidationException::withMessages([
+                        'grades' => ['Semua komponen aktif wajib diisi untuk setiap siswa.'],
+                    ]);
+                }
+            }
+        }
+
+        foreach ($request->grades as $gradeData) {
+            $componentScores = collect($gradeData['components'] ?? []);
+            foreach ($activeComponentIds as $activeComponentId) {
+                $scoreValue = $componentScores->get((string) $activeComponentId);
                 Score::updateOrCreate(
                     [
                         'student_id' => $gradeData['student_id'],
                         'subject_id' => $request->subject_id,
-                        'component_id' => (int) $componentId,
+                        'component_id' => (int) $activeComponentId,
                         'period_id' => $request->period_id,
                     ],
                     [
@@ -249,6 +448,10 @@ class KitabGradeController extends Controller
                 );
             }
         }
+        $gradeSession->forceFill([
+            'status' => KitabGradeSession::STATUS_SUBMITTED,
+            'submitted_at' => now(),
+        ])->save();
 
         $studentIds = collect($request->grades)
             ->pluck('student_id')
@@ -265,7 +468,7 @@ class KitabGradeController extends Controller
                     ->where('student_id', $student->id)
                     ->where('subject_id', (int) $request->subject_id)
                     ->where('period_id', (int) $request->period_id)
-                    ->whereIn('component_id', array_keys($request->grades[0]['components'] ?? []))
+                    ->whereIn('component_id', $activeComponentIds->all())
                     ->with('subject:id,name')
                     ->latest('id')
                     ->first();

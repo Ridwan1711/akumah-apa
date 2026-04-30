@@ -18,7 +18,7 @@ class AssessmentComponentController extends Controller
             'components' => AssessmentComponent::query()
                 ->orderBy('type')
                 ->orderBy('name')
-                ->get(['id', 'name', 'type', 'weight', 'created_at', 'updated_at']),
+                ->get(['id', 'name', 'type', 'weight', 'is_core_required', 'created_at', 'updated_at']),
         ]);
     }
 
@@ -55,7 +55,7 @@ class AssessmentComponentController extends Controller
     }
 
     /**
-     * @return array{name: string, type: string, weight: float|null}
+     * @return array{name: string, type: string, weight: float|null, is_core_required: bool}
      */
     protected function validated(Request $request, ?AssessmentComponent $existing = null): array
     {
@@ -77,11 +77,13 @@ class AssessmentComponentController extends Controller
                 AssessmentComponent::TYPE_EXAM,
             ])],
             'weight' => ['nullable', 'numeric', 'min:0', 'max:999.99'],
+            'is_core_required' => ['sometimes', 'boolean'],
         ]);
 
         $validated['weight'] = $validated['weight'] !== null && $validated['weight'] !== ''
             ? (float) $validated['weight']
             : null;
+        $validated['is_core_required'] = (bool) ($validated['is_core_required'] ?? false);
 
         return $validated;
     }

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\Diniyyah\AssessmentComponent;
+use App\Models\Diniyyah\KitabGradeSession;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Score;
 use App\Models\Diniyyah\Subject;
@@ -188,7 +189,8 @@ class GuruController extends Controller
         if (! $periodId && $request->semester_id) {
             $periodId = AcademicPeriod::where('semester_id', $request->semester_id)->value('id');
         }
-        $componentId = $request->input('component_id') ?? AssessmentComponent::query()->orderBy('id')->value('id');
+        $componentId = $request->input('component_id') ?? AssessmentComponent::query()->orderByDesc('is_core_required')->orderBy('id')->value('id');
+        $lockedSession = null;
 
         if ($request->class_id && $subjectId && $periodId && $componentId) {
             if ($hasLimitedView) {
@@ -200,6 +202,18 @@ class GuruController extends Controller
                 if (! $allowed) {
                     abort(403, 'Anda tidak ditugaskan untuk mengajar mata pelajaran ini di kelas ini.');
                 }
+            }
+            $lockedSession = KitabGradeSession::query()
+                ->where('teacher_id', $user->id)
+                ->where('class_id', (int) $request->class_id)
+                ->where('subject_id', (int) $subjectId)
+                ->where('period_id', (int) $periodId)
+                ->first();
+            $lockedComponentId = (int) collect($lockedSession?->active_component_ids ?? [])
+                ->map(fn ($id) => (int) $id)
+                ->first(fn ($id) => $id > 0);
+            if ($lockedComponentId > 0) {
+                $componentId = $lockedComponentId;
             }
 
             $students = Student::where('current_class_id', $request->class_id)
@@ -229,10 +243,13 @@ class GuruController extends Controller
             'subjects' => $subjectsQuery->get(['id', 'name']),
             'semesters' => Semester::with('academicYear:id,name')->orderByDesc('id')->get(['id', 'name', 'academic_year_id']),
             'academicPeriods' => AcademicPeriod::query()->orderByDesc('id')->get(['id', 'academic_year_id', 'semester_id', 'is_active']),
-            'assessmentComponents' => AssessmentComponent::orderBy('type')->orderBy('name')->get(['id', 'name', 'type']),
+            'assessmentComponents' => AssessmentComponent::orderByDesc('is_core_required')->orderBy('type')->orderBy('name')->get(['id', 'name', 'type', 'is_core_required']),
             'students' => $students,
             'grades' => $grades,
             'filters' => $request->only(['class_id', 'kitab_subject_id', 'subject_id', 'semester_id', 'period_id', 'component_id']),
+            'selected_component_id' => $componentId ? (int) $componentId : null,
+            'locked_component_id' => (int) collect($lockedSession?->active_component_ids ?? [])->first(),
+            'is_component_locked' => $lockedSession !== null,
             'isGuru' => $hasLimitedView,
             'classSubjectMap' => $classSubjectMap,
             'activeSemester' => AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester?->only(['id', 'name']),
@@ -276,6 +293,34 @@ class GuruController extends Controller
                     'subject_id' => ['Anda tidak ditugaskan untuk mengajar mata pelajaran ini di kelas ini.'],
                 ]);
             }
+        }
+
+        $requestedComponentId = (int) $request->component_id;
+        $gradeSession = KitabGradeSession::query()
+            ->where('teacher_id', $user->id)
+            ->where('subject_id', (int) $request->subject_id)
+            ->where('class_id', (int) $request->class_id)
+            ->where('period_id', (int) $request->period_id)
+            ->first();
+        if ($gradeSession) {
+            $lockedComponentId = (int) collect($gradeSession->active_component_ids ?? [])
+                ->map(fn ($id) => (int) $id)
+                ->first(fn ($id) => $id > 0);
+            if ($lockedComponentId > 0 && $lockedComponentId !== $requestedComponentId) {
+                throw ValidationException::withMessages([
+                    'component_id' => ['Komponen penilaian sudah dikunci untuk semester ini dan tidak bisa diubah.'],
+                ]);
+            }
+        } else {
+            $gradeSession = KitabGradeSession::query()->create([
+                'teacher_id' => $user->id,
+                'subject_id' => (int) $request->subject_id,
+                'class_id' => (int) $request->class_id,
+                'period_id' => (int) $request->period_id,
+                'active_component_ids' => [$requestedComponentId],
+                'status' => KitabGradeSession::STATUS_SUBMITTED,
+                'submitted_at' => now(),
+            ]);
         }
 
         foreach ($request->grades as $gradeData) {
@@ -331,6 +376,11 @@ class GuruController extends Controller
                     ->each(fn ($user) => $user->notify(new GradeUpdatedNotification($sampleScore)));
             }
         }
+
+        $gradeSession->forceFill([
+            'status' => KitabGradeSession::STATUS_SUBMITTED,
+            'submitted_at' => now(),
+        ])->save();
 
         return response()->json(['message' => 'Nilai berhasil disimpan.'], 200);
     }

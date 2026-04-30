@@ -190,6 +190,7 @@ export type AssessmentComponent = {
     name: string;
     type: string;
     weight?: number | string | null;
+    is_core_required?: boolean;
     created_at?: string;
     updated_at?: string;
 };

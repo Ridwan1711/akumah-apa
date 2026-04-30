@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreKitabTeachingAssignmentRequest;
 use App\Models\AcademicPeriod;
+use App\Models\Diniyyah\GradeSubject;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Subject;
 use App\Models\Diniyyah\TeacherAssignment;
@@ -59,6 +60,7 @@ class KitabTeachingAssignmentController extends Controller
             'activeAcademicYear' => AcademicPeriod::query()->active()->with('academicYear:id,name')->first()?->academicYear?->only(['id', 'name']),
             'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'grade_level_id']),
             'subjects' => Subject::query()->orderBy('name')->get(['id', 'name']),
+            'gradeSubjects' => GradeSubject::query()->get(['grade_level_id', 'subject_id']),
             'semesters' => Semester::query()
                 ->withActivePeriodFlag()
                 ->with('academicYear:id,name')
@@ -80,11 +82,12 @@ class KitabTeachingAssignmentController extends Controller
     {
         $payload = $request->validated();
         $periodId = $this->resolvePeriodIdBySemesterId((int) $payload['semester_id']);
+        $this->ensureSubjectMappedToClass((int) $payload['subject_id'], (int) $payload['class_id']);
         $resolvedTargetJam = $this->resolveTargetJam(
             (int) $payload['class_id'],
             (int) $payload['subject_id'],
             $periodId,
-            isset($payload['target_jam']) ? (int) $payload['target_jam'] : null
+            null
         );
         $assignment = TeacherAssignment::updateOrCreate(
             [
@@ -122,5 +125,19 @@ class KitabTeachingAssignmentController extends Controller
     protected function resolveTargetJam(int $classId, int $subjectId, int $periodId, ?int $requestedTargetJam): int
     {
         return $this->teachingHourResolver->resolve($classId, $subjectId, $periodId, $requestedTargetJam);
+    }
+
+    protected function ensureSubjectMappedToClass(int $subjectId, int $classId): void
+    {
+        $class = SchoolClass::query()->findOrFail($classId);
+
+        $isMapped = GradeSubject::query()
+            ->where('grade_level_id', $class->grade_level_id)
+            ->where('subject_id', $subjectId)
+            ->exists();
+
+        if (! $isMapped) {
+            abort(422, 'Pelajaran ini gak dipelajari di sini.');
+        }
     }
 }

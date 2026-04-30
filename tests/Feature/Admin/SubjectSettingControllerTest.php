@@ -189,6 +189,11 @@ test('admin akademik can bulk sync subject level mappings', function () {
         'name' => 'Nahwu',
     ]);
 
+    GradeSubject::query()->create([
+        'grade_level_id' => $this->level->id,
+        'subject_id' => $this->subject->id,
+    ]);
+
     $response = $this->post(route('admin.subject-level-mappings.sync'), [
         'level_ids' => [$this->level->id, $secondLevel->id],
         'subject_ids' => [$this->subject->id, $secondSubject->id],
@@ -196,4 +201,36 @@ test('admin akademik can bulk sync subject level mappings', function () {
 
     $response->assertRedirect();
     $this->assertDatabaseCount('grade_subjects', 4);
+    $this->assertDatabaseHas('grade_subjects', [
+        'grade_level_id' => $this->level->id,
+        'subject_id' => $this->subject->id,
+    ]);
+});
+
+test('bulk sync does not remove existing mappings outside selected combinations', function () {
+    $this->actingAs($this->admin);
+
+    $secondLevel = GradeLevel::query()->create([
+        'name' => 'Salafy 2',
+        'order' => 2,
+    ]);
+    $thirdSubject = Subject::query()->create([
+        'name' => 'Balaghah',
+    ]);
+
+    GradeSubject::query()->create([
+        'grade_level_id' => $secondLevel->id,
+        'subject_id' => $thirdSubject->id,
+    ]);
+
+    $response = $this->post(route('admin.subject-level-mappings.sync'), [
+        'level_ids' => [$this->level->id],
+        'subject_ids' => [$this->subject->id],
+    ]);
+
+    $response->assertRedirect();
+    $this->assertDatabaseHas('grade_subjects', [
+        'grade_level_id' => $secondLevel->id,
+        'subject_id' => $thirdSubject->id,
+    ]);
 });

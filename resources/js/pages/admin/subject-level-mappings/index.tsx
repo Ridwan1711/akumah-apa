@@ -56,7 +56,7 @@ export default function SubjectLevelMappingsIndex({ subjects, levels, gradeSubje
             <div>
                 <CrudPageHeader
                     title="Mapping Mapel ke Tingkat"
-                    description="Pilih banyak tingkat dan banyak mapel sekaligus. Kombinasi yang dipilih akan terhubung, yang tidak dipilih tidak dihubungkan."
+                    description="Pilih banyak tingkat dan mapel sekaligus. Kombinasi yang dipilih akan ditambahkan ke mapping yang sudah ada (tidak menghapus pasangan lain)."
                 />
                 <CrudStatStrip
                     items={[
@@ -89,7 +89,7 @@ export default function SubjectLevelMappingsIndex({ subjects, levels, gradeSubje
                         </div>
                         <div className="mcr-action-group">
                             <button type="button" className="mcr-btn primary" onClick={submitSync} disabled={isSaving}>
-                                {isSaving ? 'Menyimpan...' : 'Simpan Mapping'}
+                                {isSaving ? 'Menyimpan...' : 'Tambah Mapping'}
                             </button>
                         </div>
                     </div>

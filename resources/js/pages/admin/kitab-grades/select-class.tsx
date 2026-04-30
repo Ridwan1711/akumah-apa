@@ -36,14 +36,14 @@ export default function KitabGradesSelectClass({
                         <div className="mcr-empty-state">
                             <Users size={28} />
                             <h3>Tidak ada kelas tersedia</h3>
-                            <p>Belum ada kelas dengan penilaian aktif untuk mapel ini.</p>
+                            <p>Belum ada kelas dengan penilaian aktif untuk mapel ini. atau Mapel ini Tidak Diperbolehkan Input Nilai</p>
                         </div>
                     ) : (
                         <div style={{ display: 'grid', gap: 10 }}>
                             {classes.map((item) => (
                                 <Link
                                     key={item.id}
-                                    href={`/admin/kitab-grades/${academicPeriod.id}/${subject.id}/${item.id}`}
+                                    href={`/admin/kitab-grades/${academicPeriod.id}/${subject.id}/${item.id}/setting`}
                                     className="mcr-btn secondary"
                                     style={{ justifyContent: 'space-between', height: 44, textDecoration: 'none' }}
                                 >

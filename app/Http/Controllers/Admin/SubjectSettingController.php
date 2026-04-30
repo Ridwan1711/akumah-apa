@@ -41,31 +41,23 @@ class SubjectSettingController extends Controller
         $levelIds = collect($payload['level_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();
 
         DB::transaction(function () use ($subjectIds, $levelIds): void {
-            GradeSubject::query()->delete();
-
             if ($subjectIds->isEmpty() || $levelIds->isEmpty()) {
                 return;
             }
 
-            $rows = [];
-            $now = now();
             foreach ($levelIds as $levelId) {
                 foreach ($subjectIds as $subjectId) {
-                    $rows[] = [
+                    GradeSubject::query()->updateOrCreate([
                         'grade_level_id' => $levelId,
                         'subject_id' => $subjectId,
-                        'created_at' => $now,
-                        'updated_at' => $now,
-                    ];
+                    ]);
                 }
             }
-
-            DB::table('grade_subjects')->insert($rows);
         });
 
         return redirect()
             ->route('admin.subject-level-mappings.index')
-            ->with('success', 'Pemasangan mapel-ke-tingkat berhasil diperbarui.');
+            ->with('success', 'Pemasangan mapel-ke-tingkat berhasil ditambahkan.');
     }
 
     public function index(Request $request): Response

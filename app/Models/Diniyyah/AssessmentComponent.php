@@ -15,12 +15,14 @@ class AssessmentComponent extends Model
         'name',
         'type',
         'weight',
+        'is_core_required',
     ];
 
     protected function casts(): array
     {
         return [
             'weight' => 'decimal:2',
+            'is_core_required' => 'boolean',
         ];
     }
 

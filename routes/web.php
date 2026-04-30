@@ -48,6 +48,7 @@ use App\Http\Controllers\Santri\SantriController;
 use App\Http\Controllers\Wali\WaliPaymentController;
 use App\Http\Controllers\Wali\WaliProfileController;
 use App\Http\Controllers\Wali\WaliSantriController;
+use App\Http\Controllers\WaliKelas\WaliKelasGradeReviewController;
 use App\Http\Controllers\WaliKelas\WaliKelasReportController;
 use App\Models\Role;
 use Illuminate\Support\Facades\Route;
@@ -296,6 +297,12 @@ Route::middleware(['auth', 'verified', 'password.changed', 'can.access.kitab-gra
         Route::get('attendance-sessions', [GuruAttendanceController::class, 'index'])->name('attendance-sessions.index');
         Route::get('attendance-sessions/{session}', [GuruAttendanceController::class, 'show'])->name('attendance-sessions.show');
         Route::post('attendance-sessions/{session}', [GuruAttendanceController::class, 'store'])->name('attendance-sessions.store');
+        Route::get('kitab-grades/{academic_period}/{kitab_subject}/{diniyah_class}/setting', [KitabGradeController::class, 'setting'])
+            ->whereNumber(['academic_period', 'kitab_subject', 'diniyah_class'])
+            ->name('admin.kitab-grades.setting');
+        Route::post('kitab-grades/{academic_period}/{kitab_subject}/{diniyah_class}/setting', [KitabGradeController::class, 'saveSetting'])
+            ->whereNumber(['academic_period', 'kitab_subject', 'diniyah_class'])
+            ->name('admin.kitab-grades.setting.store');
         Route::get('kitab-grades/{academic_period}/{kitab_subject}/{diniyah_class}', [KitabGradeController::class, 'input'])
             ->whereNumber(['academic_period', 'kitab_subject', 'diniyah_class'])
             ->name('admin.kitab-grades.input');
@@ -331,6 +338,8 @@ Route::middleware(['auth', 'verified', 'password.changed', 'has.wali-kelas-recor
     ->prefix('wali-kelas')
     ->name('wali-kelas.')
     ->group(function () {
+        Route::get('grade-reviews', [WaliKelasGradeReviewController::class, 'index'])->name('grade-reviews.index');
+        Route::post('grade-reviews/review', [WaliKelasGradeReviewController::class, 'review'])->name('grade-reviews.review');
         Route::get('report-cards', [WaliKelasReportController::class, 'index'])->name('report-cards.index');
         Route::get('report-cards/preview', [WaliKelasReportController::class, 'preview'])->name('report-cards.preview');
         Route::post('report-cards/save-notes', [WaliKelasReportController::class, 'saveNotes'])->name('report-cards.save-notes');

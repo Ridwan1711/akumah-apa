@@ -18,7 +18,7 @@ class StoreKitabTeachingAssignmentRequest extends FormRequest
             'class_id' => ['required', 'exists:classes,id'],
             'subject_id' => ['required', 'exists:subjects,id'],
             'semester_id' => ['required', 'exists:semesters,id'],
-            'target_jam' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'target_jam' => ['prohibited'],
         ];
     }
 }

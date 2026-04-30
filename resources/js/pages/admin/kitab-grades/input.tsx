@@ -26,7 +26,8 @@ type Props = {
     academicPeriod: { id: number; name: string };
     subject: Pick<Subject, 'id' | 'name'>;
     schoolClass: Pick<SchoolClass, 'id' | 'name' | 'grade_level_id'>;
-    assessmentComponents: Pick<AssessmentComponent, 'id' | 'name' | 'type'>[];
+    assessmentComponents: Pick<AssessmentComponent, 'id' | 'name' | 'type' | 'is_core_required'>[];
+    defaultActiveComponentIds: number[];
     students: Pick<Student, 'id' | 'nis' | 'full_name'>[];
     gradeMatrix: Record<number, Record<number, number>>;
     isGuru?: boolean;
@@ -37,6 +38,7 @@ export default function KitabGradeInput({
     subject,
     schoolClass,
     assessmentComponents,
+    defaultActiveComponentIds,
     students,
     gradeMatrix,
     isGuru,
@@ -69,15 +71,23 @@ export default function KitabGradeInput({
 
     const { data, setData, processing, post } = useForm({
         grades: initialGrades,
+        active_component_ids: defaultActiveComponentIds,
     });
-
+    const activeComponentIds = useMemo(
+        () => data.active_component_ids.map((id) => Number(id)).filter((id) => Number.isInteger(id)),
+        [data.active_component_ids],
+    );
+    const activeComponents = useMemo(
+        () => assessmentComponents.filter((component) => activeComponentIds.includes(component.id)),
+        [assessmentComponents, activeComponentIds],
+    );
     const inputRefs = useRef<Array<Array<HTMLInputElement | null>>>([]);
 
     const ranked = useMemo(() => {
         return students
             .map((student, studentIndex) => {
                 const row = data.grades[studentIndex];
-                const values = assessmentComponents.map((component) => Number(row?.components[String(component.id)] ?? 0));
+                const values = activeComponents.map((component) => Number(row?.components[String(component.id)] ?? 0));
                 const average =
                     values.length > 0
                         ? values.reduce((carry, value) => carry + value, 0) / values.length
@@ -89,7 +99,7 @@ export default function KitabGradeInput({
             })
             .sort((a, b) => b.average - a.average)
             .map((item, index) => ({ ...item, rank: index + 1 }));
-    }, [students, data.grades, assessmentComponents]);
+    }, [students, data.grades, activeComponents]);
 
     const rankMap = useMemo(() => {
         const map = new Map<number, number>();
@@ -143,7 +153,7 @@ export default function KitabGradeInput({
         }
         if (event.key === 'ArrowRight') {
             event.preventDefault();
-            if (colIndex < assessmentComponents.length - 1) focusCell(rowIndex, colIndex + 1);
+            if (colIndex < activeComponents.length - 1) focusCell(rowIndex, colIndex + 1);
             return;
         }
     }
@@ -180,7 +190,7 @@ export default function KitabGradeInput({
 
                 <CrudCard
                     title="Matrix Nilai"
-                    subtitle="Gunakan Arrow Up/Down/Left/Right untuk berpindah antar cell input (Excel feel)."
+                    subtitle="Komponen nilai sudah dikunci di langkah setting. Gunakan Arrow Up/Down/Left/Right untuk berpindah antar cell input."
                 >
                     <form onSubmit={handleSave}>
                         <CrudTableShell>
@@ -189,7 +199,7 @@ export default function KitabGradeInput({
                                     <tr>
                                         <th style={{ width: 56 }}>No</th>
                                         <th style={{ minWidth: 220 }}>Nama</th>
-                                        {assessmentComponents.map((component) => (
+                                        {activeComponents.map((component) => (
                                             <th key={component.id} style={{ minWidth: 130, textAlign: 'center' }}>
                                                 {component.name}
                                             </th>
@@ -199,9 +209,16 @@ export default function KitabGradeInput({
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {students.map((student, rowIndex) => {
+                                    {activeComponents.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={5} style={{ textAlign: 'center', padding: 18 }}>
+                                                Aktifkan minimal satu komponen untuk mengisi nilai.
+                                            </td>
+                                        </tr>
+                                    ) : null}
+                                    {activeComponents.length > 0 && students.map((student, rowIndex) => {
                                         const row = data.grades[rowIndex];
-                                        const componentValues = assessmentComponents.map((component) =>
+                                        const componentValues = activeComponents.map((component) =>
                                             Number(row?.components[String(component.id)] ?? 0),
                                         );
                                         const avg = componentValues.length
@@ -215,7 +232,7 @@ export default function KitabGradeInput({
                                                     <div style={{ fontWeight: 600 }}>{student.full_name}</div>
                                                     <div className="mcr-table-meta">{student.nis}</div>
                                                 </td>
-                                                {assessmentComponents.map((component, colIndex) => (
+                                                {activeComponents.map((component, colIndex) => (
                                                     <td key={component.id} style={{ textAlign: 'center' }}>
                                                         <input
                                                             ref={(el) => {
@@ -245,7 +262,7 @@ export default function KitabGradeInput({
                         </CrudTableShell>
 
                         <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
-                            <button type="submit" className="mcr-btn primary" disabled={processing}>
+                            <button type="submit" className="mcr-btn primary" disabled={processing || activeComponents.length === 0}>
                                 {processing ? 'Menyimpan...' : 'Simpan Semua Nilai'}
                             </button>
                         </div>
