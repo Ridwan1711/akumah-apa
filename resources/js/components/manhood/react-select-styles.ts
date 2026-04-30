@@ -22,7 +22,11 @@ export function manhoodReactSelectStyles<
             border: '1px solid var(--border)',
             backgroundColor: 'var(--popover)',
             boxShadow: '0 4px 20px rgb(0 0 0 / 8%), 0 1px 4px rgb(0 0 0 / 4%)',
-            zIndex: 50,
+            zIndex: 9999,
+        }),
+        menuPortal: (base) => ({
+            ...base,
+            zIndex: 9999,
         }),
         menuList: (base) => ({ ...base, padding: '4px' }),
         option: (base, state) => ({

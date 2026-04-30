@@ -8,7 +8,6 @@ use App\Http\Controllers\Admin\AssessmentComponentController;
 use App\Http\Controllers\Admin\AttendanceController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\ClassPromotionController;
-use App\Http\Controllers\Admin\ClassSubjectRuleController;
 use App\Http\Controllers\Admin\DiniyahClassController;
 use App\Http\Controllers\Admin\GuardianController;
 use App\Http\Controllers\Admin\InvoiceController;
@@ -22,6 +21,7 @@ use App\Http\Controllers\Admin\PaymentTypeController;
 use App\Http\Controllers\Admin\ReportCardAssetController;
 use App\Http\Controllers\Admin\ReportCardController;
 use App\Http\Controllers\Admin\ReportCardTemplateController;
+use App\Http\Controllers\Admin\RoleCertificateController;
 use App\Http\Controllers\Admin\ScheduleController;
 use App\Http\Controllers\Admin\ScheduleMatrixController;
 use App\Http\Controllers\Admin\ScheduleSetController;
@@ -30,8 +30,10 @@ use App\Http\Controllers\Admin\StudentDataTransferController;
 use App\Http\Controllers\Admin\StudentDiscountController;
 use App\Http\Controllers\Admin\StudentEnrollmentController;
 use App\Http\Controllers\Admin\StudentEnrollmentTransferController;
+use App\Http\Controllers\Admin\SubjectSettingController;
 use App\Http\Controllers\Admin\SystemLogController;
 use App\Http\Controllers\Admin\TeacherDataTransferController;
+use App\Http\Controllers\Admin\TeacherManagementController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\ViolationController;
 use App\Http\Controllers\Auth\ForceChangePasswordController;
@@ -137,15 +139,27 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
 
         // Komponen penilaian diniyyah (harian / ujian)
         Route::resource('assessment-components', AssessmentComponentController::class)->except(['create', 'show', 'edit']);
-        Route::get('class-subject-rules', [ClassSubjectRuleController::class, 'index'])->name('class-subject-rules.index');
-        Route::post('class-subject-rules', [ClassSubjectRuleController::class, 'store'])->name('class-subject-rules.store');
-        Route::post('class-subject-rules/bulk', [ClassSubjectRuleController::class, 'bulkStore'])->name('class-subject-rules.bulk');
-        Route::delete('class-subject-rules/{classSubjectRule}', [ClassSubjectRuleController::class, 'destroy'])->name('class-subject-rules.destroy');
+        Route::get('subject-level-mappings', [SubjectSettingController::class, 'mappingIndex'])->name('subject-level-mappings.index');
+        Route::post('subject-level-mappings/sync', [SubjectSettingController::class, 'syncMappings'])->name('subject-level-mappings.sync');
+        Route::get('subject-settings', [SubjectSettingController::class, 'index'])->name('subject-settings.index');
+        Route::post('subject-settings/assign-level', [SubjectSettingController::class, 'assignSubjectToLevel'])->name('subject-settings.assign-level');
+        Route::delete('subject-settings/assign-level', [SubjectSettingController::class, 'removeSubjectFromLevel'])->name('subject-settings.remove-level');
+        Route::post('subject-settings/level', [SubjectSettingController::class, 'upsertLevel'])->name('subject-settings.level.store');
+        Route::post('subject-settings/class-override', [SubjectSettingController::class, 'upsertClassOverride'])->name('subject-settings.class-override.store');
+        Route::delete('subject-settings/class-override/{subjectClassOverride}', [SubjectSettingController::class, 'destroyClassOverride'])->name('subject-settings.class-override.destroy');
 
         // Kitab Teaching Assignments (guru -> kelas -> mata pelajaran)
         Route::get('teaching-assignments', [KitabTeachingAssignmentController::class, 'index'])->name('teaching-assignments.index');
         Route::post('teaching-assignments', [KitabTeachingAssignmentController::class, 'store'])->name('teaching-assignments.store');
         Route::delete('teaching-assignments/{teachingAssignment}', [KitabTeachingAssignmentController::class, 'destroy'])->name('teaching-assignments.destroy');
+        Route::get('teachers', [TeacherManagementController::class, 'index'])->name('teachers.index');
+        Route::get('teachers/eligible-users', [TeacherManagementController::class, 'eligibleUsers'])->name('teachers.eligible-users');
+        Route::post('teachers', [TeacherManagementController::class, 'store'])->name('teachers.store');
+        Route::put('teachers/{teacher}', [TeacherManagementController::class, 'update'])->name('teachers.update');
+        Route::post('teachers/{teacher}/toggle-active', [TeacherManagementController::class, 'toggleActive'])->name('teachers.toggle-active');
+        Route::get('role-certificates', [RoleCertificateController::class, 'index'])->name('role-certificates.index');
+        Route::post('role-certificates', [RoleCertificateController::class, 'store'])->name('role-certificates.store');
+        Route::get('role-certificates/{roleCertificate}/download', [RoleCertificateController::class, 'download'])->name('role-certificates.download');
 
         // Jadwal kitab (periode, kelas, mapel, guru) - legacy list view
         Route::get('schedules', [ScheduleController::class, 'index'])->name('schedules.index');

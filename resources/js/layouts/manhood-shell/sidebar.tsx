@@ -99,9 +99,12 @@ function buildSections(auth: Auth, userRoleNames: string[], hasGuruRecord: boole
             label: 'Akademik',
             items: [
                 { title: 'Mata Pelajaran Kitab', href: '/admin/kitab-subjects', icon: BookOpen },
+                { title: 'Mapping Mapel-Tingkat', href: '/admin/subject-level-mappings', icon: ClipboardList },
+                { title: 'Subject Setting', href: '/admin/subject-settings', icon: ClipboardList },
                 { title: 'Komponen Penilaian', href: '/admin/assessment-components', icon: ListChecks },
-                { title: 'Rule Penilaian Mapel', href: '/admin/class-subject-rules', icon: ClipboardList },
+                { title: 'Manajemen Guru', href: '/admin/teachers', icon: Users },
                 { title: 'Penugasan Guru', href: '/admin/teaching-assignments', icon: UserPlus },
+                { title: 'Surat Keterangan', href: '/admin/role-certificates', icon: ScrollText },
                 { title: 'Jadwal Kitab', href: '/admin/schedules', icon: CalendarClock },
                 { title: 'Jadwal (Matrix)', href: '/admin/schedule-sets', icon: CalendarClock },
                 { title: 'Kehadiran Santri', href: '/admin/attendances', icon: CalendarDays },

@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\AssignCellRequest;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\Diniyyah\ScheduleSet;
 use App\Models\Diniyyah\TeacherAssignment;
+use App\Services\Diniyyah\SubjectTeachingHourResolver;
 use App\Services\Schedule\ScheduleMatrixService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -17,7 +18,10 @@ use InvalidArgumentException;
 
 class ScheduleMatrixController extends Controller
 {
-    public function __construct(private ScheduleMatrixService $matrix) {}
+    public function __construct(
+        private ScheduleMatrixService $matrix,
+        private SubjectTeachingHourResolver $teachingHourResolver,
+    ) {}
 
     public function edit(ScheduleSet $scheduleSet): Response
     {
@@ -33,12 +37,13 @@ class ScheduleMatrixController extends Controller
                 'subject:id,name',
             ])
             ->get()
-            ->map(fn ($a) => [
+            ->map(fn (TeacherAssignment $a) => [
                 'id' => $a->id,
                 'teacher_id' => $a->teacher_id,
                 'class_id' => $a->class_id,
                 'subject_id' => $a->subject_id,
                 'target_jam' => (int) ($a->target_jam ?? 1),
+                'target_jam_effective' => $this->teachingHourResolver->resolveForAssignment($a),
                 'teacher' => $a->teacher?->only(['id', 'name']),
                 'school_class' => $a->schoolClass?->only(['id', 'name', 'grade_level_id', 'order']),
                 'subject' => $a->subject?->only(['id', 'name']),

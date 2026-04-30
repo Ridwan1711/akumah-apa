@@ -4,6 +4,7 @@ namespace App\Models\Diniyyah;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Subject extends Model
 {
@@ -39,11 +40,28 @@ class Subject extends Model
 
     public function levelDefaults(): HasMany
     {
-        return $this->hasMany(LevelSubjectDefault::class, 'subject_id');
+        return $this->hasMany(SubjectLevelSetting::class, 'subject_id');
     }
 
-    public function aliases(): HasMany
+    public function subjectLevelSettings(): HasMany
     {
-        return $this->hasMany(SubjectAlias::class, 'subject_id');
+        return $this->hasMany(SubjectLevelSetting::class, 'subject_id');
+    }
+
+    public function classOverrides(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            SubjectClassOverride::class,
+            SubjectLevelSetting::class,
+            'subject_id',
+            'level_subject_default_id',
+            'id',
+            'id'
+        );
+    }
+
+    public function gradeSubjects(): HasMany
+    {
+        return $this->hasMany(GradeSubject::class, 'subject_id');
     }
 }

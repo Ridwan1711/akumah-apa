@@ -35,8 +35,8 @@ class GradeLevel extends Model
         return $this->hasMany(SchoolClass::class, 'grade_level_id');
     }
 
-    public function subjectAliases(): HasMany
+    public function gradeSubjects(): HasMany
     {
-        return $this->hasMany(SubjectAlias::class, 'tingkat_id');
+        return $this->hasMany(GradeSubject::class, 'grade_level_id');
     }
 }

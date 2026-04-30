@@ -7,9 +7,11 @@ use App\Http\Requests\Admin\ScheduleFormRequest;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Subject;
+use App\Models\Diniyyah\TeacherAssignment;
 use App\Models\Role;
 use App\Models\Semester;
 use App\Models\User;
+use App\Services\Diniyyah\SubjectTeachingHourResolver;
 use App\Services\Schedule\ScheduleMatrixService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,7 +21,10 @@ use Inertia\Response;
 
 class ScheduleController extends Controller
 {
-    public function __construct(private ScheduleMatrixService $matrix) {}
+    public function __construct(
+        private ScheduleMatrixService $matrix,
+        private SubjectTeachingHourResolver $teachingHourResolver,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -90,6 +95,7 @@ class ScheduleController extends Controller
                 (string) $payload['time_end'],
             )
         );
+        $this->assertLegacyAllocationLimit($payload, null);
         AcademicSchedule::create($payload);
 
         return redirect()->route('admin.schedules.index', [
@@ -111,6 +117,7 @@ class ScheduleController extends Controller
                 (string) $payload['time_end'],
             )
         );
+        $this->assertLegacyAllocationLimit($payload, $schedule);
         $schedule->update($payload);
 
         return redirect()->route('admin.schedules.index', array_filter(
@@ -144,5 +151,37 @@ class ScheduleController extends Controller
         return (int) DB::table('academic_periods')
             ->where('id', $periodId)
             ->value('semester_id');
+    }
+
+    /**
+     * Ensure legacy schedule CRUD cannot exceed target teaching hours.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    protected function assertLegacyAllocationLimit(array $payload, ?AcademicSchedule $ignoreSchedule): void
+    {
+        $assignment = TeacherAssignment::query()
+            ->where('period_id', (int) $payload['period_id'])
+            ->where('class_id', (int) $payload['class_id'])
+            ->where('subject_id', (int) $payload['subject_id'])
+            ->where('teacher_id', (int) $payload['teacher_id'])
+            ->first();
+
+        if (! $assignment) {
+            abort(422, 'Pengampu tidak ditemukan. Silakan pasangkan guru dulu di Penugasan Guru.');
+        }
+
+        $targetJam = $this->teachingHourResolver->resolveForAssignment($assignment);
+        $allocation = AcademicSchedule::query()
+            ->where('schedule_set_id', (int) $payload['schedule_set_id'])
+            ->where('class_id', (int) $payload['class_id'])
+            ->where('subject_id', (int) $payload['subject_id'])
+            ->where('teacher_id', (int) $payload['teacher_id'])
+            ->when($ignoreSchedule !== null, fn ($query) => $query->where('id', '!=', $ignoreSchedule->id))
+            ->count();
+
+        if ($allocation >= $targetJam) {
+            abort(422, 'Target jam pengampu sudah terpenuhi untuk schedule set ini.');
+        }
     }
 }

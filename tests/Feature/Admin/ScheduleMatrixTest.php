@@ -1,12 +1,12 @@
 <?php
 
+use App\Models\AcademicPeriod;
 use App\Models\AcademicYear;
-use App\Models\Diniyyah\AcademicPeriod;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\Diniyyah\GradeLevel;
-use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\ScheduleSet;
 use App\Models\Diniyyah\ScheduleTimeSlot;
+use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Subject;
 use App\Models\Diniyyah\TeacherAssignment;
 use App\Models\Role;

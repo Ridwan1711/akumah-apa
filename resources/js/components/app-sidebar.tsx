@@ -20,7 +20,6 @@ import {
     Receipt,
     ScrollText,
     Shield,
-    Tag,
     User,
     UserPlus,
     Users,
@@ -73,11 +72,12 @@ export function AppSidebar() {
     ];
 
     const akademikNavItems: NavItem[] = [
-        { title: 'Mata Pelajaran Kitab', href: '/admin/kitab-subjects', icon: BookOpen },
+        { title: 'Mata Pelajaran', href: '/admin/kitab-subjects', icon: BookOpen },
+        { title: 'Mapping Mapel-Tingkat', href: '/admin/subject-level-mappings', icon: ClipboardList },
         { title: 'Komponen Penilaian', href: '/admin/assessment-components', icon: ListChecks },
-        { title: 'Rule Penilaian Mapel', href: '/admin/class-subject-rules', icon: ClipboardList },
+        { title: 'Aturan Mapel', href: '/admin/subject-settings', icon: ClipboardList },
         { title: 'Penugasan Guru', href: '/admin/teaching-assignments', icon: UserPlus },
-        { title: 'Jadwal Kitab', href: '/admin/schedules', icon: CalendarClock },
+        { title: 'Jadwal', href: '/admin/schedules', icon: CalendarClock },
         { title: 'Jadwal (Matrix)', href: '/admin/schedule-sets', icon: CalendarClock },
         { title: 'Kehadiran Santri', href: '/admin/attendances', icon: CalendarDays },
         { title: 'Nilai Kitab', href: '/admin/kitab-grades', icon: ClipboardList },

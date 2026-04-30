@@ -197,13 +197,14 @@ export default function ScheduleSetsIndex({ sets, semesters, selectedPeriodId, s
                                 <TableHead className="text-center">Jam</TableHead>
                                 <TableHead className="text-center">Cell</TableHead>
                                 <TableHead className="text-center">Status</TableHead>
+                                <TableHead className="text-center">Cakupan Jam</TableHead>
                                 <TableHead className="text-right">Aksi</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {sets.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                                    <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                                         Belum ada schedule set untuk periode ini.
                                     </TableCell>
                                 </TableRow>
@@ -227,6 +228,18 @@ export default function ScheduleSetsIndex({ sets, semesters, selectedPeriodId, s
                                                 </Badge>
                                             ) : (
                                                 <Badge variant="secondary">Draft</Badge>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            {(set.unmet_pengampu_count ?? 0) > 0 ? (
+                                                <Badge variant="secondary" className="whitespace-nowrap">
+                                                    Kurang {(set.unmet_jam_total ?? 0)} jam ·{' '}
+                                                    {(set.unmet_pengampu_count ?? 0)} pengampu
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="default" className="whitespace-nowrap">
+                                                    Target terpenuhi
+                                                </Badge>
                                             )}
                                         </TableCell>
                                         <TableCell className="text-right">

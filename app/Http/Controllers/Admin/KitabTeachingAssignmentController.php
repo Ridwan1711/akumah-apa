@@ -5,13 +5,14 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreKitabTeachingAssignmentRequest;
 use App\Models\AcademicPeriod;
-use App\Models\Diniyyah\LevelSubjectDefault;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Subject;
 use App\Models\Diniyyah\TeacherAssignment;
 use App\Models\Role;
 use App\Models\Semester;
 use App\Models\User;
+use App\Services\Diniyyah\SubjectTeachingHourResolver;
+use App\Services\RoleCertificateService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,11 @@ use Inertia\Response;
 
 class KitabTeachingAssignmentController extends Controller
 {
+    public function __construct(
+        private SubjectTeachingHourResolver $teachingHourResolver,
+        private RoleCertificateService $certificateService,
+    ) {}
+
     public function index(Request $request): Response
     {
         $selectedSemesterId = (int) $request->input('semester_id', 0);
@@ -47,7 +53,7 @@ class KitabTeachingAssignmentController extends Controller
                 ->get(),
             'teachers' => User::query()
                 ->where('is_active', true)
-                ->whereHas('roles', fn ($query) => $query->whereNotIn('name', [Role::SANTRI]))
+                ->whereHas('roles', fn ($query) => $query->where('name', Role::GURU))
                 ->orderBy('name')
                 ->get(['id', 'name']),
             'activeAcademicYear' => AcademicPeriod::query()->active()->with('academicYear:id,name')->first()?->academicYear?->only(['id', 'name']),
@@ -80,7 +86,7 @@ class KitabTeachingAssignmentController extends Controller
             $periodId,
             isset($payload['target_jam']) ? (int) $payload['target_jam'] : null
         );
-        TeacherAssignment::updateOrCreate(
+        $assignment = TeacherAssignment::updateOrCreate(
             [
                 'class_id' => $payload['class_id'],
                 'subject_id' => $payload['subject_id'],
@@ -91,6 +97,7 @@ class KitabTeachingAssignmentController extends Controller
                 'target_jam' => $resolvedTargetJam,
             ]
         );
+        $this->certificateService->issueForTeacherAssignment($assignment, $request->user()?->id);
 
         return redirect()->route('admin.teaching-assignments.index', ['semester_id' => $payload['semester_id']])
             ->with('success', 'Penugasan guru berhasil ditambahkan.');
@@ -114,23 +121,6 @@ class KitabTeachingAssignmentController extends Controller
 
     protected function resolveTargetJam(int $classId, int $subjectId, int $periodId, ?int $requestedTargetJam): int
     {
-        if ($requestedTargetJam !== null && $requestedTargetJam > 0) {
-            return $requestedTargetJam;
-        }
-
-        $levelId = (int) (SchoolClass::query()->whereKey($classId)->value('grade_level_id') ?? 0);
-        if ($levelId > 0) {
-            $defaultTargetJam = (int) (LevelSubjectDefault::query()
-                ->where('level_id', $levelId)
-                ->where('subject_id', $subjectId)
-                ->where('period_id', $periodId)
-                ->value('target_jam_default') ?? 0);
-
-            if ($defaultTargetJam > 0) {
-                return $defaultTargetJam;
-            }
-        }
-
-        return 1;
+        return $this->teachingHourResolver->resolve($classId, $subjectId, $periodId, $requestedTargetJam);
     }
 }

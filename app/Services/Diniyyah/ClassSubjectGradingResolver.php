@@ -3,8 +3,8 @@
 namespace App\Services\Diniyyah;
 
 use App\Models\Diniyyah\ClassSubject;
-use App\Models\Diniyyah\LevelSubjectDefault;
 use App\Models\Diniyyah\SchoolClass;
+use App\Models\Diniyyah\SubjectLevelSetting;
 
 class ClassSubjectGradingResolver
 {
@@ -42,7 +42,7 @@ class ClassSubjectGradingResolver
             return false;
         }
 
-        $default = LevelSubjectDefault::query()
+        $default = SubjectLevelSetting::query()
             ->where('level_id', $levelId)
             ->where('subject_id', $subjectId)
             ->where('period_id', $periodId)

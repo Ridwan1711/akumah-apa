@@ -3,9 +3,10 @@
 namespace App\Services\Schedule;
 
 use App\Models\Diniyyah\AcademicSchedule;
-use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\ScheduleSet;
+use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\TeacherAssignment;
+use App\Services\Diniyyah\SubjectTeachingHourResolver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -13,6 +14,8 @@ use RuntimeException;
 
 class ScheduleMatrixService
 {
+    public function __construct(private SubjectTeachingHourResolver $teachingHourResolver) {}
+
     public const CONFLICT_NONE = 'none';
 
     public const CONFLICT_OCCUPIED = 'occupied';
@@ -20,6 +23,7 @@ class ScheduleMatrixService
     public const CONFLICT_SAME_SUBJECT_OTHER_CLASS = 'same_subject_other_class';
 
     public const CONFLICT_DIFFERENT_SUBJECT_OTHER_CLASS = 'different_subject_other_class';
+
     public const CONFLICT_TARGET_REACHED = 'target_reached';
 
     public const ACTION_ASSIGN = 'assign';
@@ -125,7 +129,7 @@ class ScheduleMatrixService
         $this->assertPengampuMatchesSet($set, $pengampu);
         $this->assertDayAndJam($set, $day, $jamNo);
         $allocation = $this->currentAllocation($set, $pengampu);
-        $targetJam = max(1, (int) ($pengampu->target_jam ?? 1));
+        $targetJam = $this->teachingHourResolver->resolveForAssignment($pengampu);
         if ($allocation >= $targetJam) {
             return [
                 'type' => self::CONFLICT_TARGET_REACHED,
@@ -226,12 +230,14 @@ class ScheduleMatrixService
                     if ($conflict['type'] !== self::CONFLICT_NONE) {
                         throw new InvalidArgumentException('Konflik terdeteksi, harus memilih tindakan merge/replace.');
                     }
+
                     return $this->createCell($set, $pengampu, $day, $jamNo, $slotTimes, null);
 
                 case self::ACTION_REPLACE_CELL:
                     if ($existingTargetCell) {
                         $this->deleteScheduleWithCleanup($existingTargetCell);
                     }
+
                     return $this->createCell($set, $pengampu, $day, $jamNo, $slotTimes, null);
 
                 case self::ACTION_MERGE:

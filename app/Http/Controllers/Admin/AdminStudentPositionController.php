@@ -7,6 +7,7 @@ use App\Models\PermissionScope;
 use App\Models\Student;
 use App\Models\StudentPosition;
 use App\Models\User;
+use App\Services\RoleCertificateService;
 use App\Support\Authorization\Permissions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,6 +17,8 @@ use Inertia\Response;
 
 class AdminStudentPositionController extends Controller
 {
+    public function __construct(private RoleCertificateService $certificateService) {}
+
     public function index(Request $request): Response
     {
         $query = StudentPosition::query()
@@ -95,10 +98,12 @@ class AdminStudentPositionController extends Controller
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
-        StudentPosition::query()->create([
+        $position = StudentPosition::query()->create([
             ...$validated,
             'is_active' => (bool) ($validated['is_active'] ?? true),
         ]);
+        $position->load('student:id,full_name');
+        $this->certificateService->issueForStudentPosition($position, $request->user()?->id);
 
         return redirect()->route('admin.student-positions.index')
             ->with('success', 'Posisi pengurus santri berhasil ditambahkan.');
@@ -116,6 +121,8 @@ class AdminStudentPositionController extends Controller
         ]);
 
         $studentPosition->update($validated);
+        $studentPosition->load('student:id,full_name');
+        $this->certificateService->issueForStudentPosition($studentPosition, $request->user()?->id);
 
         return redirect()->route('admin.student-positions.index')
             ->with('success', 'Posisi pengurus santri berhasil diperbarui.');
@@ -135,6 +142,8 @@ class AdminStudentPositionController extends Controller
             'is_active' => true,
             'ended_at' => null,
         ]);
+        $studentPosition->load('student:id,full_name');
+        $this->certificateService->issueForStudentPosition($studentPosition, request()->user()?->id);
 
         return redirect()->route('admin.student-positions.index')
             ->with('success', 'Posisi pengurus diaktifkan.');

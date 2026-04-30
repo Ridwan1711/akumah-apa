@@ -9,7 +9,10 @@ use App\Http\Requests\Admin\UpdateScheduleSetRequest;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\Diniyyah\ScheduleSet;
 use App\Models\Diniyyah\ScheduleTimeSlot;
+use App\Models\Diniyyah\TeacherAssignment;
 use App\Models\Semester;
+use App\Services\Diniyyah\SubjectTeachingHourResolver;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +21,8 @@ use Inertia\Response;
 
 class ScheduleSetController extends Controller
 {
+    public function __construct(private SubjectTeachingHourResolver $teachingHourResolver) {}
+
     public function index(Request $request): Response
     {
         $selectedSemesterId = (int) $request->input('semester_id', 0);
@@ -39,6 +44,14 @@ class ScheduleSetController extends Controller
             ->orderByDesc('is_active')
             ->orderBy('name')
             ->get();
+        $coverageBySetId = $this->buildCoverageBySetId($sets, $selectedPeriodId);
+        $sets = $sets->map(function (ScheduleSet $set) use ($coverageBySetId): ScheduleSet {
+            $coverage = $coverageBySetId[$set->id] ?? ['unmet_pengampu_count' => 0, 'unmet_jam_total' => 0];
+            $set->setAttribute('unmet_pengampu_count', (int) $coverage['unmet_pengampu_count']);
+            $set->setAttribute('unmet_jam_total', (int) $coverage['unmet_jam_total']);
+
+            return $set;
+        });
 
         return Inertia::render('admin/schedules/sets-index', [
             'sets' => $sets,
@@ -231,5 +244,76 @@ class ScheduleSetController extends Controller
         return (int) DB::table('academic_periods')
             ->where('id', $periodId)
             ->value('semester_id');
+    }
+
+    /**
+     * @return array<int, array{unmet_pengampu_count: int, unmet_jam_total: int}>
+     */
+    private function buildCoverageBySetId(Collection $sets, int $periodId): array
+    {
+        $setIds = $sets->pluck('id')->map(fn ($id): int => (int) $id)->values();
+        if ($periodId <= 0 || $setIds->isEmpty()) {
+            return [];
+        }
+
+        $assignments = TeacherAssignment::query()
+            ->where('period_id', $periodId)
+            ->get(['id', 'teacher_id', 'class_id', 'subject_id', 'period_id', 'target_jam']);
+
+        if ($assignments->isEmpty()) {
+            return $setIds->mapWithKeys(fn (int $setId): array => [
+                $setId => ['unmet_pengampu_count' => 0, 'unmet_jam_total' => 0],
+            ])->all();
+        }
+
+        $allocationRows = AcademicSchedule::query()
+            ->selectRaw('schedule_set_id, teacher_id, class_id, subject_id, COUNT(*) as allocated')
+            ->whereIn('schedule_set_id', $setIds)
+            ->groupBy('schedule_set_id', 'teacher_id', 'class_id', 'subject_id')
+            ->get();
+
+        $allocationMap = [];
+        foreach ($allocationRows as $row) {
+            $key = sprintf(
+                '%d:%d:%d:%d',
+                (int) $row->schedule_set_id,
+                (int) $row->teacher_id,
+                (int) $row->class_id,
+                (int) $row->subject_id
+            );
+            $allocationMap[$key] = (int) $row->allocated;
+        }
+
+        $coverageBySetId = [];
+        foreach ($setIds as $setId) {
+            $unmetPengampuCount = 0;
+            $unmetJamTotal = 0;
+
+            foreach ($assignments as $assignment) {
+                /** @var TeacherAssignment $assignment */
+                $targetJam = $this->teachingHourResolver->resolveForAssignment($assignment);
+                $allocationKey = sprintf(
+                    '%d:%d:%d:%d',
+                    $setId,
+                    (int) $assignment->teacher_id,
+                    (int) $assignment->class_id,
+                    (int) $assignment->subject_id
+                );
+                $allocated = $allocationMap[$allocationKey] ?? 0;
+                $remaining = max(0, $targetJam - $allocated);
+
+                if ($remaining > 0) {
+                    $unmetPengampuCount++;
+                    $unmetJamTotal += $remaining;
+                }
+            }
+
+            $coverageBySetId[$setId] = [
+                'unmet_pengampu_count' => $unmetPengampuCount,
+                'unmet_jam_total' => $unmetJamTotal,
+            ];
+        }
+
+        return $coverageBySetId;
     }
 }

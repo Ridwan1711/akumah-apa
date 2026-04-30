@@ -618,7 +618,7 @@ export default function TeachingAssignmentIndex({
                         <CardHeader className="pb-3 pt-4 px-4">
                             <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                                 <UserPlus className="h-4 w-4 text-muted-foreground" />
-                                Guru yang Akan Ditugaskan
+                                Guru dari Master Guru
                                 {!selectedTeacher && (
                                     <Badge variant="outline" className="ml-auto text-[10px] text-amber-600 border-amber-300 bg-amber-50">
                                         Wajib dipilih sebelum assign
@@ -648,7 +648,7 @@ export default function TeachingAssignmentIndex({
                                         </SelectContent>
                                     </Select>
                                     <p className="text-xs text-muted-foreground">
-                                        Klik sel kosong untuk assign · Klik dan geser untuk bulk assign
+                                        Sumber guru hanya dari halaman Manajemen Guru · klik/geser untuk assign
                                     </p>
                                 </div>
                                 <div className="space-y-1.5">

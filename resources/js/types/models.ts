@@ -167,15 +167,6 @@ export type WaliPreviewResponse = {
 export type Subject = {
     id: number;
     name: string;
-    aliases?: SubjectAlias[];
-};
-
-export type SubjectAlias = {
-    id: number;
-    subject_id: number;
-    tingkat_id: number;
-    alias_name: string | null;
-    tingkat?: Pick<GradeLevel, 'id' | 'name' | 'order'>;
 };
 
 /** @deprecated Use `Subject` */
@@ -233,6 +224,8 @@ export type ScheduleSet = {
     is_active: boolean;
     created_by?: number | null;
     cells_count?: number;
+    unmet_pengampu_count?: number;
+    unmet_jam_total?: number;
     period?: Pick<AcademicPeriod, 'id' | 'academic_year_id' | 'semester_id' | 'is_active'> & {
         academic_year?: Pick<AcademicYear, 'id' | 'name'>;
         semester?: Pick<Semester, 'id' | 'name'>;
@@ -274,6 +267,7 @@ export type ScheduleMatrixPengampu = {
     class_id: number;
     subject_id: number;
     target_jam: number;
+    target_jam_effective?: number;
     teacher?: Pick<User, 'id' | 'name'>;
     school_class?: Pick<SchoolClass, 'id' | 'name' | 'grade_level_id' | 'order'>;
     subject?: Pick<Subject, 'id' | 'name'>;

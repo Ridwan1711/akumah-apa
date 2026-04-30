@@ -14,7 +14,7 @@ import {
     openDownload,
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
-import type { BreadcrumbItem, GradeLevel, Subject, SubjectAlias } from '@/types';
+import type { BreadcrumbItem, GradeLevel, Subject } from '@/types';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/dashboard' },
@@ -22,13 +22,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 type Props = {
-    subjects: Array<Pick<Subject, 'id' | 'name'> & { aliases?: SubjectAlias[] }>;
+    subjects: Array<Pick<Subject, 'id' | 'name'>>;
     tingkats: Pick<GradeLevel, 'id' | 'name' | 'order'>[];
-};
-
-type SubjectAliasFormRow = {
-    tingkat_id: string;
-    alias_name: string;
 };
 
 export default function KitabSubjectIndex({ subjects, tingkats }: Props) {
@@ -37,7 +32,7 @@ export default function KitabSubjectIndex({ subjects, tingkats }: Props) {
     const [editing, setEditing] = useState<Props['subjects'][number] | null>(null);
     const [deleting, setDeleting] = useState<Props['subjects'][number] | null>(null);
 
-    const form = useForm<{ name: string; aliases: SubjectAliasFormRow[] }>({ name: '', aliases: [] });
+    const form = useForm<{ name: string }>({ name: '' });
     const importForm = useForm<{
         file: File | null;
         strategy: 'skip' | 'update';
@@ -48,22 +43,13 @@ export default function KitabSubjectIndex({ subjects, tingkats }: Props) {
 
     function openCreate() {
         setEditing(null);
-        form.setData({
-            name: '',
-            aliases: tingkats.map((tingkat) => ({ tingkat_id: String(tingkat.id), alias_name: '' })),
-        });
+        form.setData({ name: '' });
         setModalOpen(true);
     }
 
     function openEdit(item: Props['subjects'][number]) {
         setEditing(item);
-        form.setData({
-            name: item.name,
-            aliases: tingkats.map((tingkat) => ({
-                tingkat_id: String(tingkat.id),
-                alias_name: item.aliases?.find((alias) => alias.tingkat_id === tingkat.id)?.alias_name ?? '',
-            })),
-        });
+        form.setData({ name: item.name });
         setModalOpen(true);
     }
 
@@ -166,7 +152,6 @@ export default function KitabSubjectIndex({ subjects, tingkats }: Props) {
                             <thead>
                                 <tr>
                                     <th>Nama</th>
-                                    <th>Alias Tingkat</th>
                                     <th style={{ textAlign: 'right' }}>Aksi</th>
                                 </tr>
                             </thead>
@@ -174,12 +159,6 @@ export default function KitabSubjectIndex({ subjects, tingkats }: Props) {
                                 {subjects.map((item) => (
                                     <tr key={item.id}>
                                         <td style={{ fontWeight: 600 }}>{item.name}</td>
-                                        <td>
-                                            {(item.aliases ?? [])
-                                                .filter((alias) => alias.alias_name)
-                                                .map((alias) => `${alias.tingkat?.name ?? `Tingkat ${alias.tingkat_id}`}: ${alias.alias_name}`)
-                                                .join(' | ') || '-'}
-                                        </td>
                                         <td>
                                             <div className="mcr-action-group">
                                                 <button type="button" className="mcr-btn ghost" onClick={() => openEdit(item)}>
@@ -222,26 +201,6 @@ export default function KitabSubjectIndex({ subjects, tingkats }: Props) {
                         placeholder="Contoh: Nahwu"
                     />
                     <InputError message={form.errors.name} />
-
-                    <label>Alias per Tingkat (opsional)</label>
-                    <div className="mcr-form-grid">
-                        {tingkats.map((tingkat, index) => (
-                            <div key={tingkat.id} className="mcr-form-group">
-                                <label>{tingkat.name}</label>
-                                <input
-                                    className="mcr-input"
-                                    value={form.data.aliases[index]?.alias_name ?? ''}
-                                    onChange={(e) => {
-                                        const next = [...form.data.aliases];
-                                        next[index] = { tingkat_id: String(tingkat.id), alias_name: e.target.value };
-                                        form.setData('aliases', next);
-                                    }}
-                                    placeholder={`Alias ${tingkat.name}`}
-                                />
-                                <InputError message={form.errors[`aliases.${index}.alias_name`]} />
-                            </div>
-                        ))}
-                    </div>
                 </form>
             </CrudModal>
 

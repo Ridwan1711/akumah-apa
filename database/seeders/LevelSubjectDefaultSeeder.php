@@ -3,9 +3,9 @@
 namespace Database\Seeders;
 
 use App\Models\AcademicPeriod;
-use App\Models\Diniyyah\LevelSubjectDefault;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Subject;
+use App\Models\Diniyyah\SubjectLevelSetting;
 use Illuminate\Database\Seeder;
 
 class LevelSubjectDefaultSeeder extends Seeder
@@ -28,7 +28,7 @@ class LevelSubjectDefaultSeeder extends Seeder
         // Baseline default: semua kitab dinilai + wajib diajarkan 1 jam di tiap level.
         foreach (SchoolClass::LEVELS as $levelTag) {
             foreach ($subjects as $subject) {
-                LevelSubjectDefault::query()->updateOrCreate(
+                SubjectLevelSetting::query()->updateOrCreate(
                     [
                         'level_tag' => $levelTag,
                         'subject_id' => (int) $subject->id,
@@ -58,7 +58,7 @@ class LevelSubjectDefaultSeeder extends Seeder
                 continue;
             }
 
-            LevelSubjectDefault::query()->updateOrCreate(
+            SubjectLevelSetting::query()->updateOrCreate(
                 [
                     'level_tag' => SchoolClass::LEVEL_SALAFY1,
                     'subject_id' => (int) $subject->id,

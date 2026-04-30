@@ -109,7 +109,7 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
         for (const p of pengampuList) {
             const key = `${p.teacher_id}:${p.class_id}:${p.subject_id}`;
             const allocated = allocatedMap.get(key) ?? 0;
-            const target = Math.max(1, p.target_jam ?? 1);
+            const target = Math.max(1, p.target_jam_effective ?? p.target_jam ?? 1);
             out[p.id] = {
                 allocated,
                 target,
@@ -128,6 +128,11 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                 time_end: s.time_end,
             })),
         [matrix.slots],
+    );
+
+    const unmetCount = useMemo(
+        () => Object.values(progressByPengampuId).filter((item) => item.remaining > 0).length,
+        [progressByPengampuId],
     );
 
     const pengampuForClass = useCallback(
@@ -325,6 +330,9 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                             <Clock className="mr-1 h-4 w-4" />
                             Pengaturan jam ({scheduleSet.jam_count} jam × {scheduleSet.day_count} hari)
                         </Button>
+                        <Badge variant={unmetCount > 0 ? 'secondary' : 'default'}>
+                            {unmetCount > 0 ? `${unmetCount} pengampu belum memenuhi target` : 'Semua target terpenuhi'}
+                        </Badge>
                     </div>
                 </div>
 
@@ -456,8 +464,8 @@ function InstructionPanel({
             subjectName: p.subject?.name ?? `Mapel #${p.subject_id}`,
             progress: progressByPengampuId[p.id] ?? {
                 allocated: 0,
-                target: Math.max(1, p.target_jam ?? 1),
-                remaining: Math.max(1, p.target_jam ?? 1),
+                                target: Math.max(1, p.target_jam_effective ?? p.target_jam ?? 1),
+                                remaining: Math.max(1, p.target_jam_effective ?? p.target_jam ?? 1),
                 isFull: false,
             },
         }))
@@ -477,6 +485,9 @@ function InstructionPanel({
             <div className="mt-2 text-muted-foreground">
                 Klik cell di salah satu kolom di atas. Jika guru mengampu lebih dari satu mapel di kelas yang sama,
                 sistem akan meminta memilih mapel terlebih dahulu.
+            </div>
+            <div className="mt-1 text-[11px] text-muted-foreground">
+                Target memakai prioritas: override kelas &gt; default level &gt; fallback.
             </div>
             <div className="mt-2 space-y-1">
                 {assignmentProgress.map((item) => (
