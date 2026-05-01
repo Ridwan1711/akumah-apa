@@ -1,5 +1,5 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { Download, Plus, RotateCcw, Search, ScrollText } from 'lucide-react';
+import { Download, Eye, Pencil, Plus, RotateCcw, Search, ScrollText } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import FlashMessage from '@/components/flash-message';
 import InputError from '@/components/input-error';
@@ -31,6 +31,12 @@ type CertificateRow = {
     issuance_mode: 'auto' | 'manual';
     status: string;
     issued_at: string | null;
+    valid_from: string | null;
+    valid_until: string | null;
+    principal_name: string | null;
+    principal_title: string | null;
+    stamp_path: string | null;
+    notes: string | null;
     user?: { id: number; name: string } | null;
     student_position?: {
         id: number;
@@ -60,6 +66,18 @@ type ManualIssueForm = {
     academic_period_id: string;
     valid_from: string;
     valid_until: string;
+    principal_name: string;
+    principal_title: string;
+    stamp: File | null;
+    notes: string;
+};
+
+type EditCertificateForm = {
+    valid_from: string;
+    valid_until: string;
+    principal_name: string;
+    principal_title: string;
+    stamp: File | null;
     notes: string;
 };
 
@@ -70,6 +88,18 @@ const initialIssueForm: ManualIssueForm = {
     academic_period_id: '',
     valid_from: '',
     valid_until: '',
+    principal_name: '',
+    principal_title: 'Kepala Sekolah / Pimpinan',
+    stamp: null,
+    notes: '',
+};
+
+const initialEditForm: EditCertificateForm = {
+    valid_from: '',
+    valid_until: '',
+    principal_name: '',
+    principal_title: 'Kepala Sekolah / Pimpinan',
+    stamp: null,
     notes: '',
 };
 
@@ -79,7 +109,10 @@ export default function RoleCertificateIndex({ certificates, teachers, positions
     const [typeFilter, setTypeFilter] = useState(filters.certificate_type ?? '');
     const [statusFilter, setStatusFilter] = useState(filters.status ?? '');
     const [issueOpen, setIssueOpen] = useState(false);
+    const [editOpen, setEditOpen] = useState(false);
+    const [editingCertificate, setEditingCertificate] = useState<CertificateRow | null>(null);
     const issueForm = useForm<ManualIssueForm>(initialIssueForm);
+    const editForm = useForm<EditCertificateForm>(initialEditForm);
 
     useEffect(() => {
         const timer = window.setTimeout(() => setDebouncedSearch(search), 300);
@@ -153,20 +186,71 @@ export default function RoleCertificateIndex({ certificates, teachers, positions
             user_id: issueForm.data.user_id || null,
             student_position_id: issueForm.data.student_position_id || null,
             academic_period_id: issueForm.data.academic_period_id || null,
-            valid_from: issueForm.data.valid_from || null,
-            valid_until: issueForm.data.valid_until || null,
+            valid_from: issueForm.data.valid_from,
+            valid_until: issueForm.data.valid_until,
+            principal_name: issueForm.data.principal_name,
+            principal_title: issueForm.data.principal_title || null,
+            stamp: issueForm.data.stamp,
             action: 'reissue',
         };
 
         issueForm.transform(() => payload);
         issueForm.post('/admin/role-certificates', {
             preserveScroll: true,
+            forceFormData: true,
             onSuccess: () => {
                 setIssueOpen(false);
                 issueForm.setData(initialIssueForm);
                 toast.success('Surat keterangan berhasil diterbitkan.');
             },
             onError: () => toast.error('Gagal menerbitkan surat keterangan.'),
+        });
+    }
+
+    function normalizeDate(value: string | null) {
+        return value ? value.slice(0, 10) : '';
+    }
+
+    function openEditModal(certificate: CertificateRow) {
+        setEditingCertificate(certificate);
+        editForm.setData({
+            valid_from: normalizeDate(certificate.valid_from),
+            valid_until: normalizeDate(certificate.valid_until),
+            principal_name: certificate.principal_name ?? '',
+            principal_title: certificate.principal_title ?? 'Kepala Sekolah / Pimpinan',
+            stamp: null,
+            notes: certificate.notes ?? '',
+        });
+        editForm.clearErrors();
+        setEditOpen(true);
+    }
+
+    function closeEditModal() {
+        setEditOpen(false);
+        setEditingCertificate(null);
+        editForm.setData(initialEditForm);
+    }
+
+    function submitEditForm(e: React.FormEvent) {
+        e.preventDefault();
+        if (!editingCertificate) return;
+
+        const payload = {
+            ...editForm.data,
+            principal_title: editForm.data.principal_title || null,
+            stamp: editForm.data.stamp,
+            _method: 'put',
+        };
+
+        editForm.transform(() => payload);
+        editForm.post(`/admin/role-certificates/${editingCertificate.id}`, {
+            preserveScroll: true,
+            forceFormData: true,
+            onSuccess: () => {
+                closeEditModal();
+                toast.success('Surat keterangan berhasil diperbarui.');
+            },
+            onError: () => toast.error('Gagal memperbarui surat keterangan.'),
         });
     }
 
@@ -277,6 +361,23 @@ export default function RoleCertificateIndex({ certificates, teachers, positions
                                         </td>
                                         <td>
                                             <div className="mcr-action-group">
+                                                <button
+                                                    type="button"
+                                                    className="mcr-icon-action"
+                                                    title="Edit Surat"
+                                                    onClick={() => openEditModal(certificate)}
+                                                >
+                                                    <Pencil size={13} />
+                                                </button>
+                                                <a
+                                                    href={`/admin/role-certificates/${certificate.id}/preview`}
+                                                    className="mcr-icon-action"
+                                                    title="Preview Surat"
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                >
+                                                    <Eye size={13} />
+                                                </a>
                                                 <a
                                                     href={`/admin/role-certificates/${certificate.id}/download`}
                                                     className="mcr-icon-action"
@@ -300,7 +401,7 @@ export default function RoleCertificateIndex({ certificates, teachers, positions
                 open={issueOpen}
                 onClose={() => setIssueOpen(false)}
                 title="Regenerate Surat Keterangan"
-                subtitle="Terbitkan ulang surat secara manual dengan periode default atau tanggal custom."
+                subtitle="Terbitkan ulang surat secara manual dengan masa berlaku dan snapshot tanda tangan."
             >
                 <form onSubmit={submitIssueForm}>
                     <div className="mcr-form-grid">
@@ -351,26 +452,64 @@ export default function RoleCertificateIndex({ certificates, teachers, positions
                             <InputError message={issueForm.errors.academic_period_id} />
                         </div>
                         <div className="mcr-form-group">
-                            <label htmlFor="certificate-valid-from">Valid Dari (custom)</label>
+                            <label htmlFor="certificate-valid-from">Berlaku Sejak</label>
                             <input
                                 id="certificate-valid-from"
                                 type="date"
                                 className="mcr-input"
+                                required
                                 value={issueForm.data.valid_from}
                                 onChange={(e) => issueForm.setData('valid_from', e.target.value)}
                             />
                             <InputError message={issueForm.errors.valid_from} />
                         </div>
                         <div className="mcr-form-group">
-                            <label htmlFor="certificate-valid-until">Valid Sampai (custom)</label>
+                            <label htmlFor="certificate-valid-until">Berlaku Sampai</label>
                             <input
                                 id="certificate-valid-until"
                                 type="date"
                                 className="mcr-input"
+                                required
                                 value={issueForm.data.valid_until}
                                 onChange={(e) => issueForm.setData('valid_until', e.target.value)}
                             />
                             <InputError message={issueForm.errors.valid_until} />
+                        </div>
+                        <div className="mcr-form-group">
+                            <label htmlFor="certificate-principal-name">Nama Kepala Sekolah</label>
+                            <input
+                                id="certificate-principal-name"
+                                type="text"
+                                className="mcr-input"
+                                required
+                                value={issueForm.data.principal_name}
+                                onChange={(e) => issueForm.setData('principal_name', e.target.value)}
+                                placeholder="Contoh: KH. Ahmad Fulan"
+                            />
+                            <InputError message={issueForm.errors.principal_name} />
+                        </div>
+                        <div className="mcr-form-group">
+                            <label htmlFor="certificate-principal-title">Jabatan Kepala</label>
+                            <input
+                                id="certificate-principal-title"
+                                type="text"
+                                className="mcr-input"
+                                value={issueForm.data.principal_title}
+                                onChange={(e) => issueForm.setData('principal_title', e.target.value)}
+                                placeholder="Kepala Sekolah / Pimpinan"
+                            />
+                            <InputError message={issueForm.errors.principal_title} />
+                        </div>
+                        <div className="mcr-form-group full">
+                            <label htmlFor="certificate-stamp">Stempel</label>
+                            <input
+                                id="certificate-stamp"
+                                type="file"
+                                className="mcr-input"
+                                accept="image/png,image/jpeg,image/webp"
+                                onChange={(e) => issueForm.setData('stamp', e.target.files?.[0] ?? null)}
+                            />
+                            <InputError message={issueForm.errors.stamp} />
                         </div>
                         <div className="mcr-form-group full">
                             <label htmlFor="certificate-notes">Catatan</label>
@@ -389,6 +528,97 @@ export default function RoleCertificateIndex({ certificates, teachers, positions
                         </button>
                         <button type="submit" className="mcr-btn primary" disabled={issueForm.processing}>
                             {issueForm.processing ? 'Memproses...' : 'Terbitkan'}
+                        </button>
+                    </div>
+                </form>
+            </CrudModal>
+
+            <CrudModal
+                open={editOpen}
+                onClose={closeEditModal}
+                title="Edit Surat Keterangan"
+                subtitle={`Ubah snapshot surat ${editingCertificate?.certificate_number ?? ''}.`}
+            >
+                <form onSubmit={submitEditForm}>
+                    <div className="mcr-form-grid">
+                        <div className="mcr-form-group">
+                            <label htmlFor="edit-certificate-valid-from">Berlaku Sejak</label>
+                            <input
+                                id="edit-certificate-valid-from"
+                                type="date"
+                                className="mcr-input"
+                                required
+                                value={editForm.data.valid_from}
+                                onChange={(e) => editForm.setData('valid_from', e.target.value)}
+                            />
+                            <InputError message={editForm.errors.valid_from} />
+                        </div>
+                        <div className="mcr-form-group">
+                            <label htmlFor="edit-certificate-valid-until">Berlaku Sampai</label>
+                            <input
+                                id="edit-certificate-valid-until"
+                                type="date"
+                                className="mcr-input"
+                                required
+                                value={editForm.data.valid_until}
+                                onChange={(e) => editForm.setData('valid_until', e.target.value)}
+                            />
+                            <InputError message={editForm.errors.valid_until} />
+                        </div>
+                        <div className="mcr-form-group">
+                            <label htmlFor="edit-certificate-principal-name">Nama Pimpinan</label>
+                            <input
+                                id="edit-certificate-principal-name"
+                                type="text"
+                                className="mcr-input"
+                                required
+                                value={editForm.data.principal_name}
+                                onChange={(e) => editForm.setData('principal_name', e.target.value)}
+                                placeholder="Contoh: KH. Ahmad Fulan"
+                            />
+                            <InputError message={editForm.errors.principal_name} />
+                        </div>
+                        <div className="mcr-form-group">
+                            <label htmlFor="edit-certificate-principal-title">Jabatan Pimpinan</label>
+                            <input
+                                id="edit-certificate-principal-title"
+                                type="text"
+                                className="mcr-input"
+                                value={editForm.data.principal_title}
+                                onChange={(e) => editForm.setData('principal_title', e.target.value)}
+                                placeholder="Kepala Sekolah / Pimpinan"
+                            />
+                            <InputError message={editForm.errors.principal_title} />
+                        </div>
+                        <div className="mcr-form-group full">
+                            <label htmlFor="edit-certificate-stamp">Ganti Stempel</label>
+                            <input
+                                id="edit-certificate-stamp"
+                                type="file"
+                                className="mcr-input"
+                                accept="image/png,image/jpeg,image/webp"
+                                onChange={(e) => editForm.setData('stamp', e.target.files?.[0] ?? null)}
+                            />
+                            {editingCertificate?.stamp_path && <div className="mcr-run-meta">Stempel saat ini: {editingCertificate.stamp_path}</div>}
+                            <InputError message={editForm.errors.stamp} />
+                        </div>
+                        <div className="mcr-form-group full">
+                            <label htmlFor="edit-certificate-notes">Catatan</label>
+                            <textarea
+                                id="edit-certificate-notes"
+                                className="mcr-input"
+                                value={editForm.data.notes}
+                                onChange={(e) => editForm.setData('notes', e.target.value)}
+                            />
+                            <InputError message={editForm.errors.notes} />
+                        </div>
+                    </div>
+                    <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                        <button type="button" className="mcr-btn ghost" onClick={closeEditModal}>
+                            Batal
+                        </button>
+                        <button type="submit" className="mcr-btn primary" disabled={editForm.processing}>
+                            {editForm.processing ? 'Menyimpan...' : 'Simpan Perubahan'}
                         </button>
                     </div>
                 </form>

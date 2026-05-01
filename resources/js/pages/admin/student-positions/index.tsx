@@ -15,10 +15,20 @@ import {
     CrudStatStrip,
     CrudTableShell,
     CrudToolbar,
+    AppSelect,
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem, PaginatedData, Student, StudentPosition } from '@/types';
 import { toast } from 'sonner';
+
+const positionTypes: { id: number; name: string; code: string }[] = [
+    { id: 1, name: 'Keamanan', code: "KMN" },
+    { id: 2, name: 'Kebersihan', code: "KBH" },
+    { id: 3, name: 'Pendidikan', code: "PDK" },
+    { id: 4, name: 'Kesehatan', code: "KHS" },
+    { id: 5, name: 'Kantin', code: "KNT" },
+    { id: 6, name: 'Kolektor', code: "KLT" },
+];
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/dashboard' },
@@ -46,7 +56,6 @@ type Props = {
 type PositionFormData = {
     student_id: string;
     position_type: string;
-    division_code: string;
     started_at: string;
     ended_at: string;
     is_active: boolean;
@@ -55,7 +64,6 @@ type PositionFormData = {
 const defaultFormData: PositionFormData = {
     student_id: '',
     position_type: '',
-    division_code: '',
     started_at: '',
     ended_at: '',
     is_active: true,
@@ -121,6 +129,14 @@ export default function StudentPositionIndex({ positions, students, divisionOpti
             })),
         [divisionOptions],
     );
+    const studentOptions = useMemo<SelectOption[]>(
+        () => students.map((student) => ({ value: student.id, label: `${student.full_name} (${student.nis})` })),
+        [students],
+    );
+    const positionOptions = useMemo<SelectOption[]>(
+        () => positionTypes.map((position) => ({ value: position.name, label: position.name })),
+        [],
+    );
 
     function openCreateModal() {
         setEditing(null);
@@ -134,7 +150,6 @@ export default function StudentPositionIndex({ positions, students, divisionOpti
         form.setData({
             student_id: String(item.student_id),
             position_type: item.position_type ?? '',
-            division_code: item.division_code ?? '',
             started_at: item.started_at ?? '',
             ended_at: item.ended_at ?? '',
             is_active: item.is_active,
@@ -148,7 +163,7 @@ export default function StudentPositionIndex({ positions, students, divisionOpti
         const payload = {
             ...form.data,
             student_id: Number(form.data.student_id),
-            division_code: form.data.division_code || null,
+            division_code: form.data.position_type || null,
             started_at: form.data.started_at || null,
             ended_at: form.data.ended_at || null,
         };
@@ -459,47 +474,28 @@ export default function StudentPositionIndex({ positions, students, divisionOpti
                 subtitle="Isi data penugasan pengurus santri."
             >
                 <form onSubmit={submitForm}>
-                    <div className="mcr-form-grid">
-                        <div className="mcr-form-group full">
-                            <label htmlFor="student_id">Santri *</label>
-                            <select
-                                id="student_id"
-                                className="mcr-form-select"
-                                value={form.data.student_id}
-                                onChange={(e) => form.setData('student_id', e.target.value)}
-                                required
-                            >
-                                <option value="">-- Pilih santri --</option>
-                                {students.map((student) => (
-                                    <option key={student.id} value={String(student.id)}>
-                                        {student.full_name} ({student.nis})
-                                    </option>
-                                ))}
-                            </select>
+                    <div className="mcr-form">
+                        <div className="mcr-form-group">
+                            <label htmlFor="student_id">Santri</label>
+                            <AppSelect
+                                inputId="student_id"
+                                placeholder="Pilih santri..."
+                                options={studentOptions}
+                                value={studentOptions.find((option) => String(option.value) === form.data.student_id) ?? null}
+                                onChange={(option) => form.setData('student_id', String(option?.value ?? ''))}
+                            />
                             <InputError message={form.errors.student_id} />
                         </div>
                         <div className="mcr-form-group">
-                            <label htmlFor="position_type">Jabatan/Posisi *</label>
-                            <input
-                                id="position_type"
-                                className="mcr-input"
-                                value={form.data.position_type}
-                                onChange={(e) => form.setData('position_type', e.target.value)}
-                                placeholder="Contoh: Ketua Rayon"
-                                required
+                            <label htmlFor="position_type">Jabatan</label>
+                            <AppSelect
+                                inputId="position_type"
+                                placeholder="Pilih jabatan..."
+                                options={positionOptions}
+                                value={positionOptions.find((option) => option.value === form.data.position_type) ?? null}
+                                onChange={(option) => form.setData('position_type', String(option?.value ?? ''))}
                             />
                             <InputError message={form.errors.position_type} />
-                        </div>
-                        <div className="mcr-form-group">
-                            <label htmlFor="division_code">Kode Divisi</label>
-                            <input
-                                id="division_code"
-                                className="mcr-input"
-                                value={form.data.division_code}
-                                onChange={(e) => form.setData('division_code', e.target.value)}
-                                placeholder="Contoh: keamanan"
-                            />
-                            <InputError message={form.errors.division_code} />
                         </div>
                         <div className="mcr-form-group">
                             <label htmlFor="started_at">Mulai Tugas</label>

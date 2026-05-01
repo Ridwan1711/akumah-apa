@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 
 class RoleCertificate extends Model
 {
@@ -32,6 +33,9 @@ class RoleCertificate extends Model
         'academic_period_id',
         'valid_from',
         'valid_until',
+        'principal_name',
+        'principal_title',
+        'stamp_path',
         'payload',
         'issued_at',
         'reissued_at',
@@ -68,5 +72,17 @@ class RoleCertificate extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function getStampDataUriAttribute(): ?string
+    {
+        if (! $this->stamp_path || ! Storage::disk('public')->exists($this->stamp_path)) {
+            return null;
+        }
+
+        $contents = Storage::disk('public')->get($this->stamp_path);
+        $mime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($contents) ?: 'image/png';
+
+        return 'data:'.$mime.';base64,'.base64_encode($contents);
     }
 }

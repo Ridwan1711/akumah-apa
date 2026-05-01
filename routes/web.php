@@ -166,6 +166,8 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::delete('kitab-reading-examiners/{kitabReadingExaminer}', [KitabReadingExaminerAssignmentController::class, 'destroy'])->name('kitab-reading-examiners.destroy');
         Route::get('role-certificates', [RoleCertificateController::class, 'index'])->name('role-certificates.index');
         Route::post('role-certificates', [RoleCertificateController::class, 'store'])->name('role-certificates.store');
+        Route::put('role-certificates/{roleCertificate}', [RoleCertificateController::class, 'update'])->name('role-certificates.update');
+        Route::get('role-certificates/{roleCertificate}/preview', [RoleCertificateController::class, 'preview'])->name('role-certificates.preview');
         Route::get('role-certificates/{roleCertificate}/download', [RoleCertificateController::class, 'download'])->name('role-certificates.download');
 
         // Jadwal kitab (periode, kelas, mapel, guru) - legacy list view

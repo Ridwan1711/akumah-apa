@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreRoleCertificateRequest;
+use App\Http\Requests\Admin\UpdateRoleCertificateRequest;
 use App\Models\AcademicPeriod;
 use App\Models\Role;
 use App\Models\RoleCertificate;
@@ -11,6 +12,7 @@ use App\Models\StudentPosition;
 use App\Models\User;
 use App\Services\RoleCertificateService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Contracts\View\View as ViewResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -69,6 +71,7 @@ class RoleCertificateController extends Controller
         $certificateType = (string) $validated['certificate_type'];
         $userId = isset($validated['user_id']) ? (int) $validated['user_id'] : null;
         $studentPositionId = isset($validated['student_position_id']) ? (int) $validated['student_position_id'] : null;
+        $stampPath = $request->file('stamp')?->store('role-certificate-stamps', 'public');
 
         $sourceKey = sprintf(
             '%s:%s:period:%s',
@@ -94,8 +97,11 @@ class RoleCertificateController extends Controller
             'user_id' => $userId,
             'student_position_id' => $studentPositionId,
             'academic_period_id' => $periodId,
-            'valid_from' => $validated['valid_from'] ?? null,
-            'valid_until' => $validated['valid_until'] ?? null,
+            'valid_from' => $validated['valid_from'],
+            'valid_until' => $validated['valid_until'],
+            'principal_name' => $validated['principal_name'],
+            'principal_title' => $validated['principal_title'] ?? 'Kepala Sekolah / Pimpinan',
+            'stamp_path' => $stampPath,
             'notes' => $validated['notes'] ?? null,
             'payload' => $payload,
             'created_by' => $request->user()?->id,
@@ -105,7 +111,46 @@ class RoleCertificateController extends Controller
             ->with('success', 'Surat keterangan berhasil diterbitkan ulang.');
     }
 
+    public function update(UpdateRoleCertificateRequest $request, RoleCertificate $roleCertificate): RedirectResponse
+    {
+        $validated = $request->validated();
+        $stampPath = $request->file('stamp')?->store('role-certificate-stamps', 'public');
+
+        $roleCertificate->update([
+            'valid_from' => $validated['valid_from'],
+            'valid_until' => $validated['valid_until'],
+            'principal_name' => $validated['principal_name'],
+            'principal_title' => $validated['principal_title'] ?? 'Kepala Sekolah / Pimpinan',
+            'stamp_path' => $stampPath ?? $roleCertificate->stamp_path,
+            'notes' => $validated['notes'] ?? null,
+        ]);
+
+        return redirect()->route('admin.role-certificates.index')
+            ->with('success', 'Surat keterangan berhasil diperbarui.');
+    }
+
+    public function preview(RoleCertificate $roleCertificate): ViewResponse
+    {
+        $this->loadCertificatePreviewData($roleCertificate);
+
+        return view('pdf.role-certificate', [
+            'certificate' => $roleCertificate,
+        ]);
+    }
+
     public function download(RoleCertificate $roleCertificate): BaseResponse
+    {
+        $this->loadCertificatePreviewData($roleCertificate);
+        $pdf = Pdf::loadView('pdf.role-certificate', [
+            'certificate' => $roleCertificate,
+        ])->setPaper('a4', 'portrait');
+
+        $fileName = sprintf('surat-keterangan-%s.pdf', $roleCertificate->certificate_number);
+
+        return $pdf->download($fileName);
+    }
+
+    private function loadCertificatePreviewData(RoleCertificate $roleCertificate): void
     {
         $roleCertificate->load([
             'user:id,name',
@@ -114,13 +159,5 @@ class RoleCertificateController extends Controller
             'period:id,academic_year_id',
             'period.academicYear:id,name',
         ]);
-
-        $pdf = Pdf::loadView('pdf.role-certificate', [
-            'certificate' => $roleCertificate,
-        ])->setPaper('a4', 'portrait');
-
-        $fileName = sprintf('surat-keterangan-%s.pdf', $roleCertificate->certificate_number);
-
-        return $pdf->download($fileName);
     }
 }
