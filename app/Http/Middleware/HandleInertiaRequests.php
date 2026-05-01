@@ -60,6 +60,7 @@ class HandleInertiaRequests extends Middleware
             'unreadNotificationsCount' => $user ? $user->unreadNotifications()->count() : 0,
             'hasWaliKelasRecord' => $user ? $user->homeroomAssignments()->exists() : false,
             'hasGuruRecord' => $user ? $user->teacherAssignments()->exists() : false,
+            'hasKitabReadingExaminerRecord' => $user ? $user->kitabReadingExaminerAssignments()->exists() : false,
             'flash' => [
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),

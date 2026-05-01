@@ -4,6 +4,7 @@ import {
     ArrowUpDown,
     Banknote,
     BookOpen,
+    BookOpenCheck,
     Building,
     CalendarClock,
     CalendarDays,
@@ -21,6 +22,7 @@ import {
     ScrollText,
     Shield,
     User,
+    UserCheck,
     UserPlus,
     Users,
     Wallet,
@@ -47,7 +49,17 @@ const keuanganRoles = ['super_admin', 'admin_keuangan'];
 const musyrifRoles = ['musyrif'];
 
 export function AppSidebar() {
-    const { auth, hasWaliKelasRecord = false, hasGuruRecord = false } = usePage<{ auth: Auth; hasWaliKelasRecord?: boolean; hasGuruRecord?: boolean }>().props;
+    const {
+        auth,
+        hasWaliKelasRecord = false,
+        hasGuruRecord = false,
+        hasKitabReadingExaminerRecord = false,
+    } = usePage<{
+        auth: Auth;
+        hasWaliKelasRecord?: boolean;
+        hasGuruRecord?: boolean;
+        hasKitabReadingExaminerRecord?: boolean;
+    }>().props;
     const roleName = auth.user.role?.name;
     const isAdmin = roleName && adminRoles.includes(roleName);
     const isKeuangan = (roleName && keuanganRoles.includes(roleName)) || canAny(auth, ['invoice.view', 'payment.view', 'payment.report.view']);
@@ -55,7 +67,7 @@ export function AppSidebar() {
     const isMusyrif = roleName && musyrifRoles.includes(roleName);
     const isSantri = roleName === 'santri';
     const isWaliSantri = roleName === 'wali_santri';
-    const canAccessKitabGrades = canAny(auth, ['dashboard.guru.view', 'dashboard.admin.view']) || isAdmin || hasGuruRecord;
+    const canAccessKitabGrades = canAny(auth, ['dashboard.guru.view', 'dashboard.admin.view']) || isAdmin || hasGuruRecord || hasKitabReadingExaminerRecord;
     const canAccessRaportKelas = hasWaliKelasRecord;
 
     const mainNavItems: NavItem[] = [
@@ -77,10 +89,12 @@ export function AppSidebar() {
         { title: 'Komponen Penilaian', href: '/admin/assessment-components', icon: ListChecks },
         { title: 'Aturan Mapel', href: '/admin/subject-settings', icon: ClipboardList },
         { title: 'Penugasan Guru', href: '/admin/teaching-assignments', icon: UserPlus },
+        { title: 'Penguji Baca Kitab', href: '/admin/kitab-reading-examiners', icon: UserCheck },
         { title: 'Jadwal', href: '/admin/schedules', icon: CalendarClock },
         { title: 'Jadwal (Matrix)', href: '/admin/schedule-sets', icon: CalendarClock },
         { title: 'Kehadiran Santri', href: '/admin/attendances', icon: CalendarDays },
         { title: 'Nilai Kitab', href: '/admin/kitab-grades', icon: ClipboardList },
+        { title: 'Nilai Baca Kitab', href: '/admin/kitab-reading-assessments', icon: BookOpenCheck },
         { title: 'Raport', href: '/admin/report-cards', icon: ScrollText },
         { title: 'Template Raport', href: '/admin/report-card-templates', icon: LayoutTemplate },
         { title: 'Kenaikan Kelas', href: '/admin/class-promotion', icon: ArrowUpDown },
@@ -113,9 +127,16 @@ export function AppSidebar() {
     }
 
     const guruNavItems: NavItem[] = [
-        { title: 'Jadwal Guru', href: '/admin/schedule', icon: CalendarDays },
-        { title: 'Absensi Siswa', href: '/admin/attendance-sessions', icon: CalendarClock },
-        { title: 'Nilai Kitab', href: '/admin/kitab-grades', icon: ClipboardList },
+        ...(hasGuruRecord
+            ? [
+                  { title: 'Jadwal Guru', href: '/admin/schedule', icon: CalendarDays },
+                  { title: 'Absensi Siswa', href: '/admin/attendance-sessions', icon: CalendarClock },
+                  { title: 'Nilai Kitab', href: '/admin/kitab-grades', icon: ClipboardList },
+              ]
+            : []),
+        ...(hasKitabReadingExaminerRecord
+            ? [{ title: 'Nilai Baca Kitab', href: '/admin/kitab-reading-assessments', icon: BookOpenCheck }]
+            : []),
     ];
 
     const musyrifNavItems: NavItem[] = [
@@ -139,6 +160,7 @@ export function AppSidebar() {
     
     const waliKelasNavItems: NavItem[] = [
         { title: 'Review Nilai Kelas', href: '/wali-kelas/grade-reviews', icon: ClipboardList },
+        { title: 'Rekap Kenaikan Kelas', href: '/wali-kelas/class-promotion-recaps', icon: ArrowUpDown },
         { title: 'Raport Kelas', href: '/wali-kelas/report-cards', icon: ScrollText },
     ];
     return (

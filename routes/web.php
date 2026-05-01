@@ -12,6 +12,8 @@ use App\Http\Controllers\Admin\DiniyahClassController;
 use App\Http\Controllers\Admin\GuardianController;
 use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\KitabGradeController;
+use App\Http\Controllers\Admin\KitabReadingAssessmentController;
+use App\Http\Controllers\Admin\KitabReadingExaminerAssignmentController;
 use App\Http\Controllers\Admin\KitabSubjectController;
 use App\Http\Controllers\Admin\KitabTeachingAssignmentController;
 use App\Http\Controllers\Admin\LeavePermissionController;
@@ -48,6 +50,7 @@ use App\Http\Controllers\Santri\SantriController;
 use App\Http\Controllers\Wali\WaliPaymentController;
 use App\Http\Controllers\Wali\WaliProfileController;
 use App\Http\Controllers\Wali\WaliSantriController;
+use App\Http\Controllers\WaliKelas\WaliKelasClassPromotionRecapController;
 use App\Http\Controllers\WaliKelas\WaliKelasGradeReviewController;
 use App\Http\Controllers\WaliKelas\WaliKelasReportController;
 use App\Models\Role;
@@ -158,6 +161,9 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::post('teachers', [TeacherManagementController::class, 'store'])->name('teachers.store');
         Route::put('teachers/{teacher}', [TeacherManagementController::class, 'update'])->name('teachers.update');
         Route::post('teachers/{teacher}/toggle-active', [TeacherManagementController::class, 'toggleActive'])->name('teachers.toggle-active');
+        Route::get('kitab-reading-examiners', [KitabReadingExaminerAssignmentController::class, 'index'])->name('kitab-reading-examiners.index');
+        Route::post('kitab-reading-examiners', [KitabReadingExaminerAssignmentController::class, 'store'])->name('kitab-reading-examiners.store');
+        Route::delete('kitab-reading-examiners/{kitabReadingExaminer}', [KitabReadingExaminerAssignmentController::class, 'destroy'])->name('kitab-reading-examiners.destroy');
         Route::get('role-certificates', [RoleCertificateController::class, 'index'])->name('role-certificates.index');
         Route::post('role-certificates', [RoleCertificateController::class, 'store'])->name('role-certificates.store');
         Route::get('role-certificates/{roleCertificate}/download', [RoleCertificateController::class, 'download'])->name('role-certificates.download');
@@ -232,8 +238,8 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
 
         // Class Promotion
         Route::get('class-promotion', [ClassPromotionController::class, 'index'])->name('class-promotion.index');
-        Route::post('class-promotion', [ClassPromotionController::class, 'promote'])->name('class-promotion.promote');
-        Route::post('class-promotion/runs/{importRun}/retry', [ClassPromotionController::class, 'retryBulkRun'])->name('class-promotion.runs.retry');
+        Route::post('class-promotion/{classPromotionRecap}/approve', [ClassPromotionController::class, 'approve'])->name('class-promotion.approve');
+        Route::post('class-promotion/{classPromotionRecap}/reject', [ClassPromotionController::class, 'reject'])->name('class-promotion.reject');
 
         // User Management (super_admin only)
         Route::resource('users', UserController::class)->except(['show', 'destroy']);
@@ -271,6 +277,7 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
 
         Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
         Route::get('invoices/generate', [InvoiceController::class, 'generate'])->name('invoices.generate');
+        Route::post('invoices/bulk-generate-preview', [InvoiceController::class, 'previewBulkGenerate'])->name('invoices.bulk-generate-preview');
         Route::post('invoices/bulk-generate', [InvoiceController::class, 'bulkGenerate'])->name('invoices.bulk-generate');
         Route::post('invoices/bulk-runs/{importRun}/retry', [InvoiceController::class, 'retryBulkRun'])->name('invoices.bulk-runs.retry');
         Route::post('invoices', [InvoiceController::class, 'store'])->name('invoices.store');
@@ -316,6 +323,8 @@ Route::middleware(['auth', 'verified', 'password.changed', 'can.access.kitab-gra
             ->whereNumber('academic_period')
             ->name('admin.kitab-grades.subject');
         Route::get('kitab-grades', [KitabGradeController::class, 'entry'])->name('admin.kitab-grades.index');
+        Route::get('kitab-reading-assessments', [KitabReadingAssessmentController::class, 'index'])->name('kitab-reading-assessments.index');
+        Route::post('kitab-reading-assessments', [KitabReadingAssessmentController::class, 'store'])->name('kitab-reading-assessments.store');
     });
 
 // Santri portal (read-only)
@@ -340,6 +349,8 @@ Route::middleware(['auth', 'verified', 'password.changed', 'has.wali-kelas-recor
     ->group(function () {
         Route::get('grade-reviews', [WaliKelasGradeReviewController::class, 'index'])->name('grade-reviews.index');
         Route::post('grade-reviews/review', [WaliKelasGradeReviewController::class, 'review'])->name('grade-reviews.review');
+        Route::get('class-promotion-recaps', [WaliKelasClassPromotionRecapController::class, 'index'])->name('class-promotion-recaps.index');
+        Route::post('class-promotion-recaps', [WaliKelasClassPromotionRecapController::class, 'submit'])->name('class-promotion-recaps.submit');
         Route::get('report-cards', [WaliKelasReportController::class, 'index'])->name('report-cards.index');
         Route::get('report-cards/preview', [WaliKelasReportController::class, 'preview'])->name('report-cards.preview');
         Route::post('report-cards/save-notes', [WaliKelasReportController::class, 'saveNotes'])->name('report-cards.save-notes');

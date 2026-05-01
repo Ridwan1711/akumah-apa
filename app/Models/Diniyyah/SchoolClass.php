@@ -127,6 +127,21 @@ class SchoolClass extends Model
         return $this->hasMany(StudentClassEnrollment::class, 'class_id');
     }
 
+    public function kitabReadingAssessments(): HasMany
+    {
+        return $this->hasMany(KitabReadingAssessment::class, 'class_id');
+    }
+
+    public function kitabReadingExaminerAssignments(): HasMany
+    {
+        return $this->hasMany(KitabReadingExaminerAssignment::class, 'class_id');
+    }
+
+    public function promotionRecaps(): HasMany
+    {
+        return $this->hasMany(ClassPromotionRecap::class, 'source_class_id');
+    }
+
     public function classSubjects(): HasMany
     {
         return $this->hasMany(ClassSubject::class, 'class_id');

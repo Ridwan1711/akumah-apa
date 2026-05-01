@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AcademicPeriod extends Model
 {
@@ -30,6 +31,21 @@ class AcademicPeriod extends Model
     public function academicYear(): BelongsTo
     {
         return $this->belongsTo(AcademicYear::class);
+    }
+
+    public function kitabReadingAssessments(): HasMany
+    {
+        return $this->hasMany(\App\Models\Diniyyah\KitabReadingAssessment::class, 'period_id');
+    }
+
+    public function kitabReadingExaminerAssignments(): HasMany
+    {
+        return $this->hasMany(\App\Models\Diniyyah\KitabReadingExaminerAssignment::class, 'period_id');
+    }
+
+    public function classPromotionRecaps(): HasMany
+    {
+        return $this->hasMany(\App\Models\Diniyyah\ClassPromotionRecap::class, 'period_id');
     }
 
     public function scopeActive(Builder $query): Builder

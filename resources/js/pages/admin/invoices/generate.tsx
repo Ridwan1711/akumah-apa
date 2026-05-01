@@ -1,17 +1,20 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { CalendarDays, FileStack, Plus, RefreshCw, Users } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { AlertTriangle, CalendarDays, FileStack, Info, Loader2, Plus, RefreshCw, Users } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import FlashMessage from '@/components/flash-message';
 import InputError from '@/components/input-error';
 import {
+    AppSelect,
     CrudCard,
     CrudEmptyState,
+    CrudModal,
     CrudPageHeader,
     CrudStatStrip,
     CrudToolbar,
 } from '@/components/manhood';
-import { can } from '@/lib/authz';
+import type { SelectOption } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
+import { can } from '@/lib/authz';
 import type { AcademicYear, Auth, BreadcrumbItem, ImportRun, PaymentType, Student, User } from '@/types';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -22,6 +25,22 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
+const PREVIEW_URL = '/admin/invoices/bulk-generate-preview';
+
+type BulkPreviewResponse = {
+    target_student_count: number;
+    kuliah_without_tariff_count: number;
+    summary: {
+        payment_type_name: string;
+        payment_type_code: string;
+        academic_year_name: string;
+        month_label: string | null;
+        due_date: string;
+        target_type: 'all' | 'selected';
+        send_notification_for_existing: boolean;
+    };
+};
+
 type Props = {
     paymentTypes: (Pick<PaymentType, 'id' | 'name' | 'code' | 'category'> & { is_recurring: boolean })[];
     academicYears: Pick<AcademicYear, 'id' | 'name'>[];
@@ -30,6 +49,33 @@ type Props = {
     bulkUploaders: Pick<User, 'id' | 'name'>[];
     runFilters: { run_uploader_id?: string };
 };
+
+function runStatusLabel(status: ImportRun['status']): string {
+    const map: Record<ImportRun['status'], string> = {
+        queued: 'Mengantri',
+        processing: 'Memproses',
+        completed: 'Selesai',
+        failed: 'Gagal',
+        cancelled: 'Dibatalkan',
+    };
+
+    return map[status] ?? status;
+}
+
+function runStatusBadgeClass(status: ImportRun['status']): string {
+    if (status === 'completed') {
+        return 'active';
+    }
+    if (status === 'failed') {
+        return 'wafat';
+    }
+
+    return 'keluar';
+}
+
+function getCsrfToken(): string {
+    return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+}
 
 export default function InvoiceGenerate({
     paymentTypes,
@@ -52,19 +98,158 @@ export default function InvoiceGenerate({
         send_notification_for_existing: true,
     });
 
+    const [studentSearchQuery, setStudentSearchQuery] = useState('');
+    const [lastRunsRefreshedAt, setLastRunsRefreshedAt] = useState<Date | null>(null);
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [previewLoading, setPreviewLoading] = useState(false);
+    const [previewError, setPreviewError] = useState<string | null>(null);
+    const [previewData, setPreviewData] = useState<BulkPreviewResponse | null>(null);
+    const [retryingRunId, setRetryingRunId] = useState<number | null>(null);
+
     const selectedPT = paymentTypes.find((pt) => String(pt.id) === form.data.payment_type_id);
     const hasRunningJobs = useMemo(
         () => bulkRuns.some((run) => run.status === 'queued' || run.status === 'processing'),
         [bulkRuns],
     );
 
+    const paymentTypeOptions = useMemo<SelectOption[]>(
+        () => paymentTypes.map((pt) => ({ value: String(pt.id), label: `${pt.name} (${pt.code})` })),
+        [paymentTypes],
+    );
+
+    const academicYearOptions = useMemo<SelectOption[]>(
+        () => academicYears.map((ay) => ({ value: String(ay.id), label: ay.name })),
+        [academicYears],
+    );
+
+    const monthOptions = useMemo<SelectOption[]>(
+        () => monthNames.map((name, index) => ({ value: String(index + 1), label: name })),
+        [],
+    );
+
+    const targetTypeOptions = useMemo<SelectOption[]>(
+        () => [
+            { value: 'all', label: 'Semua santri aktif' },
+            { value: 'selected', label: 'Pilih santri tertentu' },
+        ],
+        [],
+    );
+
+    const visibleStudents = useMemo(() => {
+        const q = studentSearchQuery.trim().toLowerCase();
+        if (!q) {
+            return students;
+        }
+
+        return students.filter((s) => {
+            const name = (s.full_name ?? '').toLowerCase();
+            const nis = String(s.nis ?? '').toLowerCase();
+
+            return name.includes(q) || nis.includes(q);
+        });
+    }, [students, studentSearchQuery]);
+
     useEffect(() => {
-        if (!hasRunningJobs) return;
+        if (!hasRunningJobs) {
+            return;
+        }
         const timer = window.setInterval(() => {
             router.reload({ only: ['bulkRuns'] });
         }, 7000);
+
         return () => window.clearInterval(timer);
     }, [hasRunningJobs]);
+
+    useEffect(() => {
+        setLastRunsRefreshedAt(new Date());
+    }, [bulkRuns]);
+
+    const refreshBulkRuns = useCallback(() => {
+        router.reload({ only: ['bulkRuns'], preserveUrl: true });
+    }, []);
+
+    const fetchPreview = useCallback(async () => {
+        setPreviewLoading(true);
+        setPreviewError(null);
+        setPreviewData(null);
+
+        const body: Record<string, unknown> = {
+            payment_type_id: form.data.payment_type_id ? Number(form.data.payment_type_id) : '',
+            academic_year_id: form.data.academic_year_id ? Number(form.data.academic_year_id) : '',
+            target_type: form.data.target_type,
+            student_ids: form.data.target_type === 'selected' ? form.data.student_ids : [],
+            due_date: form.data.due_date,
+            send_notification_for_existing: form.data.send_notification_for_existing,
+        };
+
+        if (selectedPT?.is_recurring && form.data.month) {
+            body.month = Number(form.data.month);
+        }
+
+        try {
+            const res = await fetch(PREVIEW_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify(body),
+            });
+
+            const json = (await res.json()) as BulkPreviewResponse & { message?: string; errors?: Record<string, string[]> };
+
+            if (!res.ok) {
+                if (json.errors) {
+                    const first = Object.values(json.errors).flat()[0];
+
+                    setPreviewError(first ?? json.message ?? 'Validasi gagal.');
+                } else {
+                    setPreviewError(json.message ?? 'Gagal memuat pratinjau.');
+                }
+
+                return;
+            }
+
+            setPreviewData(json as BulkPreviewResponse);
+        } catch {
+            setPreviewError('Gagal memuat pratinjau. Periksa koneksi lalu coba lagi.');
+        } finally {
+            setPreviewLoading(false);
+        }
+    }, [form.data, selectedPT?.is_recurring]);
+
+    function openConfirmModal() {
+        if (!canCreateInvoice) {
+            return;
+        }
+        setConfirmOpen(true);
+        void fetchPreview();
+    }
+
+    function closeConfirmModal() {
+        if (form.processing) {
+            return;
+        }
+        setConfirmOpen(false);
+        setPreviewError(null);
+        setPreviewData(null);
+    }
+
+    function confirmSubmit() {
+        if (!canCreateInvoice) {
+            return;
+        }
+        form.post('/admin/invoices/bulk-generate', {
+            preserveScroll: true,
+            onSuccess: () => {
+                setConfirmOpen(false);
+                setPreviewData(null);
+            },
+        });
+    }
 
     function toggleStudent(studentId: number) {
         const ids = form.data.student_ids.includes(studentId)
@@ -73,14 +258,18 @@ export default function InvoiceGenerate({
         form.setData('student_ids', ids);
     }
 
-    function selectAllStudents() {
-        form.setData('student_ids', form.data.student_ids.length === students.length ? [] : students.map((s) => s.id));
-    }
+    function selectAllVisibleStudents() {
+        const visibleIds = visibleStudents.map((s) => s.id);
+        const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => form.data.student_ids.includes(id));
 
-    function handleSubmit(e: React.FormEvent) {
-        e.preventDefault();
-        if (!canCreateInvoice) return;
-        form.post('/admin/invoices/bulk-generate');
+        if (allVisibleSelected) {
+            form.setData(
+                'student_ids',
+                form.data.student_ids.filter((id) => !visibleIds.includes(id)),
+            );
+        } else {
+            form.setData('student_ids', Array.from(new Set([...form.data.student_ids, ...visibleIds])));
+        }
     }
 
     function handleRunUploaderFilter(value: string) {
@@ -90,14 +279,27 @@ export default function InvoiceGenerate({
     }
 
     function handleRetry(runId: number) {
-        if (!canCreateInvoice) return;
-        router.post(`/admin/invoices/bulk-runs/${runId}/retry`);
+        if (!canCreateInvoice) {
+            return;
+        }
+        setRetryingRunId(runId);
+        router.post(`/admin/invoices/bulk-runs/${runId}/retry`, {}, {
+            preserveScroll: true,
+            onFinish: () => setRetryingRunId(null),
+        });
     }
 
     function getProgressPercent(run: ImportRun): number {
-        if (!run.total_rows || run.total_rows <= 0) return 0;
+        if (!run.total_rows || run.total_rows <= 0) {
+            return 0;
+        }
+
         return Math.min(100, Math.round((run.processed_rows / run.total_rows) * 100));
     }
+
+    const runsRefreshedLabel = lastRunsRefreshedAt
+        ? lastRunsRefreshedAt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        : '—';
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -122,42 +324,70 @@ export default function InvoiceGenerate({
                 <CrudCard
                     title="Job Center"
                     subtitle="Pantau status bulk generate invoice."
-                    right={
-                        <select className="mcr-filter-select" value={runFilters.run_uploader_id ?? 'all'} onChange={(e) => handleRunUploaderFilter(e.target.value)}>
-                            <option value="all">Semua Uploader</option>
-                            {bulkUploaders.map((u) => (
-                                <option key={u.id} value={String(u.id)}>{u.name}</option>
-                            ))}
-                        </select>
-                    }
+                    right={(
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                            <span className="mcr-table-meta" title="Diperbarui otomatis saat polling atau tombol segarkan">
+                                Terakhir dimuat: {runsRefreshedLabel}
+                            </span>
+                            <button type="button" className="mcr-btn ghost" onClick={refreshBulkRuns}>
+                                <RefreshCw size={14} />
+                                Segarkan
+                            </button>
+                            <select className="mcr-filter-select" value={runFilters.run_uploader_id ?? 'all'} onChange={(e) => handleRunUploaderFilter(e.target.value)}>
+                                <option value="all">Semua uploader</option>
+                                {bulkUploaders.map((u) => (
+                                    <option key={u.id} value={String(u.id)}>{u.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                 >
                     {bulkRuns.length === 0 ? (
                         <CrudEmptyState title="Belum ada job" description="Riwayat bulk generate akan tampil di sini." />
                     ) : (
-                        bulkRuns.map((run) => (
-                            <div key={run.id} className="mcr-run-item">
-                                <div className="mcr-run-top">
-                                    <div>
-                                        <strong>{run.file_name}</strong>
-                                        <div className="mcr-run-meta">{new Date(run.created_at).toLocaleString('id-ID')}</div>
+                        <>
+                            {bulkRuns.map((run) => (
+                                <div key={run.id} className="mcr-run-item">
+                                    <div className="mcr-run-top">
+                                        <div>
+                                            <strong>{run.file_name}</strong>
+                                            <div className="mcr-run-meta">{new Date(run.created_at).toLocaleString('id-ID')}</div>
+                                        </div>
+                                        <div className="mcr-action-group">
+                                            <span className={`mcr-dot-badge ${runStatusBadgeClass(run.status)}`}>{runStatusLabel(run.status)}</span>
+                                            {run.status === 'failed' && canCreateInvoice ? (
+                                                <button
+                                                    type="button"
+                                                    className="mcr-btn secondary"
+                                                    onClick={() => handleRetry(run.id)}
+                                                    disabled={retryingRunId === run.id}
+                                                >
+                                                    {retryingRunId === run.id ? 'Memproses…' : 'Coba lagi'}
+                                                </button>
+                                            ) : null}
+                                        </div>
                                     </div>
-                                    <div className="mcr-action-group">
-                                        <span className={`mcr-dot-badge ${run.status === 'completed' ? 'active' : run.status === 'failed' ? 'wafat' : 'keluar'}`}>{run.status}</span>
-                                        {run.status === 'failed' && canCreateInvoice ? (
-                                            <button type="button" className="mcr-btn secondary" onClick={() => handleRetry(run.id)}>Retry</button>
-                                        ) : null}
+                                    <div className="mcr-run-stats">
+                                        <span>{run.processed_rows}/{run.total_rows || '-'}</span>
+                                        <span>{getProgressPercent(run)}%</span>
+                                        <span title="Dibuat (invoice baru)">D:{run.created_count}</span>
+                                        <span title="Diperbarui">P:{run.updated_count}</span>
+                                        <span title="Dilewati">L:{run.skipped_count}</span>
+                                        <span title="Gagal">G:{run.failed_count}</span>
                                     </div>
                                 </div>
-                                <div className="mcr-run-stats">
-                                    <span>{run.processed_rows}/{run.total_rows || '-'}</span>
-                                    <span>{getProgressPercent(run)}%</span>
-                                    <span>C:{run.created_count}</span>
-                                    <span>U:{run.updated_count}</span>
-                                    <span>S:{run.skipped_count}</span>
-                                    <span>F:{run.failed_count}</span>
-                                </div>
-                            </div>
-                        ))
+                            ))}
+                            <p className="mcr-table-meta" style={{ marginTop: 10 }}>
+                                <strong>Keterangan singkat:</strong>
+                                {' '}
+                                D = dibuat,
+                                P = diperbarui,
+                                L = dilewati,
+                                G = gagal
+                                {' '}
+                                (sesuai penghitung job impor/bulk).
+                            </p>
+                        </>
                     )}
                 </CrudCard>
 
@@ -165,63 +395,87 @@ export default function InvoiceGenerate({
                     left={<span className="mcr-table-meta">Isi parameter generate, lalu jalankan proses di background.</span>}
                 />
 
-                <CrudCard title="Form Bulk Generate">
-                    <form onSubmit={handleSubmit}>
+                <CrudCard title="Form bulk generate">
+                    {!canCreateInvoice ? (
+                        <div className="mcr-confirm-note" style={{ marginBottom: 12 }}>
+                            <AlertTriangle size={13} />
+                            <span>Anda tidak punya izin membuat tagihan (invoice.create); tombol generate dinonaktifkan.</span>
+                        </div>
+                    ) : null}
+
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            openConfirmModal();
+                        }}
+                    >
                         <div className="mcr-form-grid">
                             <div className="mcr-form-group">
-                                <label>Jenis Pembayaran</label>
-                                <select className="mcr-form-select" value={form.data.payment_type_id} onChange={(e) => form.setData('payment_type_id', e.target.value)}>
-                                    <option value="">Pilih jenis</option>
-                                    {paymentTypes.map((pt) => (
-                                        <option key={pt.id} value={String(pt.id)}>{pt.name} ({pt.code})</option>
-                                    ))}
-                                </select>
+                                <label>Jenis pembayaran</label>
+                                <AppSelect
+                                    options={paymentTypeOptions}
+                                    value={paymentTypeOptions.find((o) => String(o.value) === form.data.payment_type_id) ?? null}
+                                    onChange={(opt) => {
+                                        const nextId = opt ? String(opt.value) : '';
+                                        const nextPt = paymentTypes.find((pt) => String(pt.id) === nextId);
+                                        form.setData({
+                                            ...form.data,
+                                            payment_type_id: nextId,
+                                            month: nextPt?.is_recurring ? form.data.month : '',
+                                        });
+                                    }}
+                                    placeholder="Pilih jenis…"
+                                    isDisabled={!canCreateInvoice}
+                                />
                                 <InputError message={form.errors.payment_type_id} />
                             </div>
                             <div className="mcr-form-group">
-                                <label>Tahun Ajaran</label>
-                                <select className="mcr-form-select" value={form.data.academic_year_id} onChange={(e) => form.setData('academic_year_id', e.target.value)}>
-                                    <option value="">Pilih tahun</option>
-                                    {academicYears.map((ay) => (
-                                        <option key={ay.id} value={String(ay.id)}>{ay.name}</option>
-                                    ))}
-                                </select>
+                                <label>Tahun ajaran</label>
+                                <AppSelect
+                                    options={academicYearOptions}
+                                    value={academicYearOptions.find((o) => String(o.value) === form.data.academic_year_id) ?? null}
+                                    onChange={(opt) => form.setData('academic_year_id', opt ? String(opt.value) : '')}
+                                    placeholder="Pilih tahun…"
+                                    isDisabled={!canCreateInvoice}
+                                />
                                 <InputError message={form.errors.academic_year_id} />
                             </div>
 
                             {selectedPT?.is_recurring ? (
                                 <div className="mcr-form-group">
                                     <label>Bulan</label>
-                                    <select className="mcr-form-select" value={form.data.month} onChange={(e) => form.setData('month', e.target.value)}>
-                                        <option value="">Pilih bulan</option>
-                                        {monthNames.map((name, index) => (
-                                            <option key={name} value={String(index + 1)}>{name}</option>
-                                        ))}
-                                    </select>
+                                    <AppSelect
+                                        options={monthOptions}
+                                        value={monthOptions.find((o) => String(o.value) === form.data.month) ?? null}
+                                        onChange={(opt) => form.setData('month', opt ? String(opt.value) : '')}
+                                        placeholder="Pilih bulan…"
+                                        isDisabled={!canCreateInvoice}
+                                    />
                                     <InputError message={form.errors.month} />
                                 </div>
                             ) : null}
 
                             <div className="mcr-form-group">
-                                <label>Jatuh Tempo</label>
-                                <input type="date" className="mcr-input" value={form.data.due_date} onChange={(e) => form.setData('due_date', e.target.value)} />
+                                <label>Jatuh tempo</label>
+                                <input type="date" className="mcr-input" value={form.data.due_date} onChange={(e) => form.setData('due_date', e.target.value)} disabled={!canCreateInvoice} />
                                 <InputError message={form.errors.due_date} />
                             </div>
 
                             <div className="mcr-form-group">
-                                <label>Target Santri</label>
-                                <select
-                                    className="mcr-form-select"
-                                    value={form.data.target_type}
-                                    onChange={(e) => {
-                                        const value = e.target.value as 'all' | 'selected';
+                                <label>Target santri</label>
+                                <AppSelect
+                                    options={targetTypeOptions}
+                                    value={targetTypeOptions.find((o) => String(o.value) === form.data.target_type) ?? null}
+                                    onChange={(opt) => {
+                                        const value = (opt?.value === 'selected' ? 'selected' : 'all') as 'all' | 'selected';
                                         form.setData('target_type', value);
-                                        if (value === 'all') form.setData('student_ids', []);
+                                        if (value === 'all') {
+                                            form.setData('student_ids', []);
+                                        }
                                     }}
-                                >
-                                    <option value="all">Semua Santri Aktif</option>
-                                    <option value="selected">Pilih Santri Tertentu</option>
-                                </select>
+                                    placeholder="Pilih target…"
+                                    isDisabled={!canCreateInvoice}
+                                />
                                 <InputError message={form.errors.target_type} />
                             </div>
 
@@ -231,30 +485,86 @@ export default function InvoiceGenerate({
                                         type="checkbox"
                                         checked={form.data.send_notification_for_existing}
                                         onChange={(e) => form.setData('send_notification_for_existing', e.target.checked)}
+                                        disabled={!canCreateInvoice}
                                     />
-                                    <span>Kirim notifikasi walau invoice sudah ada</span>
+                                    <span>Kirim ulang notifikasi (wali/santri) jika tagihan untuk kombinasi ini sudah ada</span>
                                 </label>
+                                <p className="mcr-table-meta" style={{ marginTop: 6, marginLeft: 24 }}>
+                                    Jika tidak dicentang, duplikat biasanya dilewati tanpa notifikasi tambahan — sesuai perilaku job di server.
+                                </p>
                             </div>
                         </div>
 
                         {form.data.target_type === 'selected' ? (
-                            <div style={{ marginTop: 12 }}>
-                                <div className="mcr-table-meta" style={{ marginBottom: 8 }}>Pilih Santri</div>
-                                <button type="button" className="mcr-btn ghost" onClick={selectAllStudents}>
-                                    {form.data.student_ids.length === students.length ? 'Batal Semua' : 'Pilih Semua'}
-                                </button>
-                                <div className="mcr-select-list">
-                                    {students.map((student) => (
-                                        <label key={student.id} className="mcr-checkline">
-                                            <input
-                                                type="checkbox"
-                                                checked={form.data.student_ids.includes(student.id)}
-                                                onChange={() => toggleStudent(student.id)}
-                                            />
-                                            <span>{student.full_name} ({student.nis})</span>
-                                        </label>
-                                    ))}
+                            <div className="mcr-student-picker">
+                                <div className="mcr-student-picker__head">
+                                    <h3 className="mcr-student-picker__title">Pilih santri</h3>
+                                    <span className="mcr-student-picker__chip">
+                                        Dipilih:
+                                        {' '}
+                                        {form.data.student_ids.length}
+                                        {' '}
+                                        /
+                                        {' '}
+                                        {students.length}
+                                    </span>
                                 </div>
+                                <p className="mcr-student-picker__meta">
+                                    Menampilkan
+                                    {' '}
+                                    <strong>{visibleStudents.length}</strong>
+                                    {' '}
+                                    dari
+                                    {' '}
+                                    <strong>{students.length}</strong>
+                                    {' '}
+                                    santri
+                                    {studentSearchQuery.trim() ? ' (sesuai pencarian)' : ''}
+                                    .
+                                </p>
+                                <div className="mcr-student-picker__toolbar">
+                                    <input
+                                        type="search"
+                                        className="mcr-input mcr-student-picker__search"
+                                        placeholder="Cari nama atau NIS…"
+                                        value={studentSearchQuery}
+                                        onChange={(e) => setStudentSearchQuery(e.target.value)}
+                                        disabled={!canCreateInvoice}
+                                        autoComplete="off"
+                                    />
+                                    <button
+                                        type="button"
+                                        className="mcr-btn ghost"
+                                        onClick={selectAllVisibleStudents}
+                                        disabled={!canCreateInvoice || visibleStudents.length === 0}
+                                    >
+                                        {visibleStudents.length > 0 && visibleStudents.every((s) => form.data.student_ids.includes(s.id))
+                                            ? 'Lepas tampilan'
+                                            : 'Pilih semua tampilan'}
+                                    </button>
+                                </div>
+                                {visibleStudents.length === 0 ? (
+                                    <div className="mcr-student-picker__empty">
+                                        Tidak ada santri yang cocok dengan pencarian. Ubah kata kunci atau kosongkan kolom cari.
+                                    </div>
+                                ) : (
+                                    <div className="mcr-student-picker__list" role="group" aria-label="Daftar santri">
+                                        {visibleStudents.map((student) => (
+                                            <label key={student.id} className="mcr-student-picker__row">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={form.data.student_ids.includes(student.id)}
+                                                    onChange={() => toggleStudent(student.id)}
+                                                    disabled={!canCreateInvoice}
+                                                />
+                                                <span className="mcr-student-picker__nameblock">
+                                                    <span className="mcr-student-picker__name">{student.full_name}</span>
+                                                    <span className="mcr-student-picker__nis">{student.nis}</span>
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                )}
                                 <InputError message={form.errors.student_ids} />
                             </div>
                         ) : null}
@@ -262,11 +572,104 @@ export default function InvoiceGenerate({
                         <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                             <button type="submit" className="mcr-btn primary" disabled={form.processing || !canCreateInvoice}>
                                 <Plus size={14} />
-                                {form.processing ? 'Memproses...' : 'Generate Tagihan'}
+                                {form.processing ? 'Memproses…' : 'Generate tagihan'}
                             </button>
                         </div>
                     </form>
                 </CrudCard>
+
+                <CrudModal
+                    open={confirmOpen}
+                    title="Konfirmasi bulk generate"
+                    subtitle="Pastikan parameter sudah benar sebelum job diantrekan."
+                    onClose={closeConfirmModal}
+                    wide
+                    footer={(
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, width: '100%' }}>
+                            <button type="button" className="mcr-btn ghost" onClick={closeConfirmModal} disabled={form.processing}>
+                                Batal
+                            </button>
+                            <button type="button" className="mcr-btn primary" onClick={confirmSubmit} disabled={form.processing || !!previewError || previewLoading || !previewData}>
+                                {form.processing ? 'Mengantri…' : 'Ya, jalankan'}
+                            </button>
+                        </div>
+                    )}
+                >
+                    {previewLoading ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0' }}>
+                            <Loader2 className="animate-spin" size={20} />
+                            <span className="mcr-table-meta">Menghitung pratinjau…</span>
+                        </div>
+                    ) : null}
+
+                    {previewError ? (
+                        <div className="mcr-confirm-note" style={{ marginTop: previewLoading ? 12 : 0 }}>
+                            <AlertTriangle size={13} />
+                            <span>{previewError}</span>
+                        </div>
+                    ) : null}
+
+                    {previewData ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                <Info size={18} style={{ marginTop: 2, flexShrink: 0 }} />
+                                <div>
+                                    <p style={{ margin: 0, fontWeight: 600 }}>Ringkasan</p>
+                                    <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+                                        <li>
+                                            Jenis:
+                                            {' '}
+                                            {previewData.summary.payment_type_name}
+                                            {' '}
+                                            (
+                                            {previewData.summary.payment_type_code}
+                                            )
+                                        </li>
+                                        <li>
+                                            Tahun ajaran:
+                                            {' '}
+                                            {previewData.summary.academic_year_name}
+                                        </li>
+                                        {previewData.summary.month_label ? (
+                                            <li>
+                                                Bulan:
+                                                {' '}
+                                                {previewData.summary.month_label}
+                                            </li>
+                                        ) : null}
+                                        <li>
+                                            Jatuh tempo:
+                                            {' '}
+                                            {new Date(previewData.summary.due_date).toLocaleDateString('id-ID')}
+                                        </li>
+                                        <li>
+                                            Target:
+                                            {' '}
+                                            {previewData.summary.target_type === 'all' ? 'Semua santri aktif' : 'Santri terpilih'}
+                                        </li>
+                                        <li>
+                                            Notifikasi duplikat:
+                                            {' '}
+                                            {previewData.summary.send_notification_for_existing ? 'Ya (kirim ulang)' : 'Tidak'}
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <p style={{ margin: 0 }}>
+                                <strong>Santri yang akan diproses (satu baris per santri):</strong>
+                                {' '}
+                                {previewData.target_student_count}
+                            </p>
+                            {previewData.kuliah_without_tariff_count > 0 ? (
+                                <p className="mcr-table-meta" style={{ margin: 0 }}>
+                                    Perkiraan santri kuliah tanpa nominal tarif (akan dilewati oleh job):
+                                    {' '}
+                                    <strong>{previewData.kuliah_without_tariff_count}</strong>
+                                </p>
+                            ) : null}
+                        </div>
+                    ) : null}
+                </CrudModal>
             </div>
         </AppLayout>
     );

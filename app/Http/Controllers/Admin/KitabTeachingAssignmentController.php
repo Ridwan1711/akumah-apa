@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreKitabTeachingAssignmentRequest;
 use App\Models\AcademicPeriod;
+use App\Models\Diniyyah\GradeLevel;
 use App\Models\Diniyyah\GradeSubject;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Subject;
@@ -59,6 +60,7 @@ class KitabTeachingAssignmentController extends Controller
                 ->get(['id', 'name']),
             'activeAcademicYear' => AcademicPeriod::query()->active()->with('academicYear:id,name')->first()?->academicYear?->only(['id', 'name']),
             'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'grade_level_id']),
+            'gradeLevels' => GradeLevel::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'order']),
             'subjects' => Subject::query()->orderBy('name')->get(['id', 'name']),
             'gradeSubjects' => GradeSubject::query()->get(['grade_level_id', 'subject_id']),
             'semesters' => Semester::query()

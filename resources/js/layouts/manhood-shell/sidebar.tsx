@@ -4,6 +4,7 @@ import {
     ArrowUpDown,
     Banknote,
     BookOpen,
+    BookOpenCheck,
     Building,
     CalendarClock,
     CalendarDays,
@@ -21,6 +22,7 @@ import {
     ScrollText,
     Shield,
     User,
+    UserCheck,
     UserPlus,
     Users,
     Wallet,
@@ -66,14 +68,21 @@ function formatRoleLabel(roleNames: string[]): string {
         .join(', ');
 }
 
-function buildSections(auth: Auth, userRoleNames: string[], hasGuruRecord: boolean, hasWaliKelasRecord: boolean): NavSection[] {
+function buildSections(
+    auth: Auth,
+    userRoleNames: string[],
+    hasGuruRecord: boolean,
+    hasWaliKelasRecord: boolean,
+    hasKitabReadingExaminerRecord: boolean,
+): NavSection[] {
     const isAdmin = hasAnyRole(userRoleNames, adminRoles);
     const hasFinanceAccess = canAny(auth, ['invoice.view', 'payment.view', 'payment.report.view']) || hasAnyRole(userRoleNames, keuanganRoles);
     const isSuperAdmin = userRoleNames.includes('super_admin');
     const isMusyrif = hasAnyRole(userRoleNames, musyrifRoles);
     const isSantri = userRoleNames.includes('santri');
     const isWaliSantri = userRoleNames.includes('wali_santri');
-    const canAccessKitabGrades = canAny(auth, ['dashboard.guru.view', 'dashboard.admin.view']) || isAdmin || hasGuruRecord;
+    const canAccessKitabGrades =
+        canAny(auth, ['dashboard.guru.view', 'dashboard.admin.view']) || isAdmin || hasGuruRecord || hasKitabReadingExaminerRecord;
     const canAccessRaportKelas = hasWaliKelasRecord;
 
     const sections: NavSection[] = [
@@ -104,11 +113,13 @@ function buildSections(auth: Auth, userRoleNames: string[], hasGuruRecord: boole
                 { title: 'Komponen Penilaian', href: '/admin/assessment-components', icon: ListChecks },
                 { title: 'Manajemen Guru', href: '/admin/teachers', icon: Users },
                 { title: 'Penugasan Guru', href: '/admin/teaching-assignments', icon: UserPlus },
+                { title: 'Penguji Baca Kitab', href: '/admin/kitab-reading-examiners', icon: UserCheck },
                 { title: 'Surat Keterangan', href: '/admin/role-certificates', icon: ScrollText },
                 { title: 'Jadwal Kitab', href: '/admin/schedules', icon: CalendarClock },
                 { title: 'Jadwal (Matrix)', href: '/admin/schedule-sets', icon: CalendarClock },
                 { title: 'Kehadiran Santri', href: '/admin/attendances', icon: CalendarDays },
                 { title: 'Nilai Kitab', href: '/admin/kitab-grades', icon: ClipboardList },
+                { title: 'Nilai Baca Kitab', href: '/admin/kitab-reading-assessments', icon: BookOpenCheck },
                 { title: 'Raport', href: '/admin/report-cards', icon: ScrollText },
                 { title: 'Template Raport', href: '/admin/report-card-templates', icon: LayoutTemplate },
                 { title: 'Kenaikan Kelas', href: '/admin/class-promotion', icon: ArrowUpDown },
@@ -161,9 +172,16 @@ function buildSections(auth: Auth, userRoleNames: string[], hasGuruRecord: boole
         sections.push({
             label: 'Guru',
             items: [
-                { title: 'Jadwal Guru', href: '/admin/schedule', icon: CalendarDays },
-                { title: 'Absensi Siswa', href: '/admin/attendance-sessions', icon: CalendarClock },
-                { title: 'Nilai Kitab', href: '/admin/kitab-grades', icon: ClipboardList },
+                ...(hasGuruRecord
+                    ? [
+                          { title: 'Jadwal Guru', href: '/admin/schedule', icon: CalendarDays },
+                          { title: 'Absensi Siswa', href: '/admin/attendance-sessions', icon: CalendarClock },
+                          { title: 'Nilai Kitab', href: '/admin/kitab-grades', icon: ClipboardList },
+                      ]
+                    : []),
+                ...(hasKitabReadingExaminerRecord
+                    ? [{ title: 'Nilai Baca Kitab', href: '/admin/kitab-reading-assessments', icon: BookOpenCheck }]
+                    : []),
             ],
         });
     }
@@ -207,6 +225,7 @@ function buildSections(auth: Auth, userRoleNames: string[], hasGuruRecord: boole
             label: 'Wali Kelas',
             items: [
                 { title: 'Review Nilai Kelas', href: '/wali-kelas/grade-reviews', icon: ClipboardList },
+                { title: 'Rekap Kenaikan Kelas', href: '/wali-kelas/class-promotion-recaps', icon: ArrowUpDown },
                 { title: 'Raport Kelas', href: '/wali-kelas/report-cards', icon: ScrollText },
             ],
         });
@@ -224,8 +243,13 @@ type Props = {
 };
 
 export function ShellSidebar({ collapsed, mobileOpen, onClose }: Props) {
-    const { auth, hasGuruRecord = false, hasWaliKelasRecord = false } =
-        usePage<{ auth: Auth; hasGuruRecord?: boolean; hasWaliKelasRecord?: boolean }>().props;
+    const { auth, hasGuruRecord = false, hasWaliKelasRecord = false, hasKitabReadingExaminerRecord = false } =
+        usePage<{
+            auth: Auth;
+            hasGuruRecord?: boolean;
+            hasWaliKelasRecord?: boolean;
+            hasKitabReadingExaminerRecord?: boolean;
+        }>().props;
     const { isCurrentUrl, isCurrentOrParentUrl } = useCurrentUrl();
     const getInitials = useInitials();
 
@@ -233,8 +257,8 @@ export function ShellSidebar({ collapsed, mobileOpen, onClose }: Props) {
     const initials = getInitials(user.name ?? '');
     const userRoleNames = useMemo(() => getUserRoleNames(user), [user]);
     const sections = useMemo(
-        () => buildSections(auth, userRoleNames, !!hasGuruRecord, !!hasWaliKelasRecord),
-        [auth, userRoleNames, hasGuruRecord, hasWaliKelasRecord],
+        () => buildSections(auth, userRoleNames, !!hasGuruRecord, !!hasWaliKelasRecord, !!hasKitabReadingExaminerRecord),
+        [auth, userRoleNames, hasGuruRecord, hasWaliKelasRecord, hasKitabReadingExaminerRecord],
     );
     const roleLabel = useMemo(() => formatRoleLabel(userRoleNames), [userRoleNames]);
 

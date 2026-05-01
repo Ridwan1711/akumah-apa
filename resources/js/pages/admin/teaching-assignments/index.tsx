@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState, useEffect, useRef } from 'react';
 import FlashMessage from '@/components/flash-message';
+import { AppMultiSelect, type SelectOption } from '@/components/manhood';
 import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,6 +44,7 @@ import AppLayout from '@/layouts/app-layout';
 import type {
     AcademicYear,
     BreadcrumbItem,
+    GradeLevel,
     SchoolClass,
     Semester,
     Subject,
@@ -60,6 +62,7 @@ type Props = {
     teachers: Pick<User, 'id' | 'name'>[];
     activeAcademicYear: Pick<AcademicYear, 'id' | 'name'> | null;
     classes: Pick<SchoolClass, 'id' | 'name' | 'grade_level_id'>[];
+    gradeLevels: Pick<GradeLevel, 'id' | 'name' | 'order'>[];
     subjects: Pick<Subject, 'id' | 'name'>[];
     gradeSubjects: Array<{ grade_level_id: number; subject_id: number }>;
     semesters: (Pick<Semester, 'id' | 'name'> & { academic_year_name?: string | null; is_active?: boolean })[];
@@ -354,6 +357,7 @@ export default function TeachingAssignmentIndex({
     assignments,
     teachers,
     classes,
+    gradeLevels,
     subjects,
     gradeSubjects,
     semesters,
@@ -369,6 +373,7 @@ export default function TeachingAssignmentIndex({
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [searchSubject, setSearchSubject] = useState('');
     const [searchClass, setSearchClass] = useState('');
+    const [selectedGradeLevelIds, setSelectedGradeLevelIds] = useState<string[]>([]);
     const [toast, setToast] = useState<ToastState>(null);
     const [isBulkAssigning, setIsBulkAssigning] = useState(false);
     const dragActiveRef = useRef(false);
@@ -382,10 +387,28 @@ export default function TeachingAssignmentIndex({
         return String(active?.id ?? semesters[0]?.id ?? '');
     }, [semesters]);
 
-    const filteredClasses = useMemo(() =>
-        !searchClass ? classes : classes.filter(c =>
-            c.name.toLowerCase().includes(searchClass.toLowerCase())
-        ), [classes, searchClass]);
+    const gradeLevelOptions = useMemo<SelectOption[]>(
+        () => gradeLevels.map((level) => ({ value: String(level.id), label: level.name })),
+        [gradeLevels],
+    );
+
+    const filteredClasses = useMemo(() => {
+        let list = classes;
+
+        if (selectedGradeLevelIds.length > 0) {
+            const idSet = new Set(selectedGradeLevelIds);
+            list = list.filter(
+                (c) => c.grade_level_id != null && idSet.has(String(c.grade_level_id)),
+            );
+        }
+
+        if (searchClass) {
+            const q = searchClass.toLowerCase();
+            list = list.filter((c) => c.name.toLowerCase().includes(q));
+        }
+
+        return list;
+    }, [classes, searchClass, selectedGradeLevelIds]);
 
     const filteredSubjects = useMemo(() =>
         !searchSubject ? subjects : subjects.filter(s =>
@@ -668,7 +691,16 @@ export default function TeachingAssignmentIndex({
                 </div>
 
                 {/* ── Search Filters ── */}
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-end gap-3">
+                    <div className="flex min-w-[220px] flex-1 max-w-md flex-col gap-1.5">
+                        <label className="text-xs font-medium text-muted-foreground">Tingkat kelas</label>
+                        <AppMultiSelect
+                            options={gradeLevelOptions}
+                            value={gradeLevelOptions.filter((opt) => selectedGradeLevelIds.includes(String(opt.value)))}
+                            onChange={(items) => setSelectedGradeLevelIds((items ?? []).map((item) => String(item.value)))}
+                            placeholder="Semua tingkat…"
+                        />
+                    </div>
                     <div className="relative min-w-[200px] flex-1 max-w-xs">
                         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
@@ -704,8 +736,8 @@ export default function TeachingAssignmentIndex({
                         )}
                     </div>
 
-                    {(searchSubject || searchClass) && (
-                        <p className="text-xs text-muted-foreground">
+                    {(searchSubject || searchClass || selectedGradeLevelIds.length > 0) && (
+                        <p className="text-xs text-muted-foreground self-center">
                             Menampilkan{' '}
                             <span className="font-medium">{filteredSubjects.length}</span> mapel ·{' '}
                             <span className="font-medium">{filteredClasses.length}</span> kelas

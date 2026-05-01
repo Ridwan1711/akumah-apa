@@ -3,14 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Diniyyah\SchoolClass;
-use App\Models\ImportRun;
-use App\Models\Student;
+use App\Models\Diniyyah\ClassPromotionRecap;
+use App\Services\Diniyyah\ClassPromotionPlacementService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use App\Jobs\ProcessBulkRun;
-use App\Models\User;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -18,92 +14,82 @@ class ClassPromotionController extends Controller
 {
     public function index(Request $request): Response
     {
-        $perPageOptions = [25, 50, 75, 100, 1000];
-        $perPage = (int) $request->input('per_page', 25);
-        if (! in_array($perPage, $perPageOptions, true)) {
-            $perPage = 25;
+        $status = (string) $request->input('status', ClassPromotionRecap::STATUS_SUBMITTED);
+        if (! in_array($status, ClassPromotionRecap::STATUSES, true) && $status !== 'all') {
+            $status = ClassPromotionRecap::STATUS_SUBMITTED;
         }
 
-        $students = null;
+        $recaps = ClassPromotionRecap::query()
+            ->with([
+                'sourceClass:id,name',
+                'period:id,academic_year_id,semester_id',
+                'period.academicYear:id,name',
+                'period.semester:id,name',
+                'submitter:id,name',
+                'reviewer:id,name',
+            ])
+            ->withCount('items')
+            ->when($status !== 'all', fn ($query) => $query->where('status', $status))
+            ->latest('id')
+            ->paginate(15)
+            ->withQueryString();
 
-        if ($request->source_class_id) {
-            $students = Student::where('current_class_id', $request->source_class_id)
-                ->where('status', Student::STATUS_ACTIVE)
-                ->orderBy('full_name')
-                ->paginate($perPage, ['id', 'nis', 'full_name', 'current_class_id'])
-                ->withQueryString();
+        $selectedRecap = null;
+        if ($request->filled('recap_id')) {
+            $selectedRecap = ClassPromotionRecap::query()
+                ->with([
+                    'sourceClass:id,name',
+                    'period:id,academic_year_id,semester_id',
+                    'period.academicYear:id,name',
+                    'period.semester:id,name',
+                    'submitter:id,name',
+                    'reviewer:id,name',
+                    'items.student:id,nis,full_name,gender',
+                    'items.targetClass:id,name',
+                    'items.appliedClass:id,name',
+                ])
+                ->find((int) $request->integer('recap_id'));
         }
-
-        $bulkRunsQuery = ImportRun::query()
-            ->with('requestedBy:id,name')
-            ->where('job_type', ImportRun::JOB_CLASS_PROMOTION)
-            ->when($request->run_uploader_id, fn ($q, $id) => $q->where('requested_by', $id))
-            ->latest('id');
-
-        $uploaderIds = ImportRun::query()
-            ->where('job_type', ImportRun::JOB_CLASS_PROMOTION)
-            ->whereNotNull('requested_by')
-            ->distinct()
-            ->pluck('requested_by');
 
         return Inertia::render('admin/class-promotion/index', [
-            'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'grade_level_id']),
-            'students' => $students,
-            'filters' => $request->only(['source_class_id', 'run_uploader_id', 'per_page']),
-            'bulkRuns' => $bulkRunsQuery->limit(20)->get(),
-            'bulkUploaders' => User::query()->whereIn('id', $uploaderIds)->orderBy('name')->get(['id', 'name']),
-            'perPageOptions' => $perPageOptions,
-        ]);
-    }
-
-    public function promote(Request $request): RedirectResponse
-    {
-        $request->validate([
-            'source_class_id' => ['required', 'exists:classes,id'],
-            'promotions' => ['required', 'array'],
-            'promotions.*.student_id' => ['required', 'exists:students,id'],
-            'promotions.*.action' => ['required', 'in:promote,stay,graduate'],
-            'promotions.*.target_class_id' => ['nullable', 'exists:classes,id'],
-        ]);
-
-        $run = ImportRun::query()->create([
-            'uuid' => (string) Str::uuid(),
-            'type' => ImportRun::TYPE_BULK,
-            'job_type' => ImportRun::JOB_CLASS_PROMOTION,
-            'status' => ImportRun::STATUS_QUEUED,
-            'requested_by' => $request->user()?->id,
-            'file_name' => 'class-promotion',
-            'file_path' => '-',
-            'meta' => [
-                'source_class_id' => $request->source_class_id,
-                'period_id' => $request->input('period_id'),
-                'promotions' => $request->promotions,
+            'recaps' => $recaps,
+            'selectedRecap' => $selectedRecap,
+            'filters' => ['status' => $status],
+            'statusOptions' => [
+                'all',
+                ...ClassPromotionRecap::STATUSES,
             ],
         ]);
-
-        ProcessBulkRun::dispatch($run->id);
-
-        return redirect()->back()->with('success', 'Proses kenaikan kelas dipindahkan ke background queue.');
     }
 
-    public function retryBulkRun(ImportRun $importRun): RedirectResponse
-    {
-        abort_unless($importRun->job_type === ImportRun::JOB_CLASS_PROMOTION, 404);
-        abort_unless($importRun->status === ImportRun::STATUS_FAILED, 422, 'Hanya job gagal yang bisa di-retry.');
+    public function approve(
+        ClassPromotionRecap $classPromotionRecap,
+        Request $request,
+        ClassPromotionPlacementService $placementService,
+    ): RedirectResponse {
+        abort_unless($classPromotionRecap->status === ClassPromotionRecap::STATUS_SUBMITTED, 422, 'Hanya rekap submitted yang bisa disetujui.');
 
-        $retryRun = ImportRun::query()->create([
-            'uuid' => (string) Str::uuid(),
-            'type' => ImportRun::TYPE_BULK,
-            'job_type' => ImportRun::JOB_CLASS_PROMOTION,
-            'status' => ImportRun::STATUS_QUEUED,
-            'requested_by' => request()->user()?->id,
-            'file_name' => $importRun->file_name,
-            'file_path' => '-',
-            'meta' => $importRun->meta,
+        $placementService->approve($classPromotionRecap, $request->user()->id);
+
+        return redirect()->route('admin.class-promotion.index', [
+            'status' => ClassPromotionRecap::STATUS_APPROVED,
+            'recap_id' => $classPromotionRecap->id,
+        ])->with('success', 'Rekap kenaikan kelas disetujui dan penempatan santri diproses.');
+    }
+
+    public function reject(ClassPromotionRecap $classPromotionRecap, Request $request, ClassPromotionPlacementService $placementService): RedirectResponse
+    {
+        abort_unless($classPromotionRecap->status === ClassPromotionRecap::STATUS_SUBMITTED, 422, 'Hanya rekap submitted yang bisa ditolak.');
+
+        $validated = $request->validate([
+            'rejection_notes' => ['required', 'string', 'max:1000'],
         ]);
 
-        ProcessBulkRun::dispatch($retryRun->id);
+        $placementService->reject($classPromotionRecap, $request->user()->id, $validated['rejection_notes']);
 
-        return redirect()->back()->with('success', 'Retry kenaikan kelas diproses di background.');
+        return redirect()->route('admin.class-promotion.index', [
+            'status' => ClassPromotionRecap::STATUS_REJECTED,
+            'recap_id' => $classPromotionRecap->id,
+        ])->with('success', 'Rekap kenaikan kelas ditolak.');
     }
 }

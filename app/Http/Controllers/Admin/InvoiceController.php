@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\BulkGenerateInvoiceRequest;
 use App\Jobs\ProcessBulkRun;
 use App\Models\AcademicYear;
 use App\Models\Diniyyah\SchoolClass;
@@ -10,15 +11,14 @@ use App\Models\ImportRun;
 use App\Models\Invoice;
 use App\Models\PaymentType;
 use App\Models\Student;
-use App\Models\StudentPosition;
 use App\Models\StudentDiscount;
+use App\Models\StudentPosition;
 use App\Models\User;
 use App\Notifications\InvoiceCreatedNotification;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -97,19 +97,47 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function bulkGenerate(Request $request): RedirectResponse
+    public function previewBulkGenerate(BulkGenerateInvoiceRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'payment_type_id' => ['required', 'exists:payment_types,id'],
-            'academic_year_id' => ['required', 'exists:academic_years,id'],
-            'target_type' => ['required', Rule::in(['all', 'selected'])],
-            'student_ids' => ['exclude_unless:target_type,selected', 'required', 'array', 'min:1'],
-            'student_ids.*' => ['exclude_unless:target_type,selected', 'integer', 'exists:students,id'],
-            'month' => ['nullable', 'integer', 'min:1', 'max:12'],
-            'due_date' => ['required', 'date'],
-            'send_notification_for_existing' => ['sometimes', 'boolean'],
+        $validated = $this->normalizedBulkGeneratePayload($request->validated());
+
+        $paymentType = PaymentType::query()->findOrFail((int) $validated['payment_type_id']);
+        $academicYear = AcademicYear::query()->findOrFail((int) $validated['academic_year_id']);
+
+        $studentQuery = Student::query()
+            ->where('status', Student::STATUS_ACTIVE)
+            ->when(
+                $validated['target_type'] === 'selected',
+                fn ($query) => $query->whereIn('id', $validated['student_ids'] ?? [])
+            );
+
+        $targetStudentCount = (clone $studentQuery)->count();
+
+        $kuliahWithoutTariffCount = 0;
+        if ($paymentType->kuliah_amount === null) {
+            $kuliahWithoutTariffCount = (clone $studentQuery)->where('is_kuliah', true)->count();
+        }
+
+        $monthLabel = $this->resolveIndonesianMonthLabel($validated['month'] ?? null);
+
+        return response()->json([
+            'target_student_count' => $targetStudentCount,
+            'kuliah_without_tariff_count' => $kuliahWithoutTariffCount,
+            'summary' => [
+                'payment_type_name' => $paymentType->name,
+                'payment_type_code' => $paymentType->code,
+                'academic_year_name' => $academicYear->name,
+                'month_label' => $monthLabel,
+                'due_date' => $validated['due_date'],
+                'target_type' => $validated['target_type'],
+                'send_notification_for_existing' => $validated['send_notification_for_existing'],
+            ],
         ]);
-        $validated['send_notification_for_existing'] = (bool) ($validated['send_notification_for_existing'] ?? true);
+    }
+
+    public function bulkGenerate(BulkGenerateInvoiceRequest $request): RedirectResponse
+    {
+        $validated = $this->normalizedBulkGeneratePayload($request->validated());
 
         $run = ImportRun::query()->create([
             'uuid' => (string) Str::uuid(),
@@ -258,6 +286,42 @@ class InvoiceController extends Controller
         $this->notifyInvoiceCreatedTargets($invoice);
 
         return redirect()->route('admin.invoices.index')->with('success', 'Tagihan berhasil dibuat.');
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function normalizedBulkGeneratePayload(array $validated): array
+    {
+        $validated['send_notification_for_existing'] = (bool) ($validated['send_notification_for_existing'] ?? true);
+
+        return $validated;
+    }
+
+    private function resolveIndonesianMonthLabel(null|int|string $month): ?string
+    {
+        if ($month === null || $month === '') {
+            return null;
+        }
+
+        $index = (int) $month;
+        $names = [
+            1 => 'Januari',
+            2 => 'Februari',
+            3 => 'Maret',
+            4 => 'April',
+            5 => 'Mei',
+            6 => 'Juni',
+            7 => 'Juli',
+            8 => 'Agustus',
+            9 => 'September',
+            10 => 'Oktober',
+            11 => 'November',
+            12 => 'Desember',
+        ];
+
+        return $names[$index] ?? null;
     }
 
     public function show(Invoice $invoice): Response

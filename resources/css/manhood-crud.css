@@ -755,6 +755,153 @@
     color: var(--mhs-text-2);
 }
 
+/* Checkbox + label (impor, generator akun, tagihan, dll.) */
+.mcr-checkline {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--mhs-text);
+}
+
+.mcr-checkline input[type='checkbox'] {
+    margin-top: 3px;
+    flex-shrink: 0;
+}
+
+/* Bulk invoice — daftar santri */
+.mcr-student-picker {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid var(--mhs-border-light);
+}
+
+.mcr-student-picker__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.mcr-student-picker__title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--mhs-text);
+}
+
+.mcr-student-picker__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.mcr-student-picker__search {
+    flex: 1 1 220px;
+    min-width: 180px;
+    max-width: 100%;
+}
+
+.mcr-student-picker__meta {
+    font-size: 12px;
+    color: var(--mhs-text-3);
+    width: 100%;
+    margin-bottom: 2px;
+}
+
+.mcr-student-picker__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--mhs-bg-3);
+    border: 1px solid var(--mhs-border);
+    color: var(--mhs-text-2);
+    white-space: nowrap;
+}
+
+.mcr-student-picker__list {
+    max-height: min(52vh, 440px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    border: 1px solid var(--mhs-border);
+    border-radius: var(--mhs-radius);
+    background: var(--mhs-surface);
+    scroll-behavior: smooth;
+}
+
+.mcr-student-picker__row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 14px;
+    margin: 0;
+    border-bottom: 1px solid var(--mhs-border-light);
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+
+.mcr-student-picker__row:last-child {
+    border-bottom: none;
+}
+
+.mcr-student-picker__row:hover {
+    background: var(--mhs-bg-3);
+}
+
+.mcr-student-picker__row:has(input:disabled) {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.mcr-student-picker__row input[type='checkbox'] {
+    margin-top: 4px;
+    flex-shrink: 0;
+    cursor: inherit;
+}
+
+.mcr-student-picker__nameblock {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.mcr-student-picker__name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mhs-text);
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.mcr-student-picker__nis {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--mhs-text-4);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    letter-spacing: 0.02em;
+}
+
+.mcr-student-picker__empty {
+    padding: 28px 16px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--mhs-text-3);
+    border: 1px dashed var(--mhs-border);
+    border-radius: var(--mhs-radius);
+    background: var(--mhs-bg-3);
+}
+
 @media (max-width: 1100px) {
     .mcr-stat-strip {
         grid-template-columns: repeat(2, 1fr);

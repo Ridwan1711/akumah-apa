@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Concerns\Auditable;
+use App\Models\Diniyyah\ClassPromotionRecapItem;
+use App\Models\Diniyyah\KitabReadingAssessment;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Score;
 use App\Models\Diniyyah\StudentClassEnrollment;
@@ -49,8 +51,11 @@ class Student extends Model
     }
 
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_ALUMNI = 'alumni';
+
     public const STATUS_KELUAR = 'keluar';
+
     public const STATUS_WAFAT = 'wafat';
 
     public const STATUSES = [
@@ -61,8 +66,11 @@ class Student extends Model
     ];
 
     public const GENDER_MALE = 'L';
+
     public const GENDER_FEMALE = 'P';
+
     public const SEX_MALE = self::GENDER_MALE;
+
     public const SEX_FEMALE = self::GENDER_FEMALE;
 
     // --- Core relationships ---
@@ -117,6 +125,16 @@ class Student extends Model
     public function scores(): HasMany
     {
         return $this->hasMany(Score::class);
+    }
+
+    public function kitabReadingAssessments(): HasMany
+    {
+        return $this->hasMany(KitabReadingAssessment::class);
+    }
+
+    public function classPromotionRecapItems(): HasMany
+    {
+        return $this->hasMany(ClassPromotionRecapItem::class);
     }
 
     // --- Asrama ---

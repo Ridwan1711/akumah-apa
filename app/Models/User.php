@@ -2,7 +2,10 @@
 
 namespace App\Models;
 
+use App\Models\Diniyyah\ClassPromotionRecap;
 use App\Models\Diniyyah\ClassWali;
+use App\Models\Diniyyah\KitabReadingAssessment;
+use App\Models\Diniyyah\KitabReadingExaminerAssignment;
 use App\Models\Diniyyah\Score;
 use App\Models\Diniyyah\TeacherAssignment;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -151,6 +154,26 @@ class User extends Authenticatable
         return $this->hasMany(Score::class, 'teacher_id');
     }
 
+    public function kitabReadingAssessments(): HasMany
+    {
+        return $this->hasMany(KitabReadingAssessment::class, 'examiner_id');
+    }
+
+    public function kitabReadingExaminerAssignments(): HasMany
+    {
+        return $this->hasMany(KitabReadingExaminerAssignment::class, 'examiner_id');
+    }
+
+    public function submittedClassPromotionRecaps(): HasMany
+    {
+        return $this->hasMany(ClassPromotionRecap::class, 'submitted_by');
+    }
+
+    public function reviewedClassPromotionRecaps(): HasMany
+    {
+        return $this->hasMany(ClassPromotionRecap::class, 'reviewed_by');
+    }
+
     public function musyrif(): HasOne
     {
         return $this->hasOne(Musyrif::class);
@@ -283,6 +306,7 @@ class User extends Authenticatable
     public function canAccessKitabGrades(): bool
     {
         return $this->hasPermission('kitab_grades.view_all')
-            || $this->teacherAssignments()->exists();
+            || $this->teacherAssignments()->exists()
+            || $this->kitabReadingExaminerAssignments()->exists();
     }
 }
