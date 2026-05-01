@@ -1,5 +1,5 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { Pencil, Plus, Power, RotateCcw, Search, ShieldCheck, Users } from 'lucide-react';
+import { Download, FileText, FileUp, Pencil, Plus, Power, RotateCcw, Search, ShieldCheck, Users } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import FlashMessage from '@/components/flash-message';
 import InputError from '@/components/input-error';
@@ -14,9 +14,10 @@ import {
     CrudStatStrip,
     CrudTableShell,
     CrudToolbar,
+    openDownload,
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
-import type { BreadcrumbItem, PaginatedData } from '@/types';
+import type { BreadcrumbItem, ImportRun, PaginatedData } from '@/types';
 import { toast } from 'sonner';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -34,6 +35,7 @@ type TeacherRow = {
 
 type Props = {
     teachers: PaginatedData<TeacherRow>;
+    importRuns: ImportRun[];
     filters: {
         search?: string;
         status?: string;
@@ -60,15 +62,23 @@ const initialForm: TeacherFormData = {
     is_active: true,
 };
 
-export default function TeacherIndex({ teachers, filters }: Props) {
+export default function TeacherIndex({ teachers, importRuns, filters }: Props) {
     const [search, setSearch] = useState(filters.search ?? '');
     const [debouncedSearch, setDebouncedSearch] = useState(search);
     const [statusFilter, setStatusFilter] = useState(filters.status ?? '');
     const [createOpen, setCreateOpen] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
     const [editing, setEditing] = useState<TeacherRow | null>(null);
     const [existingUserOptions, setExistingUserOptions] = useState<SelectOption[]>([]);
     const [isLoadingExistingUsers, setIsLoadingExistingUsers] = useState(false);
     const form = useForm<TeacherFormData>(initialForm);
+    const importForm = useForm<{
+        file: File | null;
+        strategy: 'skip' | 'update';
+    }>({
+        file: null,
+        strategy: 'skip',
+    });
 
     useEffect(() => {
         const timer = window.setTimeout(() => setDebouncedSearch(search), 300);
@@ -193,6 +203,20 @@ export default function TeacherIndex({ teachers, filters }: Props) {
         });
     }
 
+    function submitImport(e: React.FormEvent) {
+        e.preventDefault();
+        importForm.post('/admin/teachers-import', {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                setImportOpen(false);
+                importForm.reset('file');
+                toast.success('Import guru dimulai.');
+            },
+            onError: () => toast.error('Gagal import guru.'),
+        });
+    }
+
     function handleModeChange(option: SelectOption | null) {
         const nextMode = (option?.value as 'create' | 'assign') ?? 'create';
 
@@ -217,6 +241,14 @@ export default function TeacherIndex({ teachers, filters }: Props) {
                 toast.success('Status guru diperbarui.');
             },
             onError: () => toast.error('Gagal memperbarui status guru.'),
+        });
+    }
+
+    function retryImport(runId: number) {
+        router.post(`/admin/teachers-import-runs/${runId}/retry`, undefined, {
+            preserveScroll: true,
+            onSuccess: () => toast.success('Retry import guru dijalankan.'),
+            onError: () => toast.error('Gagal retry import guru.'),
         });
     }
 
@@ -271,10 +303,32 @@ export default function TeacherIndex({ teachers, filters }: Props) {
                         </>
                     }
                     right={
-                        <button type="button" className="mcr-btn primary" onClick={openCreateModal}>
-                            <Plus size={14} />
-                            Tambah Guru
-                        </button>
+                        <>
+                            <button
+                                type="button"
+                                className="mcr-btn secondary"
+                                onClick={() => openDownload('/admin/teachers-template?format=xlsx')}
+                            >
+                                <FileText size={14} />
+                                Template
+                            </button>
+                            <button
+                                type="button"
+                                className="mcr-btn secondary"
+                                onClick={() => openDownload(`/admin/teachers-export?format=xlsx&search=${encodeURIComponent(debouncedSearch)}&status=${statusFilter}`)}
+                            >
+                                <Download size={14} />
+                                Export
+                            </button>
+                            <button type="button" className="mcr-btn secondary" onClick={() => setImportOpen(true)}>
+                                <FileUp size={14} />
+                                Import
+                            </button>
+                            <button type="button" className="mcr-btn primary" onClick={openCreateModal}>
+                                <Plus size={14} />
+                                Tambah Guru
+                            </button>
+                        </>
                     }
                 />
 
@@ -338,7 +392,102 @@ export default function TeacherIndex({ teachers, filters }: Props) {
                 </CrudTableShell>
 
                 <CrudPagination links={teachers.links} />
+
+                <CrudCard title="Riwayat Import Guru" subtitle="Pantau import guru dari file XLSX/CSV.">
+                    {importRuns.length === 0 ? (
+                        <CrudEmptyState title="Belum ada riwayat import" description="Import guru akan muncul di sini." />
+                    ) : (
+                        <div style={{ display: 'grid', gap: 10 }}>
+                            {importRuns.map((run) => (
+                                <div key={run.id} className="mcr-run-item">
+                                    <div className="mcr-run-top">
+                                        <div>
+                                            <strong>{run.file_name}</strong>
+                                            <div className="mcr-run-meta">Strategi {run.strategy.toUpperCase()} • {run.processed_rows}/{run.total_rows || '-'}</div>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 6 }}>
+                                            <span className={`mcr-dot-badge ${run.status === 'completed' ? 'active' : run.status === 'failed' ? 'wafat' : 'keluar'}`}>
+                                                {run.status}
+                                            </span>
+                                            {run.error_report_path ? (
+                                                <a href={`/admin/teachers-import-errors/${run.uuid}`} className="mcr-btn secondary">
+                                                    Error CSV
+                                                </a>
+                                            ) : null}
+                                            {run.status === 'failed' ? (
+                                                <button type="button" className="mcr-btn secondary" onClick={() => retryImport(run.id)}>
+                                                    <RotateCcw size={14} />
+                                                    Retry
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                    </div>
+                                    <div className="mcr-run-stats">
+                                        <span>C:{run.created_count}</span>
+                                        <span>U:{run.updated_count}</span>
+                                        <span>S:{run.skipped_count}</span>
+                                        <span>F:{run.failed_count}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CrudCard>
             </div>
+
+            <CrudModal
+                open={importOpen}
+                onClose={() => setImportOpen(false)}
+                title="Import Data Guru"
+                subtitle="Unduh template dulu, lalu unggah file XLSX/CSV sesuai format."
+            >
+                <form onSubmit={submitImport}>
+                    <div className="mcr-form-grid">
+                        <div className="mcr-form-group full">
+                            <button
+                                type="button"
+                                className="mcr-btn secondary"
+                                onClick={() => openDownload('/admin/teachers-template?format=xlsx')}
+                            >
+                                <FileText size={14} />
+                                Download Template XLSX
+                            </button>
+                        </div>
+                        <div className="mcr-form-group full">
+                            <label htmlFor="teacher-import-file">File XLSX/CSV</label>
+                            <input
+                                id="teacher-import-file"
+                                className="mcr-input"
+                                type="file"
+                                accept=".xlsx,.csv"
+                                onChange={(e) => importForm.setData('file', e.target.files?.[0] ?? null)}
+                            />
+                            <InputError message={importForm.errors.file} />
+                        </div>
+                        <div className="mcr-form-group full">
+                            <label htmlFor="teacher-import-strategy">Strategi Duplikat Email</label>
+                            <select
+                                id="teacher-import-strategy"
+                                className="mcr-form-select"
+                                value={importForm.data.strategy}
+                                onChange={(e) => importForm.setData('strategy', e.target.value as 'skip' | 'update')}
+                            >
+                                <option value="skip">Lewati data yang sudah ada</option>
+                                <option value="update">Perbarui data yang sudah ada</option>
+                            </select>
+                            <InputError message={importForm.errors.strategy} />
+                        </div>
+                    </div>
+                    <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                        <button type="button" className="mcr-btn ghost" onClick={() => setImportOpen(false)}>
+                            Batal
+                        </button>
+                        <button type="submit" className="mcr-btn primary" disabled={importForm.processing}>
+                            {importForm.processing ? 'Memproses...' : 'Proses Import'}
+                        </button>
+                    </div>
+                </form>
+            </CrudModal>
 
             <CrudModal
                 open={createOpen || editing !== null}

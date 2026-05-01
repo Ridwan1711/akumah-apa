@@ -60,7 +60,7 @@ class TeacherDataTransferController extends Controller
 
         ProcessImportRun::dispatch($importRun->id);
 
-        return redirect()->route('admin.users.index', ['role_name' => 'guru'])
+        return redirect()->route('admin.teachers.index')
             ->with('success', 'Import guru diproses di background. Anda bisa lanjut kerja, hasil muncul di Riwayat Import.');
     }
 
@@ -100,7 +100,7 @@ class TeacherDataTransferController extends Controller
 
         ProcessImportRun::dispatch($retryRun->id);
 
-        return redirect()->route('admin.users.index', ['role_name' => 'guru'])
+        return redirect()->route('admin.teachers.index')
             ->with('success', 'Retry import guru dimasukkan ke antrean background.');
     }
 }

@@ -34,8 +34,16 @@ test('teacher management index only shows users with guru role', function () {
         fn ($page) => $page
             ->component('admin/teachers/index')
             ->where('teachers.data', fn ($rows) => $rows->count() === 1)
+            ->has('importRuns')
             ->where('teachers.data.0.name', 'Guru A')
     );
+});
+
+test('admin akademik can download teacher import template', function () {
+    $response = $this->actingAs($this->admin)->get(route('admin.teachers.template', ['format' => 'xlsx']));
+
+    $response->assertOk();
+    expect($response->headers->get('content-disposition'))->toContain('template-import-guru-v1.xlsx');
 });
 
 test('admin akademik can create teacher and role guru is attached', function () {

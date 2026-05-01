@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreTeacherRequest;
 use App\Http\Requests\Admin\UpdateTeacherRequest;
+use App\Models\ImportRun;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -38,6 +39,12 @@ class TeacherManagementController extends Controller
         return Inertia::render('admin/teachers/index', [
             'teachers' => $query->paginate(15)->withQueryString(),
             'filters' => $request->only(['search', 'status']),
+            'importRuns' => ImportRun::query()
+                ->with('requestedBy:id,name')
+                ->where('type', ImportRun::TYPE_TEACHERS)
+                ->latest('id')
+                ->limit(10)
+                ->get(),
         ]);
     }
 
