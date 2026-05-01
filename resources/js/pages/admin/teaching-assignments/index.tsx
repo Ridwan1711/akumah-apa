@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState, useEffect, useRef } from 'react';
 import FlashMessage from '@/components/flash-message';
-import { AppMultiSelect, type SelectOption } from '@/components/manhood';
+import { AppMultiSelect, AppSelect, type SelectOption } from '@/components/manhood';
 import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -670,18 +670,7 @@ export default function TeachingAssignmentIndex({
                         </CardHeader>
                         <CardContent className="px-4 pb-4">
                             <div className="space-y-1.5">
-                                    <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
-                                        <SelectTrigger className={selectedTeacher ? 'border-primary/50' : ''}>
-                                            <SelectValue placeholder="Pilih guru..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {teachers.map((t) => (
-                                                <SelectItem key={t.id} value={String(t.id)}>
-                                                    {t.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <AppSelect options={teachers.map((t) => ({ value: t.id, label: t.name }))} />
                                     <p className="text-xs text-muted-foreground">
                                         Sumber guru hanya dari halaman Manajemen Guru · target jam otomatis dari setting default/override
                                     </p>

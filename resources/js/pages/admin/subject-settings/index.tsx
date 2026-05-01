@@ -2,7 +2,7 @@ import { Head, router } from '@inertiajs/react';
 import { BookOpen, Clock3, Layers3 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import FlashMessage from '@/components/flash-message';
-import { CrudCard, CrudModal, CrudPageHeader, CrudStatStrip, CrudToolbar } from '@/components/manhood';
+import { AppSelect, CrudCard, CrudModal, CrudPageHeader, CrudStatStrip, CrudToolbar } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem, GradeLevel, SchoolClass, Semester, Subject } from '@/types';
 
@@ -141,22 +141,7 @@ export default function SubjectSettingsIndex({
                     left={(
                         <>
                             <span className="mcr-table-meta">Semester:</span>
-                            <select
-                                className="mcr-filter-select"
-                                value={semesterId}
-                                disabled={isRefreshing}
-                                onChange={(e) => {
-                                    const next = e.target.value;
-                                    setSemesterId(next);
-                                    refreshSemester(next);
-                                }}
-                            >
-                                {semesters.map((semester) => (
-                                    <option key={semester.id} value={String(semester.id)}>
-                                        {semester.name}
-                                    </option>
-                                ))}
-                            </select>
+                            <AppSelect options={semesters.map((semester) => ({ value: semester.id, label: `${semester.name} (${semester.academic_year_name})` }))} />
                         </>
                     )}
                     right={(
