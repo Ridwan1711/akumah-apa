@@ -1,4 +1,4 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import {
     Eraser,
     Loader2,
@@ -10,7 +10,7 @@ import {
     Calendar,
     CheckCircle2,
     XCircle,
-    ChevronDown,
+    Layers3,
     GraduationCap,
     LayoutGrid,
     RefreshCw,
@@ -19,7 +19,6 @@ import {
 import { useMemo, useState, useEffect, useRef } from 'react';
 import FlashMessage from '@/components/flash-message';
 import { AppMultiSelect, AppSelect, type SelectOption } from '@/components/manhood';
-import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -374,6 +373,7 @@ export default function TeachingAssignmentIndex({
     const [searchSubject, setSearchSubject] = useState('');
     const [searchClass, setSearchClass] = useState('');
     const [selectedGradeLevelIds, setSelectedGradeLevelIds] = useState<string[]>([]);
+    const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
     const [toast, setToast] = useState<ToastState>(null);
     const [isBulkAssigning, setIsBulkAssigning] = useState(false);
     const dragActiveRef = useRef(false);
@@ -390,6 +390,21 @@ export default function TeachingAssignmentIndex({
     const gradeLevelOptions = useMemo<SelectOption[]>(
         () => gradeLevels.map((level) => ({ value: String(level.id), label: level.name })),
         [gradeLevels],
+    );
+
+    const subjectOptions = useMemo<SelectOption[]>(
+        () => subjects.map((s) => ({ value: String(s.id), label: s.name })),
+        [subjects],
+    );
+
+    const teacherSelectOptions = useMemo<SelectOption[]>(
+        () => teachers.map((t) => ({ value: t.id, label: t.name })),
+        [teachers],
+    );
+
+    const selectedTeacherOption = useMemo(
+        () => teacherSelectOptions.find((o) => String(o.value) === selectedTeacherId) ?? null,
+        [teacherSelectOptions, selectedTeacherId],
     );
 
     const filteredClasses = useMemo(() => {
@@ -410,10 +425,18 @@ export default function TeachingAssignmentIndex({
         return list;
     }, [classes, searchClass, selectedGradeLevelIds]);
 
-    const filteredSubjects = useMemo(() =>
-        !searchSubject ? subjects : subjects.filter(s =>
-            s.name.toLowerCase().includes(searchSubject.toLowerCase())
-        ), [subjects, searchSubject]);
+    const filteredSubjects = useMemo(() => {
+        let list = subjects;
+        if (selectedSubjectIds.length > 0) {
+            const idSet = new Set(selectedSubjectIds);
+            list = list.filter((s) => idSet.has(String(s.id)));
+        }
+        if (searchSubject) {
+            const q = searchSubject.toLowerCase();
+            list = list.filter((s) => s.name.toLowerCase().includes(q));
+        }
+        return list;
+    }, [subjects, selectedSubjectIds, searchSubject]);
 
     const assignmentMap = useMemo(() => {
         const map = new Map<string, TeacherAssignment>();
@@ -445,6 +468,23 @@ export default function TeachingAssignmentIndex({
         window.addEventListener('mouseup', endDrag);
         return () => window.removeEventListener('mouseup', endDrag);
     }, []);
+
+    function applySubjectsFromMappingPreset() {
+        const ids = new Set<string>();
+        if (selectedGradeLevelIds.length > 0) {
+            const levelSet = new Set(selectedGradeLevelIds);
+            for (const row of gradeSubjects) {
+                if (levelSet.has(String(row.grade_level_id))) {
+                    ids.add(String(row.subject_id));
+                }
+            }
+        } else {
+            for (const row of gradeSubjects) {
+                ids.add(String(row.subject_id));
+            }
+        }
+        setSelectedSubjectIds(Array.from(ids));
+    }
 
     function refreshByPeriod(nextPeriodId: string) {
         setIsRefreshing(true);
@@ -670,7 +710,13 @@ export default function TeachingAssignmentIndex({
                         </CardHeader>
                         <CardContent className="px-4 pb-4">
                             <div className="space-y-1.5">
-                                    <AppSelect options={teachers.map((t) => ({ value: t.id, label: t.name }))} />
+                                    <AppSelect
+                                        inputId="teaching-assignments-teacher"
+                                        placeholder="Pilih guru..."
+                                        options={teacherSelectOptions}
+                                        value={selectedTeacherOption}
+                                        onChange={(opt) => setSelectedTeacherId(opt ? String(opt.value) : '')}
+                                    />
                                     <p className="text-xs text-muted-foreground">
                                         Sumber guru hanya dari halaman Manajemen Guru · target jam otomatis dari setting default/override
                                     </p>
@@ -679,59 +725,85 @@ export default function TeachingAssignmentIndex({
                     </Card>
                 </div>
 
-                {/* ── Search Filters ── */}
-                <div className="flex flex-wrap items-end gap-3">
-                    <div className="flex min-w-[220px] flex-1 max-w-md flex-col gap-1.5">
-                        <label className="text-xs font-medium text-muted-foreground">Tingkat kelas</label>
-                        <AppMultiSelect
-                            options={gradeLevelOptions}
-                            value={gradeLevelOptions.filter((opt) => selectedGradeLevelIds.includes(String(opt.value)))}
-                            onChange={(items) => setSelectedGradeLevelIds((items ?? []).map((item) => String(item.value)))}
-                            placeholder="Semua tingkat…"
-                        />
-                    </div>
-                    <div className="relative min-w-[200px] flex-1 max-w-xs">
-                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            placeholder="Cari mata pelajaran..."
-                            value={searchSubject}
-                            onChange={(e) => setSearchSubject(e.target.value)}
-                            className="pl-9"
-                        />
-                        {searchSubject && (
-                            <button
-                                onClick={() => setSearchSubject('')}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                            >
-                                <X className="h-3.5 w-3.5" />
-                            </button>
-                        )}
-                    </div>
-                    <div className="relative min-w-[200px] flex-1 max-w-xs">
-                        <School className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            placeholder="Cari kelas..."
-                            value={searchClass}
-                            onChange={(e) => setSearchClass(e.target.value)}
-                            className="pl-9"
-                        />
-                        {searchClass && (
-                            <button
-                                onClick={() => setSearchClass('')}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                            >
-                                <X className="h-3.5 w-3.5" />
-                            </button>
+                {/* ── Filters (tingkat / mapel seperti Mapping Mapel–Tingkat + pencarian) ── */}
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-wrap items-end gap-3">
+                        <div className="flex min-w-[220px] flex-1 max-w-md flex-col gap-1.5">
+                            <label className="text-xs font-medium text-muted-foreground">Tingkat kelas</label>
+                            <AppMultiSelect
+                                options={gradeLevelOptions}
+                                value={gradeLevelOptions.filter((opt) => selectedGradeLevelIds.includes(String(opt.value)))}
+                                onChange={(items) => setSelectedGradeLevelIds((items ?? []).map((item) => String(item.value)))}
+                                placeholder="Semua tingkat…"
+                            />
+                        </div>
+                        <div className="flex min-w-[220px] flex-1 max-w-md flex-col gap-1.5">
+                            <label className="text-xs font-medium text-muted-foreground">Mata pelajaran</label>
+                            <AppMultiSelect
+                                options={subjectOptions}
+                                value={subjectOptions.filter((opt) => selectedSubjectIds.includes(String(opt.value)))}
+                                onChange={(items) => setSelectedSubjectIds((items ?? []).map((item) => String(item.value)))}
+                                placeholder="Semua mapel…"
+                            />
+                        </div>
+                        <div className="relative min-w-[200px] flex-1 max-w-xs">
+                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                placeholder="Cari mata pelajaran..."
+                                value={searchSubject}
+                                onChange={(e) => setSearchSubject(e.target.value)}
+                                className="pl-9"
+                            />
+                            {searchSubject && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchSubject('')}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                            )}
+                        </div>
+                        <div className="relative min-w-[200px] flex-1 max-w-xs">
+                            <School className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                placeholder="Cari kelas..."
+                                value={searchClass}
+                                onChange={(e) => setSearchClass(e.target.value)}
+                                className="pl-9"
+                            />
+                            {searchClass && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchClass('')}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                            )}
+                        </div>
+
+                        {(searchSubject || searchClass || selectedGradeLevelIds.length > 0 || selectedSubjectIds.length > 0) && (
+                            <p className="text-xs text-muted-foreground self-center">
+                                Menampilkan{' '}
+                                <span className="font-medium">{filteredSubjects.length}</span> mapel ·{' '}
+                                <span className="font-medium">{filteredClasses.length}</span> kelas
+                            </p>
                         )}
                     </div>
 
-                    {(searchSubject || searchClass || selectedGradeLevelIds.length > 0) && (
-                        <p className="text-xs text-muted-foreground self-center">
-                            Menampilkan{' '}
-                            <span className="font-medium">{filteredSubjects.length}</span> mapel ·{' '}
-                            <span className="font-medium">{filteredClasses.length}</span> kelas
-                        </p>
-                    )}
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={applySubjectsFromMappingPreset}>
+                            <Layers3 className="h-3.5 w-3.5" />
+                            Sesuaikan dari mapping
+                        </Button>
+                        <Link
+                            href="/admin/subject-level-mappings"
+                            className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                        >
+                            Kelola mapping mapel–tingkat
+                        </Link>
+                    </div>
                 </div>
 
                 {/* ── Matrix Table ── */}
