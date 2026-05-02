@@ -142,6 +142,7 @@ final class AuditLogHumanizer
             'studentdiscount' => self::summarizeStudentDiscount($log->action, $studentName($new, $old, 0)),
             'paymenttype' => self::summarizePaymentType($log->action, $new, $old),
             'guardian' => self::summarizeGuardian($log->action, $new, $old),
+            'lessonattendance' => self::summarizeLessonAttendance($log->action, $new, $old, $studentName($new, $old, 0)),
             'score' => self::summarizeScore($log->action, $studentName($new, $old, 0)),
             default => self::fallbackSummary($log),
         };
@@ -344,6 +345,36 @@ final class AuditLogHumanizer
         }
 
         return 'Data wali: '.$name;
+    }
+
+    private static function summarizeLessonAttendance(string $action, array $new, array $old, string $studentName): string
+    {
+        $statusLabel = static function (?string $s): string {
+            return match ($s ?? '') {
+                'present' => 'Hadir',
+                'absent' => 'Tidak hadir',
+                'excused' => 'Izin',
+                default => $s ?? '?',
+            };
+        };
+
+        $newStatus = isset($new['status']) ? (string) $new['status'] : null;
+        $oldStatus = isset($old['status']) ? (string) $old['status'] : null;
+
+        if ($action === 'create') {
+            return 'Kehadiran pelajaran dicatat untuk '.$studentName.' ('.$statusLabel($newStatus).')';
+        }
+        if ($action === 'update' && $newStatus !== null && $oldStatus !== null && $newStatus !== $oldStatus) {
+            return 'Kehadiran pelajaran '.$studentName.': '.$statusLabel($oldStatus).' → '.$statusLabel($newStatus);
+        }
+        if ($action === 'update') {
+            return 'Kehadiran pelajaran '.$studentName.' diperbarui';
+        }
+        if ($action === 'delete') {
+            return 'Catatan kehadiran pelajaran untuk '.$studentName.' dihapus';
+        }
+
+        return 'Kehadiran pelajaran: '.$studentName;
     }
 
     private static function summarizeScore(string $action, string $studentName): string

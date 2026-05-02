@@ -1,7 +1,7 @@
 <?php
 
+use App\Models\AcademicPeriod;
 use App\Models\AcademicYear;
-use App\Models\Diniyyah\AcademicPeriod;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\Diniyyah\GradeLevel;
 use App\Models\Diniyyah\SchoolClass;
@@ -55,10 +55,9 @@ beforeEach(function () {
     ]);
 
     $this->period = AcademicPeriod::create([
-        'name' => 'Periode Ganjil',
-        'type' => AcademicPeriod::TYPE_SEMESTER_1,
-        'is_active' => true,
+        'academic_year_id' => $academicYear->id,
         'semester_id' => $semester->id,
+        'is_active' => true,
     ]);
 
     $gradeLevel = GradeLevel::create([
@@ -69,8 +68,8 @@ beforeEach(function () {
     $this->schoolClass = SchoolClass::create([
         'name' => '1B',
         'grade_level_id' => $gradeLevel->id,
-        'level_order' => 1,
-        'level' => SchoolClass::LEVEL_SALAFY1,
+        'order' => 1,
+        'student_gender' => SchoolClass::STUDENT_GENDER_SANTRIYYIN,
     ]);
 
     $subject = Subject::create([
@@ -100,7 +99,7 @@ beforeEach(function () {
     $this->student = Student::create([
         'nis' => 'NIS-'.uniqid(),
         'full_name' => 'Santri Test',
-        'gender' => 'male',
+        'gender' => Student::GENDER_MALE,
         'admission_year' => 2024,
         'current_class_id' => $this->schoolClass->id,
         'status' => Student::STATUS_ACTIVE,

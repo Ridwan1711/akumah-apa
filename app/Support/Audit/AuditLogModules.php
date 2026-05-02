@@ -10,8 +10,8 @@ final class AuditLogModules
     /** Modul yang ditulis trait Auditable untuk domain keuangan. */
     public const FINANCE = ['invoice', 'payment', 'studentdiscount', 'paymenttype'];
 
-    /** Modul akademik, santri, asrama, izin, pelanggaran, wali. */
-    public const AKADEMIK_OPERASIONAL = ['student', 'guardian', 'score', 'leavepermission', 'studentviolation', 'dormassignment'];
+    /** Modul akademik, santri, asrama, izin, pelanggaran, wali, kehadiran pelajaran. */
+    public const AKADEMIK_OPERASIONAL = ['student', 'guardian', 'score', 'leavepermission', 'studentviolation', 'dormassignment', 'lessonattendance'];
 
     private function __construct() {}
 
@@ -51,7 +51,7 @@ final class AuditLogModules
             return 'Menampilkan aktivitas keuangan dari semua pengguna (tagihan, pembayaran, jenis pembayaran, diskon santri).';
         }
         if ($akademik) {
-            return 'Menampilkan aktivitas akademik & operasional (santri, wali, nilai diniyah, izin pulang, pelanggaran, asrama).';
+            return 'Menampilkan aktivitas akademik & operasional (santri, wali, nilai diniyah, kehadiran pelajaran, izin pulang, pelanggaran, asrama).';
         }
 
         return '';

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\AdminAttendanceController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AdminKeuanganController;
@@ -12,7 +13,6 @@ use App\Http\Controllers\Api\PpdbSyncController;
 use App\Http\Controllers\Api\SantriController;
 use App\Http\Controllers\Api\WaliController;
 use App\Http\Controllers\NotificationController;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -48,6 +48,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/notifications', [NotificationController::class, 'index']);
         Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
         Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+
+        Route::get('/activity', [ActivityController::class, 'index']);
 
         // Santri
         Route::middleware('role:santri')->prefix('santri')->group(function () {
