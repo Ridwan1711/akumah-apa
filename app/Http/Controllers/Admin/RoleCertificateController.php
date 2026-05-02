@@ -143,7 +143,7 @@ class RoleCertificateController extends Controller
         $this->loadCertificatePreviewData($roleCertificate);
         $pdf = Pdf::loadView('pdf.role-certificate', [
             'certificate' => $roleCertificate,
-        ])->setPaper('a4', 'portrait');
+        ])->setPaper('f4', 'portrait');
 
         $fileName = sprintf('surat-keterangan-%s.pdf', $roleCertificate->certificate_number);
 
