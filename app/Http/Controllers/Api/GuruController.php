@@ -11,6 +11,7 @@ use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Score;
 use App\Models\Diniyyah\Subject;
 use App\Models\Diniyyah\TeacherAssignment;
+use App\Models\LessonSession;
 use App\Models\ReportCard;
 use App\Models\ReportCardTemplate;
 use App\Models\Semester;
@@ -50,8 +51,26 @@ class GuruController extends Controller
         $user = $request->user();
 
         $assignments = TeacherAssignment::where('teacher_id', $user->id)
-            ->with(['schoolClass:id,name,grade_level_id', 'subject:id,name'])
+            ->with([
+                'schoolClass:id,name,grade_level_id',
+                'subject:id,name',
+                'period:id,semester_id',
+            ])
             ->get();
+
+        $assignmentsPayload = $assignments->map(function (TeacherAssignment $a) {
+            return [
+                'id' => $a->id,
+                'teacher_id' => $a->teacher_id,
+                'class_id' => $a->class_id,
+                'subject_id' => $a->subject_id,
+                'period_id' => $a->period_id,
+                'semester_id' => $a->period?->semester_id,
+                'target_jam' => $a->target_jam,
+                'school_class' => $a->schoolClass?->toArray(),
+                'subject' => $a->subject?->toArray(),
+            ];
+        })->values()->all();
 
         $waliKelasClasses = [];
         $waliClassIds = $user->homeroomAssignments()->pluck('class_id')->unique();
@@ -63,9 +82,29 @@ class GuruController extends Controller
                 ->get(['id', 'name', 'grade_level_id']);
         }
 
+        $activePeriod = AcademicPeriod::query()->active()->with('semester:id,name')->first();
+        $todayDow = (int) now()->isoWeekday();
+
+        $todayScheduleSlots = AcademicSchedule::query()
+            ->where('teacher_id', $user->id)
+            ->where('day', $todayDow)
+            ->count();
+
+        $sessionsPendingAttendanceToday = LessonSession::query()
+            ->whereDate('date', now()->toDateString())
+            ->whereHas('schedule', fn ($q) => $q->where('teacher_id', $user->id))
+            ->withCount('attendances')
+            ->get()
+            ->filter(fn (LessonSession $s) => $s->attendances_count === 0)
+            ->count();
+
         return response()->json([
-            'assignments' => $assignments,
+            'assignments' => $assignmentsPayload,
             'waliKelasClasses' => $waliKelasClasses,
+            'active_semester' => $activePeriod?->semester?->only(['id', 'name']),
+            'active_period_id' => $activePeriod?->id,
+            'today_schedule_slots' => $todayScheduleSlots,
+            'sessions_pending_attendance_today' => $sessionsPendingAttendanceToday,
         ]);
     }
 
