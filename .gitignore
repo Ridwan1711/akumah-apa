@@ -36,3 +36,5 @@ frankenphp-worker.php
 **/caddy
 frankenphp
 frankenphp-worker.php
+/.cursor
+/tests
