@@ -14,6 +14,7 @@ class StoreStudentRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'user_id' => ['nullable', 'integer', 'exists:users,id', 'unique:students,user_id'],
             'nis' => ['required', 'string', 'max:20', 'unique:students,nis'],
             'full_name' => ['required', 'string', 'max:255'],
             'admission_year' => ['required', 'integer', 'min:2000', 'max:2099'],

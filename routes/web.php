@@ -89,6 +89,7 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
     ->name('admin.')
     ->group(function () {
         // Students & Guardians
+        Route::get('students/eligible-users', [StudentController::class, 'eligibleUsers'])->name('students.eligible-users');
         Route::resource('students', StudentController::class);
         Route::get('student-positions', [AdminStudentPositionController::class, 'index'])->name('student-positions.index');
         Route::post('student-positions', [AdminStudentPositionController::class, 'store'])->name('student-positions.store');

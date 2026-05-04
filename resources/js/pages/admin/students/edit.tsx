@@ -1,6 +1,8 @@
 import { Head, Link, useForm } from '@inertiajs/react';
+import { useState } from 'react';
 import InputError from '@/components/input-error';
 import Heading from '@/components/heading';
+import { AppSelect, type SelectOption } from '@/components/manhood';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,6 +31,7 @@ export default function StudentEdit({ student, classes }: Props) {
     ];
 
     const { data, setData, put, processing, errors } = useForm({
+        user_id: student.user_id ? String(student.user_id) : '',
         nis: student.nis,
         nik: student.nik ?? '',
         full_name: student.full_name,
@@ -40,6 +43,44 @@ export default function StudentEdit({ student, classes }: Props) {
         admission_year: String(student.admission_year),
         current_class_id: student.current_class_id ? String(student.current_class_id) : '',
     });
+
+    const [existingUserOptions, setExistingUserOptions] = useState<SelectOption[]>(() => {
+        if (!student.user) {
+            return [];
+        }
+        return [{ value: String(student.user.id), label: `${student.user.name} (${student.user.email})` }];
+    });
+    const [isLoadingExistingUsers, setIsLoadingExistingUsers] = useState(false);
+    const selectedExistingUserOption = existingUserOptions.find((item) => item.value === data.user_id) ?? null;
+
+    async function loadEligibleUsers(searchTerm = '') {
+        setIsLoadingExistingUsers(true);
+        try {
+            const url = new URL('/admin/students/eligible-users', window.location.origin);
+            if (searchTerm.trim() !== '') {
+                url.searchParams.set('search', searchTerm.trim());
+            }
+            if (student.user_id) {
+                url.searchParams.set('include_user_id', String(student.user_id));
+            }
+
+            const response = await fetch(url.toString(), {
+                method: 'GET',
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            const payload = await response.json();
+            const options: SelectOption[] = (payload?.data ?? []).map((user: { id: number; name: string; email: string }) => ({
+                value: String(user.id),
+                label: `${user.name} (${user.email})`,
+            }));
+            setExistingUserOptions(options);
+        } catch {
+            setExistingUserOptions(student.user ? [{ value: String(student.user.id), label: `${student.user.name} (${student.user.email})` }] : []);
+        } finally {
+            setIsLoadingExistingUsers(false);
+        }
+    }
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -64,6 +105,30 @@ export default function StudentEdit({ student, classes }: Props) {
                             <Input id="nik" value={data.nik} onChange={(e) => setData('nik', e.target.value)} maxLength={16} />
                             <InputError message={errors.nik} />
                         </div>
+                    </div>
+
+                    <div className="grid gap-2">
+                        <Label htmlFor="existing-user">Akun User (Opsional)</Label>
+                        <AppSelect
+                            inputId="existing-user"
+                            placeholder="Cari user..."
+                            options={existingUserOptions}
+                            isLoading={isLoadingExistingUsers}
+                            value={selectedExistingUserOption}
+                            onChange={(option) => setData('user_id', String(option?.value ?? ''))}
+                            onInputChange={(value, meta) => {
+                                if (meta.action === 'input-change') {
+                                    void loadEligibleUsers(value);
+                                }
+                                return value;
+                            }}
+                            onMenuOpen={() => {
+                                if (existingUserOptions.length === 0) {
+                                    void loadEligibleUsers();
+                                }
+                            }}
+                        />
+                        <InputError message={errors.user_id} />
                     </div>
 
                     <div className="grid gap-2">

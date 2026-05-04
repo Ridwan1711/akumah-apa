@@ -7,8 +7,11 @@ use App\Http\Requests\Admin\StoreStudentRequest;
 use App\Http\Requests\Admin\UpdateStudentRequest;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\ImportRun;
+use App\Models\Role;
 use App\Models\Student;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -16,12 +19,41 @@ use Inertia\Response;
 
 class StudentController extends Controller
 {
+    public function eligibleUsers(Request $request): JsonResponse
+    {
+        $search = trim((string) $request->string('search'));
+        $includeUserId = (int) $request->integer('include_user_id');
+
+        $users = User::query()
+            ->whereHas('roles', fn (Builder $roleQuery) => $roleQuery->whereNotIn('name', [Role::SANTRI, Role::ALUMNI]))
+            ->when($search !== '', function (Builder $builder) use ($search) {
+                $builder->where(function (Builder $inner) use ($search) {
+                    $inner->where('name', 'ilike', "%{$search}%")
+                        ->orWhere('username', 'ilike', "%{$search}%")
+                        ->orWhere('email', 'ilike', "%{$search}%");
+                });
+            })
+            ->where(function (Builder $builder) use ($includeUserId) {
+                $builder->whereDoesntHave('student');
+                if ($includeUserId > 0) {
+                    $builder->orWhere('id', $includeUserId);
+                }
+            })
+            ->orderBy('name')
+            ->limit(25)
+            ->get(['id', 'name', 'email', 'username']);
+
+        return response()->json([
+            'data' => $users,
+        ]);
+    }
+
     public function index(Request $request): Response
     {
         $query = Student::with(['currentClass', 'user'])
             ->when($request->search, fn ($q, $search) => $q->where(function ($q) use ($search) {
                 $q->where('full_name', 'ilike', "%{$search}%")
-                  ->orWhere('nis', 'ilike', "%{$search}%");
+                    ->orWhere('nis', 'ilike', "%{$search}%");
             }))
             ->when($request->status, fn ($q, $status) => $q->where('status', $status))
             ->when($request->class_id, fn ($q, $classId) => $q->where('current_class_id', $classId))
@@ -87,7 +119,7 @@ class StudentController extends Controller
     public function edit(Student $student): Response
     {
         return Inertia::render('admin/students/edit', [
-            'student' => $student,
+            'student' => $student->load('user'),
             'classes' => SchoolClass::with('gradeLevel')
                 ->orderBy('name')
                 ->get(['id', 'name', 'level', 'grade_level_id']),

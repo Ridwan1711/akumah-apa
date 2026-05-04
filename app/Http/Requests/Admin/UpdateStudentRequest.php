@@ -16,6 +16,7 @@ class UpdateStudentRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'user_id' => ['nullable', 'integer', 'exists:users,id', Rule::unique('students', 'user_id')->ignore($this->route('student'))],
             'nis' => ['required', 'string', 'max:20', Rule::unique('students', 'nis')->ignore($this->route('student'))],
             'nik' => ['nullable', 'string', 'max:16'],
             'full_name' => ['required', 'string', 'max:255'],

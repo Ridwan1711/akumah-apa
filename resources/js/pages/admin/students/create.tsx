@@ -1,6 +1,8 @@
 import { Head, Link, useForm } from '@inertiajs/react';
+import { useState } from 'react';
 import InputError from '@/components/input-error';
 import Heading from '@/components/heading';
+import { AppSelect, type SelectOption } from '@/components/manhood';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,10 +18,41 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function StudentCreate() {
     const { data, setData, post, processing, errors } = useForm({
+        user_id: '',
         nis: '',
         full_name: '',
         admission_year: String(new Date().getFullYear()),
     });
+
+    const [existingUserOptions, setExistingUserOptions] = useState<SelectOption[]>([]);
+    const [isLoadingExistingUsers, setIsLoadingExistingUsers] = useState(false);
+    const selectedExistingUserOption = existingUserOptions.find((item) => item.value === data.user_id) ?? null;
+
+    async function loadEligibleUsers(searchTerm = '') {
+        setIsLoadingExistingUsers(true);
+        try {
+            const url = new URL('/admin/students/eligible-users', window.location.origin);
+            if (searchTerm.trim() !== '') {
+                url.searchParams.set('search', searchTerm.trim());
+            }
+
+            const response = await fetch(url.toString(), {
+                method: 'GET',
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            const payload = await response.json();
+            const options: SelectOption[] = (payload?.data ?? []).map((user: { id: number; name: string; email: string }) => ({
+                value: String(user.id),
+                label: `${user.name} (${user.email})`,
+            }));
+            setExistingUserOptions(options);
+        } catch {
+            setExistingUserOptions([]);
+        } finally {
+            setIsLoadingExistingUsers(false);
+        }
+    }
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -36,6 +69,30 @@ export default function StudentCreate() {
                 </p>
 
                 <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
+                    <div className="grid gap-2">
+                        <Label htmlFor="existing-user">Pilih User Existing (Opsional)</Label>
+                        <AppSelect
+                            inputId="existing-user"
+                            placeholder="Cari user..."
+                            options={existingUserOptions}
+                            isLoading={isLoadingExistingUsers}
+                            value={selectedExistingUserOption}
+                            onChange={(option) => setData('user_id', String(option?.value ?? ''))}
+                            onInputChange={(value, meta) => {
+                                if (meta.action === 'input-change') {
+                                    void loadEligibleUsers(value);
+                                }
+                                return value;
+                            }}
+                            onMenuOpen={() => {
+                                if (existingUserOptions.length === 0) {
+                                    void loadEligibleUsers();
+                                }
+                            }}
+                        />
+                        <InputError message={errors.user_id} />
+                    </div>
+
                     <div className="grid gap-2">
                         <Label htmlFor="nis">NIS *</Label>
                         <Input id="nis" value={data.nis} onChange={(e) => setData('nis', e.target.value)} required />
