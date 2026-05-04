@@ -9,13 +9,18 @@ use App\Http\Requests\Admin\ImportDiniyahClassesRequest;
 use App\Http\Requests\Admin\StoreDiniyahClassRequest;
 use App\Http\Requests\Admin\UpdateDiniyahClassRequest;
 use App\Imports\DiniyahClassDataImport;
+use App\Models\AcademicPeriod;
+use App\Models\Diniyyah\ClassWali;
 use App\Models\Diniyyah\GradeLevel;
 use App\Models\Diniyyah\SchoolClass;
+use App\Models\Role;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Arr;
 use Inertia\Inertia;
 use Inertia\Response;
+use Maatwebsite\Excel\Facades\Excel;
 
 class DiniyahClassController extends Controller
 {
@@ -28,7 +33,21 @@ class DiniyahClassController extends Controller
             $perPage = 25;
         }
 
-        $classQuery = SchoolClass::with(['gradeLevel:id,name,order'])
+        $activePeriodId = AcademicPeriod::query()->active()->value('id');
+        $activePeriod = $activePeriodId
+            ? AcademicPeriod::query()
+                ->whereKey($activePeriodId)
+                ->with(['semester:id,name', 'academicYear:id,name'])
+                ->first()
+            : null;
+
+        $eager = ['gradeLevel:id,name,order'];
+        if ($activePeriodId) {
+            $eager['walis'] = fn ($q) => $q->where('period_id', $activePeriodId)
+                ->with('teacher:id,name');
+        }
+
+        $classQuery = SchoolClass::with($eager)
             ->withCount('students')
             ->when($search !== '', function ($query) use ($search) {
                 $query->where('name', 'ilike', "%{$search}%");
@@ -43,6 +62,15 @@ class DiniyahClassController extends Controller
             'gradeLevels' => GradeLevel::orderBy('order')->get(['id', 'name', 'order']),
             'filters' => $request->only(['per_page', 'search']),
             'perPageOptions' => $perPageOptions,
+            'homeroomTeachers' => User::query()
+                ->where('is_active', true)
+                ->whereHas('roles', fn ($q) => $q->where('name', Role::GURU))
+                ->orderBy('name')
+                ->get(['id', 'name']),
+            'activeAcademicPeriod' => $activePeriod ? [
+                'id' => $activePeriod->id,
+                'label' => ($activePeriod->academicYear?->name ?? '—').' · '.($activePeriod->semester?->name ?? '—'),
+            ] : null,
         ]);
     }
 
@@ -101,7 +129,11 @@ class DiniyahClassController extends Controller
 
     public function store(StoreDiniyahClassRequest $request): RedirectResponse
     {
-        SchoolClass::create($request->validated());
+        $validated = $request->validated();
+        $class = SchoolClass::create(Arr::except($validated, ['wali_teacher_id']));
+        if (array_key_exists('wali_teacher_id', $validated)) {
+            $this->syncHomeroomTeacherForActivePeriod($class, $validated['wali_teacher_id']);
+        }
 
         return redirect()->route('admin.diniyah-classes.index')
             ->with('success', 'Kelas diniyah berhasil ditambahkan.');
@@ -109,7 +141,11 @@ class DiniyahClassController extends Controller
 
     public function update(UpdateDiniyahClassRequest $request, SchoolClass $diniyahClass): RedirectResponse
     {
-        $diniyahClass->update($request->validated());
+        $validated = $request->validated();
+        $diniyahClass->update(Arr::except($validated, ['wali_teacher_id']));
+        if (array_key_exists('wali_teacher_id', $validated)) {
+            $this->syncHomeroomTeacherForActivePeriod($diniyahClass, $validated['wali_teacher_id']);
+        }
 
         return redirect()->route('admin.diniyah-classes.index')
             ->with('success', 'Kelas diniyah berhasil diperbarui.');
@@ -121,5 +157,32 @@ class DiniyahClassController extends Controller
 
         return redirect()->route('admin.diniyah-classes.index')
             ->with('success', 'Kelas diniyah berhasil dihapus.');
+    }
+
+    private function syncHomeroomTeacherForActivePeriod(SchoolClass $class, ?int $teacherId): void
+    {
+        $periodId = (int) (AcademicPeriod::query()->active()->value('id') ?? 0);
+        if (! $periodId) {
+            return;
+        }
+
+        if ($teacherId === null) {
+            ClassWali::query()
+                ->where('class_id', $class->id)
+                ->where('period_id', $periodId)
+                ->delete();
+
+            return;
+        }
+
+        ClassWali::query()->updateOrCreate(
+            [
+                'class_id' => $class->id,
+                'period_id' => $periodId,
+            ],
+            [
+                'teacher_id' => $teacherId,
+            ],
+        );
     }
 }

@@ -83,9 +83,51 @@ test('api guru sessions returns lesson sessions for schedules on requested date'
             'sessions' => [
                 [
                     'id',
+                    'teacher_name',
+                    'students_total',
+                    'attendance_counts' => ['present', 'excused', 'absent'],
+                    'attendance_percent',
+                    'grade_level',
                     'class' => ['id', 'name', 'grade_level_id'],
                     'subject' => ['id', 'name'],
                 ],
             ],
+        ])
+        ->assertJsonPath('sessions.0.teacher_name', $this->guru->name)
+        ->assertJsonPath('sessions.0.grade_level.name', 'Level Sesi');
+});
+
+test('api guru session students includes session summary fields', function (): void {
+    $today = Carbon::now(config('app.timezone'));
+    $date = $today->toDateString();
+    $dow = (int) $today->isoWeekday();
+
+    AcademicSchedule::query()->create([
+        'class_id' => $this->class->id,
+        'subject_id' => $this->subject->id,
+        'teacher_id' => $this->guru->id,
+        'period_id' => $this->period->id,
+        'day' => $dow,
+        'time_start' => '13:00:00',
+        'time_end' => '14:30:00',
+    ]);
+
+    Sanctum::actingAs($this->guru);
+
+    $sessions = $this->getJson('/api/v1/guru/sessions?date='.$date)->json('sessions');
+    $sessionId = $sessions[0]['id'];
+
+    $this->getJson("/api/v1/guru/sessions/{$sessionId}/students")
+        ->assertOk()
+        ->assertJsonStructure([
+            'session' => [
+                'notes',
+                'subject',
+                'teacher_name',
+                'students_total',
+                'attendance_counts',
+                'attendance_percent',
+            ],
+            'students',
         ]);
 });

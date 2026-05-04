@@ -23,6 +23,15 @@ export type Semester = {
     updated_at: string;
 };
 
+/** Wali kelas per periode (`class_walis`). */
+export type ClassWali = {
+    id: number;
+    class_id: number;
+    teacher_id: number;
+    period_id: number;
+    teacher?: { id: number; name: string };
+};
+
 /** Diniyyah `classes` row (model `SchoolClass`). */
 export type SchoolClass = {
     id: number;
@@ -38,6 +47,8 @@ export type SchoolClass = {
     level_order?: number;
     grade_level?: { id: number; name: string; order: number };
     students_count?: number;
+    /** Eager-loaded untuk periode akademik aktif saja (admin kelas diniyah). */
+    walis?: ClassWali[];
     created_at?: string;
     updated_at?: string;
 };

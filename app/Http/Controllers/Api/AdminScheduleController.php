@@ -11,17 +11,21 @@ use Illuminate\Http\Request;
 
 class AdminScheduleController extends Controller
 {
+    /** @var list<string> */
+    private const SCHEDULE_RELATIONS = [
+        'schoolClass:id,name,student_gender,grade_level_id',
+        'schoolClass.gradeLevel:id,name',
+        'subject:id,name',
+        'teacher:id,name',
+        'period:id,academic_year_id,semester_id,is_active',
+    ];
+
     public function __construct(private ScheduleMatrixService $matrix) {}
 
     public function index(Request $request): JsonResponse
     {
         $query = AcademicSchedule::query()
-            ->with([
-                'schoolClass:id,name,level',
-                'subject:id,name',
-                'teacher:id,name',
-                'period:id,academic_year_id,semester_id,is_active',
-            ])
+            ->with(self::SCHEDULE_RELATIONS)
             ->orderBy('day')
             ->orderBy('time_start');
 
@@ -60,12 +64,7 @@ class AdminScheduleController extends Controller
 
         return response()->json([
             'message' => 'Jadwal berhasil dibuat.',
-            'schedule' => $schedule->load([
-                'schoolClass:id,name,level',
-                'subject:id,name',
-                'teacher:id,name',
-                'period:id,academic_year_id,semester_id,is_active',
-            ]),
+            'schedule' => $schedule->load(self::SCHEDULE_RELATIONS),
         ], 201);
     }
 
@@ -85,12 +84,7 @@ class AdminScheduleController extends Controller
 
         return response()->json([
             'message' => 'Jadwal berhasil diperbarui.',
-            'schedule' => $schedule->load([
-                'schoolClass:id,name,level',
-                'subject:id,name',
-                'teacher:id,name',
-                'period:id,academic_year_id,semester_id,is_active',
-            ]),
+            'schedule' => $schedule->load(self::SCHEDULE_RELATIONS),
         ]);
     }
 

@@ -6,6 +6,7 @@ use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\Diniyyah\GradeLevel;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Subject;
+use App\Models\LessonAttendance;
 use App\Models\LessonSession;
 use App\Models\Role;
 use App\Models\Semester;
@@ -113,6 +114,31 @@ test('store attendance remains successful and returns warnings', function (): vo
         ->assertJsonPath('message', 'Kehadiran santri berhasil disimpan.')
         ->assertJsonPath('warnings.0.code', 'time_outside_window')
         ->assertJsonPath('warnings.1.code', 'outside_geofence');
+
+    expect($this->session->fresh()->status)->toBe('completed');
+});
+
+test('store attendance as draft saves rows but keeps session planned', function (): void {
+    $this->session->update(['status' => 'planned', 'notes' => null]);
+    LessonAttendance::query()->where('lesson_session_id', $this->session->id)->delete();
+
+    Sanctum::actingAs($this->guru);
+
+    $this->postJson("/api/v1/guru/sessions/{$this->session->id}/attendance", [
+        'draft' => true,
+        'notes' => 'Catatan uji',
+        'attendances' => [
+            [
+                'student_id' => $this->student->id,
+                'status' => 'present',
+            ],
+        ],
+    ])->assertOk();
+
+    $this->session->refresh();
+    expect($this->session->status)->toBe('planned');
+    expect($this->session->notes)->toBe('Catatan uji');
+    expect(LessonAttendance::query()->where('lesson_session_id', $this->session->id)->count())->toBe(1);
 });
 
 test('guru location ping can be read by admin only', function (): void {

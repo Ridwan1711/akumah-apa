@@ -16,7 +16,7 @@ import {
     openDownload,
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
-import type { BreadcrumbItem, PaginatedData, SchoolClass } from '@/types';
+import type { BreadcrumbItem, ClassWali, PaginatedData, SchoolClass } from '@/types';
 import { toast } from 'sonner';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -29,6 +29,7 @@ type GradeLevel = { id: number; name: string; order: number };
 type ClassRow = SchoolClass & {
     grade_level?: GradeLevel;
     students_count?: number;
+    walis?: ClassWali[];
 };
 
 const studentGenderLabels: Record<string, string> = {
@@ -36,11 +37,15 @@ const studentGenderLabels: Record<string, string> = {
     P: 'Santriyah',
 };
 
+type HomeroomTeacherOption = { id: number; name: string };
+
 type Props = {
     classes: PaginatedData<ClassRow>;
     gradeLevels: GradeLevel[];
     filters: { per_page?: string; search?: string };
     perPageOptions: number[];
+    homeroomTeachers: HomeroomTeacherOption[];
+    activeAcademicPeriod: { id: number; label: string } | null;
 };
 
 export default function DiniyahClassIndex({
@@ -48,6 +53,8 @@ export default function DiniyahClassIndex({
     gradeLevels,
     filters,
     perPageOptions,
+    homeroomTeachers,
+    activeAcademicPeriod,
 }: Props) {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -62,6 +69,7 @@ export default function DiniyahClassIndex({
         grade_level_id: '',
         order: '0',
         student_gender: '' as string,
+        wali_teacher_id: '' as string,
     });
     const importForm = useForm<{
         file: File | null;
@@ -86,11 +94,13 @@ export default function DiniyahClassIndex({
     function handleEdit(cls: ClassRow) {
         setEditingClass(cls);
         setDialogOpen(true);
+        const waliId = cls.walis?.[0]?.teacher_id;
         form.setData({
             name: cls.name,
             grade_level_id: String(cls.grade_level_id ?? cls.grade_level?.id ?? ''),
             order: String((cls as ClassRow & { order?: number; level_order?: number }).order ?? cls.level_order ?? 0),
             student_gender: cls.student_gender ?? '',
+            wali_teacher_id: waliId != null ? String(waliId) : '',
         });
     }
 
@@ -148,6 +158,7 @@ export default function DiniyahClassIndex({
             grade_level_id: '',
             order: '0',
             student_gender: '',
+            wali_teacher_id: '',
         });
         setDialogOpen(true);
     }
@@ -176,7 +187,7 @@ export default function DiniyahClassIndex({
             <div>
                 <CrudPageHeader
                     title="Kelas Diniyah"
-                    description="Kelola struktur kelas, jenjang, urutan, dan segmentasi santri."
+                    description="Kelola struktur kelas, jenjang, urutan, segmentasi santri, dan wali kelas (periode aktif)."
                 />
 
                 <CrudStatStrip
@@ -305,6 +316,7 @@ export default function DiniyahClassIndex({
                                     <th>Jenjang</th>
                                     <th>Urutan</th>
                                     <th>Jenis Santri</th>
+                                    <th>Wali Kelas</th>
                                     <th>Jumlah Santri</th>
                                     <th style={{ textAlign: 'right' }}>Aksi</th>
                                 </tr>
@@ -339,6 +351,13 @@ export default function DiniyahClassIndex({
                                                 </span>
                                             ) : (
                                                 <span className="mcr-dot-badge keluar">Belum diatur</span>
+                                            )}
+                                        </td>
+                                        <td>
+                                            {cls.walis?.[0]?.teacher?.name ? (
+                                                <span className="mcr-dot-badge active">{cls.walis[0].teacher?.name}</span>
+                                            ) : (
+                                                <span className="mcr-dot-badge keluar">—</span>
                                             )}
                                         </td>
                                         <td>{cls.students_count ?? 0}</td>
@@ -379,7 +398,7 @@ export default function DiniyahClassIndex({
                     setEditingClass(null);
                 }}
                 title={editingClass ? 'Edit Kelas Diniyah' : 'Tambah Kelas Diniyah'}
-                subtitle="Atur nama kelas, jenjang, urutan, dan segmentasi santri."
+                subtitle="Atur nama kelas, jenjang, urutan, segmentasi santri, dan wali kelas untuk periode akademik aktif."
             >
                 <form
                     onSubmit={
@@ -448,6 +467,36 @@ export default function DiniyahClassIndex({
                                 <option value="P">{studentGenderLabels.P}</option>
                             </select>
                             <InputError message={form.errors.student_gender} />
+                        </div>
+                        <div className="mcr-form-group full">
+                            <label htmlFor="class-wali-teacher">Wali kelas (periode aktif)</label>
+                            {activeAcademicPeriod ? (
+                                <p style={{ opacity: 0.75, fontSize: 12, marginBottom: 4 }}>{activeAcademicPeriod.label}</p>
+                            ) : (
+                                <p style={{ opacity: 0.75, fontSize: 12, marginBottom: 4 }}>
+                                    Belum ada periode akademik aktif — penentuan wali dinonaktifkan.
+                                </p>
+                            )}
+                            <select
+                                id="class-wali-teacher"
+                                className="mcr-form-select"
+                                disabled={!activeAcademicPeriod}
+                                value={form.data.wali_teacher_id ? form.data.wali_teacher_id : '_none'}
+                                onChange={(e) =>
+                                    form.setData(
+                                        'wali_teacher_id',
+                                        e.target.value === '_none' ? '' : e.target.value,
+                                    )
+                                }
+                            >
+                                <option value="_none">— Tanpa wali —</option>
+                                {homeroomTeachers.map((t) => (
+                                    <option key={t.id} value={String(t.id)}>
+                                        {t.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <InputError message={form.errors.wali_teacher_id} />
                         </div>
                     </div>
                     <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

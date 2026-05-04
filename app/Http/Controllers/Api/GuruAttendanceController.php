@@ -30,11 +30,12 @@ class GuruAttendanceController extends Controller
             ->where('teacher_id', $user->id)
             ->with([
                 'schoolClass:id,name,grade_level_id',
+                'schoolClass.gradeLevel:id,name',
                 'subject:id,name',
             ])
             ->get();
 
-        $sessions = [];
+        $sessionRows = [];
         foreach ($schedules as $schedule) {
             /** @var LessonSession $session */
             $session = LessonSession::firstOrCreate(
@@ -51,7 +52,60 @@ class GuruAttendanceController extends Controller
                 ]
             );
 
-            $attendanceFilled = $session->attendances()->exists();
+            $sessionRows[] = [
+                'session' => $session,
+                'schedule' => $schedule,
+            ];
+        }
+
+        $classIds = $schedules->pluck('class_id')->unique()->filter()->values()->all();
+        $studentsTotalByClass = [];
+        if ($classIds !== []) {
+            $studentsTotalByClass = Student::query()
+                ->whereIn('current_class_id', $classIds)
+                ->where('status', Student::STATUS_ACTIVE)
+                ->selectRaw('current_class_id, count(*) as c')
+                ->groupBy('current_class_id')
+                ->pluck('c', 'current_class_id')
+                ->map(fn ($c) => (int) $c)
+                ->all();
+        }
+
+        $sessionIds = collect($sessionRows)->map(fn (array $r) => $r['session']->id)->all();
+        $attendanceCountsBySession = [];
+        $sessionIdsHavingAttendance = [];
+        if ($sessionIds !== []) {
+            $agg = LessonAttendance::query()
+                ->whereIn('lesson_session_id', $sessionIds)
+                ->selectRaw('lesson_session_id, status, count(*) as cnt')
+                ->groupBy('lesson_session_id', 'status')
+                ->get();
+            foreach ($agg as $row) {
+                $sid = (int) $row->lesson_session_id;
+                $attendanceCountsBySession[$sid][(string) $row->status] = (int) $row->cnt;
+                $sessionIdsHavingAttendance[$sid] = true;
+            }
+        }
+
+        $sessions = [];
+        foreach ($sessionRows as $row) {
+            /** @var LessonSession $session */
+            $session = $row['session'];
+            /** @var AcademicSchedule $schedule */
+            $schedule = $row['schedule'];
+            $class = $schedule->schoolClass;
+
+            $attendanceFilled = isset($sessionIdsHavingAttendance[$session->id]);
+            $byStatus = $attendanceCountsBySession[$session->id] ?? [];
+            $present = (int) ($byStatus['present'] ?? 0);
+            $excused = (int) ($byStatus['excused'] ?? 0);
+            $absent = (int) ($byStatus['absent'] ?? 0);
+            $studentsTotal = (int) ($studentsTotalByClass[$class->id] ?? 0);
+            $attendancePercent = $studentsTotal > 0
+                ? (int) round(($present / $studentsTotal) * 100)
+                : null;
+
+            $gradeLevel = $class->gradeLevel;
 
             $sessions[] = [
                 'id' => $session->id,
@@ -60,11 +114,20 @@ class GuruAttendanceController extends Controller
                 'end_time' => $session->end_time,
                 'status' => $session->status,
                 'attendance_filled' => $attendanceFilled,
-                'class' => [
-                    'id' => $schedule->schoolClass->id,
-                    'name' => $schedule->schoolClass->name,
-                    'grade_level_id' => $schedule->schoolClass->grade_level_id,
+                'teacher_name' => $user->name,
+                'students_total' => $studentsTotal,
+                'attendance_counts' => [
+                    'present' => $present,
+                    'excused' => $excused,
+                    'absent' => $absent,
                 ],
+                'attendance_percent' => $attendancePercent,
+                'class' => [
+                    'id' => $class->id,
+                    'name' => $class->name,
+                    'grade_level_id' => $class->grade_level_id,
+                ],
+                'grade_level' => $gradeLevel ? $gradeLevel->only(['id', 'name']) : null,
                 'subject' => [
                     'id' => $schedule->subject->id,
                     'name' => $schedule->subject->name,
@@ -84,7 +147,11 @@ class GuruAttendanceController extends Controller
         $user = $request->user();
         $this->authorizeSession($session, $user->id);
 
-        $schedule = $session->schedule()->with('schoolClass')->firstOrFail();
+        $schedule = $session->schedule()->with([
+            'schoolClass.gradeLevel:id,name',
+            'subject:id,name',
+            'teacher:id,name',
+        ])->firstOrFail();
         $class = $schedule->schoolClass;
 
         $students = Student::where('current_class_id', $class->id)
@@ -111,6 +178,26 @@ class GuruAttendanceController extends Controller
             ];
         });
 
+        $byStatus = LessonAttendance::query()
+            ->where('lesson_session_id', $session->id)
+            ->selectRaw('status, count(*) as cnt')
+            ->groupBy('status')
+            ->pluck('cnt', 'status')
+            ->map(fn ($c) => (int) $c)
+            ->all();
+
+        $studentsTotal = Student::query()
+            ->where('current_class_id', $class->id)
+            ->where('status', Student::STATUS_ACTIVE)
+            ->count();
+
+        $present = (int) ($byStatus['present'] ?? 0);
+        $excused = (int) ($byStatus['excused'] ?? 0);
+        $absent = (int) ($byStatus['absent'] ?? 0);
+        $attendancePercent = $studentsTotal > 0
+            ? (int) round(($present / $studentsTotal) * 100)
+            : null;
+
         return response()->json([
             'session' => [
                 'id' => $session->id,
@@ -118,11 +205,25 @@ class GuruAttendanceController extends Controller
                 'start_time' => $session->start_time,
                 'end_time' => $session->end_time,
                 'status' => $session->status,
+                'notes' => $session->notes,
                 'class' => [
                     'id' => $class->id,
                     'name' => $class->name,
                     'grade_level_id' => $class->grade_level_id,
                 ],
+                'grade_level' => $class->gradeLevel ? $class->gradeLevel->only(['id', 'name']) : null,
+                'subject' => [
+                    'id' => $schedule->subject->id,
+                    'name' => $schedule->subject->name,
+                ],
+                'teacher_name' => $schedule->teacher?->name ?? '',
+                'students_total' => $studentsTotal,
+                'attendance_counts' => [
+                    'present' => $present,
+                    'excused' => $excused,
+                    'absent' => $absent,
+                ],
+                'attendance_percent' => $attendancePercent,
             ],
             'students' => $data,
         ]);
@@ -142,6 +243,8 @@ class GuruAttendanceController extends Controller
             'attendances.*.status' => ['required', 'in:present,excused,absent'],
             'attendances.*.reason' => ['nullable', 'string', 'max:255'],
             'attendances.*.leave_permission_id' => ['nullable', 'exists:leave_permissions,id'],
+            'notes' => ['nullable', 'string', 'max:255'],
+            'draft' => ['sometimes', 'boolean'],
             'meta' => ['nullable', 'array'],
             'meta.latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'meta.longitude' => ['nullable', 'numeric', 'between:-180,180'],
@@ -186,10 +289,16 @@ class GuruAttendanceController extends Controller
             $this->notifyWaliOfAbsence($session, $schedule, $absentStudentIds);
         }
 
-        if ($session->status !== 'completed') {
-            $session->status = 'completed';
-            $session->save();
+        $draft = (bool) ($validated['draft'] ?? false);
+        if (array_key_exists('notes', $validated)) {
+            $session->notes = $validated['notes'];
         }
+
+        if (! $draft && $session->status !== 'completed') {
+            $session->status = 'completed';
+        }
+
+        $session->save();
 
         $geoWarnings = $this->buildGeoWarnings($session, $validated['meta'] ?? null);
 
