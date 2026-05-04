@@ -50,12 +50,15 @@ class GuruAttendanceController extends Controller
                 ]
             );
 
+            $attendanceFilled = $session->attendances()->exists();
+
             $sessions[] = [
                 'id' => $session->id,
                 'date' => $session->date->toDateString(),
                 'start_time' => $session->start_time,
                 'end_time' => $session->end_time,
                 'status' => $session->status,
+                'attendance_filled' => $attendanceFilled,
                 'class' => [
                     'id' => $schedule->schoolClass->id,
                     'name' => $schedule->schoolClass->name,
@@ -172,6 +175,11 @@ class GuruAttendanceController extends Controller
 
         if (! empty($absentStudentIds)) {
             $this->notifyWaliOfAbsence($session, $schedule, $absentStudentIds);
+        }
+
+        if ($session->status !== 'completed') {
+            $session->status = 'completed';
+            $session->save();
         }
 
         return response()->json([
