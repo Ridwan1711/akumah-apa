@@ -34,6 +34,7 @@ class GuruAttendanceController extends Controller
             'date' => $today,
             'attendance' => $attendance ? [
                 'id' => $attendance->id,
+                'teacher_id' => $attendance->teacher_id,
                 'status' => $attendance->status,
                 'check_in_at' => $attendance->check_in_at,
                 'check_out_at' => $attendance->check_out_at,
@@ -68,6 +69,7 @@ class GuruAttendanceController extends Controller
             'message' => 'Check-in guru berhasil.',
             'attendance' => [
                 'id' => $attendance->id,
+                'teacher_id' => $attendance->teacher_id,
                 'status' => $attendance->status,
                 'check_in_at' => $attendance->check_in_at,
                 'check_out_at' => $attendance->check_out_at,
@@ -103,6 +105,7 @@ class GuruAttendanceController extends Controller
             'message' => 'Check-out guru berhasil.',
             'attendance' => [
                 'id' => $attendance->id,
+                'teacher_id' => $attendance->teacher_id,
                 'status' => $attendance->status,
                 'check_in_at' => $attendance->check_in_at,
                 'check_out_at' => $attendance->check_out_at,

@@ -154,9 +154,13 @@ test('admin recap includes teacher and student attendance summaries', function (
         'created_by' => $this->guru->id,
     ]);
 
-    $student = Student::factory()->create([
-        'current_class_id' => $class->id,
+    $student = Student::query()->create([
+        'nis' => 'REKAP-001',
+        'full_name' => 'Santri Rekap',
+        'gender' => Student::GENDER_MALE,
         'status' => Student::STATUS_ACTIVE,
+        'admission_year' => 2026,
+        'current_class_id' => $class->id,
     ]);
     LessonAttendance::query()->create([
         'lesson_session_id' => $session->id,
