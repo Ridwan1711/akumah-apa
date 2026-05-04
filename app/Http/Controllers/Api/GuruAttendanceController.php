@@ -7,16 +7,238 @@ use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\LessonAttendance;
 use App\Models\LessonSession;
+use App\Models\Role;
 use App\Models\Student;
+use App\Models\TeacherAttendance;
 use App\Notifications\StudentAbsentNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Validator;
 
 class GuruAttendanceController extends Controller
 {
+    public function teacherAttendanceToday(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $today = now()->toDateString();
+
+        $attendance = TeacherAttendance::query()
+            ->where('teacher_id', $user->id)
+            ->whereDate('date', $today)
+            ->first();
+
+        return response()->json([
+            'date' => $today,
+            'attendance' => $attendance ? [
+                'id' => $attendance->id,
+                'status' => $attendance->status,
+                'check_in_at' => $attendance->check_in_at,
+                'check_out_at' => $attendance->check_out_at,
+                'notes' => $attendance->notes,
+            ] : null,
+        ]);
+    }
+
+    public function teacherCheckIn(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $today = now()->toDateString();
+
+        /** @var TeacherAttendance $attendance */
+        $attendance = TeacherAttendance::query()->firstOrCreate(
+            [
+                'teacher_id' => $user->id,
+                'date' => $today,
+            ],
+            [
+                'status' => 'present',
+                'check_in_at' => now(),
+            ]
+        );
+
+        if (! $attendance->check_in_at) {
+            $attendance->check_in_at = now();
+            $attendance->save();
+        }
+
+        return response()->json([
+            'message' => 'Check-in guru berhasil.',
+            'attendance' => [
+                'id' => $attendance->id,
+                'status' => $attendance->status,
+                'check_in_at' => $attendance->check_in_at,
+                'check_out_at' => $attendance->check_out_at,
+                'notes' => $attendance->notes,
+            ],
+        ]);
+    }
+
+    public function teacherCheckOut(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $today = now()->toDateString();
+
+        /** @var TeacherAttendance|null $attendance */
+        $attendance = TeacherAttendance::query()
+            ->where('teacher_id', $user->id)
+            ->whereDate('date', $today)
+            ->first();
+
+        if (! $attendance) {
+            return response()->json([
+                'message' => 'Anda belum melakukan check-in hari ini.',
+            ], 422);
+        }
+
+        if (! $attendance->check_in_at) {
+            $attendance->check_in_at = now();
+        }
+        $attendance->check_out_at = now();
+        $attendance->save();
+
+        return response()->json([
+            'message' => 'Check-out guru berhasil.',
+            'attendance' => [
+                'id' => $attendance->id,
+                'status' => $attendance->status,
+                'check_in_at' => $attendance->check_in_at,
+                'check_out_at' => $attendance->check_out_at,
+                'notes' => $attendance->notes,
+            ],
+        ]);
+    }
+
+    public function recap(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $isAdminScope = $user->hasAnyRole([Role::SUPER_ADMIN, Role::ADMIN_AKADEMIK]);
+
+        $validator = Validator::make($request->all(), [
+            'month' => ['nullable', 'date_format:Y-m'],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
+            'teacher_id' => ['nullable', 'integer', 'exists:users,id'],
+            'class_id' => ['nullable', 'integer', 'exists:classes,id'],
+        ]);
+        $validator->validate();
+
+        if ($request->filled('month')) {
+            $startDate = Carbon::createFromFormat('Y-m', $request->string('month'))->startOfMonth()->toDateString();
+            $endDate = Carbon::createFromFormat('Y-m', $request->string('month'))->endOfMonth()->toDateString();
+        } else {
+            $startDate = $request->date_from
+                ? Carbon::parse($request->date_from)->toDateString()
+                : now()->startOfMonth()->toDateString();
+            $endDate = $request->date_to
+                ? Carbon::parse($request->date_to)->toDateString()
+                : now()->endOfMonth()->toDateString();
+        }
+
+        $teacherAttendanceQuery = TeacherAttendance::query()
+            ->whereBetween('date', [$startDate, $endDate])
+            ->with('teacher:id,name');
+
+        if (! $isAdminScope) {
+            $teacherAttendanceQuery->where('teacher_id', $user->id);
+        } elseif ($request->filled('teacher_id')) {
+            $teacherAttendanceQuery->where('teacher_id', (int) $request->teacher_id);
+        }
+
+        $teacherRows = $teacherAttendanceQuery
+            ->orderBy('date')
+            ->get();
+
+        $teacherSummary = $teacherRows
+            ->groupBy('teacher_id')
+            ->map(function ($items) {
+                $first = $items->first();
+                $presentCount = $items->where('status', 'present')->count();
+                $lateCount = $items->where('status', 'late')->count();
+                $excusedCount = $items->where('status', 'excused')->count();
+                $absentCount = $items->where('status', 'absent')->count();
+
+                return [
+                    'teacher_id' => $first?->teacher_id,
+                    'teacher_name' => $first?->teacher?->name,
+                    'days_recorded' => $items->count(),
+                    'present_count' => $presentCount,
+                    'late_count' => $lateCount,
+                    'excused_count' => $excusedCount,
+                    'absent_count' => $absentCount,
+                    'completion_rate' => $items->count() > 0
+                        ? round((($presentCount + $lateCount) / $items->count()) * 100, 2)
+                        : 0,
+                ];
+            })
+            ->values();
+
+        $studentByClassSummary = collect();
+        if ($isAdminScope) {
+            $studentByClassQuery = LessonAttendance::query()
+                ->join('lesson_sessions', 'lesson_sessions.id', '=', 'lesson_attendances.lesson_session_id')
+                ->join('schedules', 'schedules.id', '=', 'lesson_sessions.schedule_id')
+                ->join('classes', 'classes.id', '=', 'schedules.class_id')
+                ->whereBetween('lesson_sessions.date', [$startDate, $endDate])
+                ->selectRaw(
+                    'classes.id as class_id, classes.name as class_name, lesson_attendances.status, COUNT(*) as total'
+                )
+                ->groupBy('classes.id', 'classes.name', 'lesson_attendances.status');
+
+            if ($request->filled('class_id')) {
+                $studentByClassQuery->where('classes.id', (int) $request->class_id);
+            }
+
+            $studentByClassSummary = $studentByClassQuery
+                ->get()
+                ->groupBy('class_id')
+                ->map(function ($rows) {
+                    $first = $rows->first();
+                    $presentCount = (int) ($rows->firstWhere('status', 'present')->total ?? 0);
+                    $excusedCount = (int) ($rows->firstWhere('status', 'excused')->total ?? 0);
+                    $absentCount = (int) ($rows->firstWhere('status', 'absent')->total ?? 0);
+                    $total = $presentCount + $excusedCount + $absentCount;
+
+                    return [
+                        'class_id' => (int) $first->class_id,
+                        'class_name' => (string) $first->class_name,
+                        'present_count' => $presentCount,
+                        'excused_count' => $excusedCount,
+                        'absent_count' => $absentCount,
+                        'total_records' => $total,
+                        'present_rate' => $total > 0 ? round(($presentCount / $total) * 100, 2) : 0,
+                    ];
+                })
+                ->values();
+        }
+
+        return response()->json([
+            'scope' => $isAdminScope ? 'admin' : 'guru',
+            'period' => [
+                'date_from' => $startDate,
+                'date_to' => $endDate,
+            ],
+            'teacher_attendance' => [
+                'summary' => $teacherSummary,
+                'records' => $teacherRows->map(function (TeacherAttendance $attendance) {
+                    return [
+                        'id' => $attendance->id,
+                        'date' => $attendance->date->toDateString(),
+                        'teacher_id' => $attendance->teacher_id,
+                        'teacher_name' => $attendance->teacher?->name,
+                        'status' => $attendance->status,
+                        'check_in_at' => $attendance->check_in_at,
+                        'check_out_at' => $attendance->check_out_at,
+                        'notes' => $attendance->notes,
+                    ];
+                })->values(),
+            ],
+            'student_attendance_by_class' => $studentByClassSummary,
+        ]);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();

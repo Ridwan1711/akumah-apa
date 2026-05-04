@@ -186,6 +186,11 @@ class User extends Authenticatable
         return $this->hasMany(LessonSession::class, 'created_by');
     }
 
+    public function teacherAttendances(): HasMany
+    {
+        return $this->hasMany(TeacherAttendance::class, 'teacher_id');
+    }
+
     // --- Push notification (FCM) ---
 
     public function deviceTokens(): HasMany

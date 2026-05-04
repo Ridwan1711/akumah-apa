@@ -85,6 +85,10 @@ Route::prefix('v1')->group(function () {
             Route::get('/dashboard', [GuruController::class, 'dashboard']);
             Route::get('/teaching-assignments', [GuruController::class, 'teachingAssignments']);
             Route::get('/schedule', [GuruController::class, 'schedule']);
+            Route::get('/teacher-attendance/today', [GuruAttendanceController::class, 'teacherAttendanceToday']);
+            Route::post('/teacher-attendance/check-in', [GuruAttendanceController::class, 'teacherCheckIn']);
+            Route::post('/teacher-attendance/check-out', [GuruAttendanceController::class, 'teacherCheckOut']);
+            Route::get('/attendance-recap', [GuruAttendanceController::class, 'recap']);
             Route::get('/sessions', [GuruAttendanceController::class, 'index']);
             Route::get('/sessions/{session}/students', [GuruAttendanceController::class, 'students']);
             Route::post('/sessions/{session}/attendance', [GuruAttendanceController::class, 'storeAttendance']);
