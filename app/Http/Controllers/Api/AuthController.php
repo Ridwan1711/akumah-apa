@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Controller;
 use App\Models\DeviceToken;
 use App\Models\User;
-use App\Http\Controllers\Controller;
+use App\Services\Firebase\AccountLinkSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -13,7 +14,6 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\PersonalAccessToken;
-use App\Services\Firebase\AccountLinkSyncService;
 
 class AuthController extends Controller
 {
@@ -255,18 +255,23 @@ class AuthController extends Controller
         ]);
 
         $user = $request->user();
+        $accessToken = $user->currentAccessToken();
+        if ($accessToken === null) {
+            return response()->json(['message' => 'Sesi tidak valid.'], 401);
+        }
 
-        $deviceToken = DeviceToken::updateOrCreate(
-            [
-                'user_id' => $user->id,
-                'token' => $validated['token'],
-            ],
-            [
-                'platform' => $validated['platform'],
-                'device_label' => $validated['device_label'] ?? null,
-                'last_used_at' => now(),
-            ],
-        );
+        // `token` is unique globally (one FCM install = one row). Hapus lalu buat ulang agar
+        // ganti akun di perangkat yang sama selalu memindahkan baris ke user + sesi aktif.
+        DeviceToken::query()->where('token', $validated['token'])->delete();
+
+        $deviceToken = DeviceToken::query()->create([
+            'user_id' => $user->id,
+            'personal_access_token_id' => $accessToken->id,
+            'token' => $validated['token'],
+            'platform' => $validated['platform'],
+            'device_label' => $validated['device_label'] ?? null,
+            'last_used_at' => now(),
+        ]);
 
         return response()->json([
             'message' => 'Token perangkat tersimpan.',
