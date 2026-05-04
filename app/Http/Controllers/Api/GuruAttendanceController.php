@@ -7,241 +7,17 @@ use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\LessonAttendance;
 use App\Models\LessonSession;
-use App\Models\Role;
 use App\Models\Student;
-use App\Models\TeacherAttendance;
+use App\Models\TeacherLocationLog;
 use App\Notifications\StudentAbsentNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\Validator;
 
 class GuruAttendanceController extends Controller
 {
-    public function teacherAttendanceToday(Request $request): JsonResponse
-    {
-        $user = $request->user();
-        $today = now()->toDateString();
-
-        $attendance = TeacherAttendance::query()
-            ->where('teacher_id', $user->id)
-            ->whereDate('date', $today)
-            ->first();
-
-        return response()->json([
-            'date' => $today,
-            'attendance' => $attendance ? [
-                'id' => $attendance->id,
-                'teacher_id' => $attendance->teacher_id,
-                'status' => $attendance->status,
-                'check_in_at' => $attendance->check_in_at,
-                'check_out_at' => $attendance->check_out_at,
-                'notes' => $attendance->notes,
-            ] : null,
-        ]);
-    }
-
-    public function teacherCheckIn(Request $request): JsonResponse
-    {
-        $user = $request->user();
-        $today = now()->toDateString();
-
-        /** @var TeacherAttendance $attendance */
-        $attendance = TeacherAttendance::query()->firstOrCreate(
-            [
-                'teacher_id' => $user->id,
-                'date' => $today,
-            ],
-            [
-                'status' => 'present',
-                'check_in_at' => now(),
-            ]
-        );
-
-        if (! $attendance->check_in_at) {
-            $attendance->check_in_at = now();
-            $attendance->save();
-        }
-
-        return response()->json([
-            'message' => 'Check-in guru berhasil.',
-            'attendance' => [
-                'id' => $attendance->id,
-                'teacher_id' => $attendance->teacher_id,
-                'status' => $attendance->status,
-                'check_in_at' => $attendance->check_in_at,
-                'check_out_at' => $attendance->check_out_at,
-                'notes' => $attendance->notes,
-            ],
-        ]);
-    }
-
-    public function teacherCheckOut(Request $request): JsonResponse
-    {
-        $user = $request->user();
-        $today = now()->toDateString();
-
-        /** @var TeacherAttendance|null $attendance */
-        $attendance = TeacherAttendance::query()
-            ->where('teacher_id', $user->id)
-            ->whereDate('date', $today)
-            ->first();
-
-        if (! $attendance) {
-            return response()->json([
-                'message' => 'Anda belum melakukan check-in hari ini.',
-            ], 422);
-        }
-
-        if (! $attendance->check_in_at) {
-            $attendance->check_in_at = now();
-        }
-        $attendance->check_out_at = now();
-        $attendance->save();
-
-        return response()->json([
-            'message' => 'Check-out guru berhasil.',
-            'attendance' => [
-                'id' => $attendance->id,
-                'teacher_id' => $attendance->teacher_id,
-                'status' => $attendance->status,
-                'check_in_at' => $attendance->check_in_at,
-                'check_out_at' => $attendance->check_out_at,
-                'notes' => $attendance->notes,
-            ],
-        ]);
-    }
-
-    public function recap(Request $request): JsonResponse
-    {
-        $user = $request->user();
-        $isAdminScope = $user->hasAnyRole([Role::SUPER_ADMIN, Role::ADMIN_AKADEMIK]);
-
-        $validator = Validator::make($request->all(), [
-            'month' => ['nullable', 'date_format:Y-m'],
-            'date_from' => ['nullable', 'date'],
-            'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
-            'teacher_id' => ['nullable', 'integer', 'exists:users,id'],
-            'class_id' => ['nullable', 'integer', 'exists:classes,id'],
-        ]);
-        $validator->validate();
-
-        if ($request->filled('month')) {
-            $startDate = Carbon::createFromFormat('Y-m', $request->string('month'))->startOfMonth()->toDateString();
-            $endDate = Carbon::createFromFormat('Y-m', $request->string('month'))->endOfMonth()->toDateString();
-        } else {
-            $startDate = $request->date_from
-                ? Carbon::parse($request->date_from)->toDateString()
-                : now()->startOfMonth()->toDateString();
-            $endDate = $request->date_to
-                ? Carbon::parse($request->date_to)->toDateString()
-                : now()->endOfMonth()->toDateString();
-        }
-
-        $teacherAttendanceQuery = TeacherAttendance::query()
-            ->whereBetween('date', [$startDate, $endDate])
-            ->with('teacher:id,name');
-
-        if (! $isAdminScope) {
-            $teacherAttendanceQuery->where('teacher_id', $user->id);
-        } elseif ($request->filled('teacher_id')) {
-            $teacherAttendanceQuery->where('teacher_id', (int) $request->teacher_id);
-        }
-
-        $teacherRows = $teacherAttendanceQuery
-            ->orderBy('date')
-            ->get();
-
-        $teacherSummary = $teacherRows
-            ->groupBy('teacher_id')
-            ->map(function ($items) {
-                $first = $items->first();
-                $presentCount = $items->where('status', 'present')->count();
-                $lateCount = $items->where('status', 'late')->count();
-                $excusedCount = $items->where('status', 'excused')->count();
-                $absentCount = $items->where('status', 'absent')->count();
-
-                return [
-                    'teacher_id' => $first?->teacher_id,
-                    'teacher_name' => $first?->teacher?->name,
-                    'days_recorded' => $items->count(),
-                    'present_count' => $presentCount,
-                    'late_count' => $lateCount,
-                    'excused_count' => $excusedCount,
-                    'absent_count' => $absentCount,
-                    'completion_rate' => $items->count() > 0
-                        ? round((($presentCount + $lateCount) / $items->count()) * 100, 2)
-                        : 0,
-                ];
-            })
-            ->values();
-
-        $studentByClassSummary = collect();
-        if ($isAdminScope) {
-            $studentByClassQuery = LessonAttendance::query()
-                ->join('lesson_sessions', 'lesson_sessions.id', '=', 'lesson_attendances.lesson_session_id')
-                ->join('schedules', 'schedules.id', '=', 'lesson_sessions.schedule_id')
-                ->join('classes', 'classes.id', '=', 'schedules.class_id')
-                ->whereBetween('lesson_sessions.date', [$startDate, $endDate])
-                ->selectRaw(
-                    'classes.id as class_id, classes.name as class_name, lesson_attendances.status, COUNT(*) as total'
-                )
-                ->groupBy('classes.id', 'classes.name', 'lesson_attendances.status');
-
-            if ($request->filled('class_id')) {
-                $studentByClassQuery->where('classes.id', (int) $request->class_id);
-            }
-
-            $studentByClassSummary = $studentByClassQuery
-                ->get()
-                ->groupBy('class_id')
-                ->map(function ($rows) {
-                    $first = $rows->first();
-                    $presentCount = (int) ($rows->firstWhere('status', 'present')->total ?? 0);
-                    $excusedCount = (int) ($rows->firstWhere('status', 'excused')->total ?? 0);
-                    $absentCount = (int) ($rows->firstWhere('status', 'absent')->total ?? 0);
-                    $total = $presentCount + $excusedCount + $absentCount;
-
-                    return [
-                        'class_id' => (int) $first->class_id,
-                        'class_name' => (string) $first->class_name,
-                        'present_count' => $presentCount,
-                        'excused_count' => $excusedCount,
-                        'absent_count' => $absentCount,
-                        'total_records' => $total,
-                        'present_rate' => $total > 0 ? round(($presentCount / $total) * 100, 2) : 0,
-                    ];
-                })
-                ->values();
-        }
-
-        return response()->json([
-            'scope' => $isAdminScope ? 'admin' : 'guru',
-            'period' => [
-                'date_from' => $startDate,
-                'date_to' => $endDate,
-            ],
-            'teacher_attendance' => [
-                'summary' => $teacherSummary,
-                'records' => $teacherRows->map(function (TeacherAttendance $attendance) {
-                    return [
-                        'id' => $attendance->id,
-                        'date' => $attendance->date->toDateString(),
-                        'teacher_id' => $attendance->teacher_id,
-                        'teacher_name' => $attendance->teacher?->name,
-                        'status' => $attendance->status,
-                        'check_in_at' => $attendance->check_in_at,
-                        'check_out_at' => $attendance->check_out_at,
-                        'notes' => $attendance->notes,
-                    ];
-                })->values(),
-            ],
-            'student_attendance_by_class' => $studentByClassSummary,
-        ]);
-    }
-
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -366,6 +142,14 @@ class GuruAttendanceController extends Controller
             'attendances.*.status' => ['required', 'in:present,excused,absent'],
             'attendances.*.reason' => ['nullable', 'string', 'max:255'],
             'attendances.*.leave_permission_id' => ['nullable', 'exists:leave_permissions,id'],
+            'meta' => ['nullable', 'array'],
+            'meta.latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'meta.longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'meta.accuracy_meters' => ['nullable', 'numeric', 'min:0'],
+            'meta.device_recorded_at' => ['nullable', 'date'],
+            'meta.is_location_enabled' => ['nullable', 'boolean'],
+            'meta.source' => ['nullable', 'in:foreground,background,last_known'],
+            'meta.note' => ['nullable', 'string', 'max:255'],
         ]);
 
         $allowedStudentIds = Student::where('current_class_id', $class->id)
@@ -407,8 +191,79 @@ class GuruAttendanceController extends Controller
             $session->save();
         }
 
+        $geoWarnings = $this->buildGeoWarnings($session, $validated['meta'] ?? null);
+
+        if (! empty($validated['meta']) && array_key_exists('latitude', $validated['meta']) && array_key_exists('longitude', $validated['meta'])) {
+            TeacherLocationLog::query()->create([
+                'teacher_id' => $user->id,
+                'recorded_at' => isset($validated['meta']['device_recorded_at'])
+                    ? Carbon::parse($validated['meta']['device_recorded_at'])
+                    : now(),
+                'latitude' => $validated['meta']['latitude'],
+                'longitude' => $validated['meta']['longitude'],
+                'accuracy_meters' => $validated['meta']['accuracy_meters'] ?? null,
+                'source' => $validated['meta']['source'] ?? 'foreground',
+                'app_state' => 'foreground',
+                'is_location_enabled' => $validated['meta']['is_location_enabled'] ?? true,
+                'note' => $validated['meta']['note'] ?? null,
+            ]);
+        }
+
         return response()->json([
             'message' => 'Kehadiran santri berhasil disimpan.',
+            'warnings' => $geoWarnings,
+        ]);
+    }
+
+    public function pingLocation(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'accuracy_meters' => ['nullable', 'numeric', 'min:0'],
+            'recorded_at' => ['nullable', 'date'],
+            'source' => ['nullable', 'in:foreground,background,last_known'],
+            'app_state' => ['nullable', 'in:foreground,background'],
+            'is_location_enabled' => ['nullable', 'boolean'],
+            'note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $minIntervalSeconds = (int) config('geo_attendance.location_log.ping_min_interval_seconds', 300);
+        $recent = TeacherLocationLog::query()
+            ->where('teacher_id', $user->id)
+            ->latest('recorded_at')
+            ->first();
+
+        $recordedAt = isset($validated['recorded_at'])
+            ? Carbon::parse($validated['recorded_at'])
+            : now();
+
+        if ($recent && $recordedAt->diffInSeconds($recent->recorded_at) < $minIntervalSeconds) {
+            return response()->json([
+                'message' => 'Ping diabaikan karena interval terlalu dekat.',
+                'accepted' => false,
+                'min_interval_seconds' => $minIntervalSeconds,
+            ]);
+        }
+
+        $log = TeacherLocationLog::query()->create([
+            'teacher_id' => $user->id,
+            'recorded_at' => $recordedAt,
+            'latitude' => $validated['latitude'] ?? null,
+            'longitude' => $validated['longitude'] ?? null,
+            'accuracy_meters' => $validated['accuracy_meters'] ?? null,
+            'source' => $validated['source'] ?? 'background',
+            'app_state' => $validated['app_state'] ?? 'background',
+            'is_location_enabled' => $validated['is_location_enabled'] ?? true,
+            'note' => $validated['note'] ?? null,
+        ]);
+
+        return response()->json([
+            'message' => 'Lokasi guru berhasil direkam.',
+            'accepted' => true,
+            'log_id' => $log->id,
         ]);
     }
 
@@ -509,5 +364,87 @@ class GuruAttendanceController extends Controller
         if (! $schedule || $schedule->teacher_id !== $userId) {
             abort(403, 'Anda tidak berhak mengelola sesi ini.');
         }
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $meta
+     * @return list<array{code: string, message: string, detail: array<string, mixed>}>
+     */
+    private function buildGeoWarnings(LessonSession $session, ?array $meta): array
+    {
+        if (! config('geo_attendance.enabled', true)) {
+            return [];
+        }
+
+        $warnings = [];
+
+        $scheduleDate = $session->date->toDateString();
+        $graceBefore = (int) config('geo_attendance.time_window.grace_before_minutes', 15);
+        $graceAfter = (int) config('geo_attendance.time_window.grace_after_minutes', 20);
+
+        $windowStart = Carbon::parse("{$scheduleDate} {$session->start_time}")->subMinutes($graceBefore);
+        $windowEnd = Carbon::parse("{$scheduleDate} {$session->end_time}")->addMinutes($graceAfter);
+        $deviceRecordedAt = isset($meta['device_recorded_at'])
+            ? Carbon::parse((string) $meta['device_recorded_at'])
+            : now();
+
+        if ($deviceRecordedAt->lt($windowStart) || $deviceRecordedAt->gt($windowEnd)) {
+            $warnings[] = [
+                'code' => 'time_outside_window',
+                'message' => 'Waktu input absensi berada di luar rentang jadwal mengajar.',
+                'detail' => [
+                    'recorded_at' => $deviceRecordedAt->toIso8601String(),
+                    'window_start' => $windowStart->toIso8601String(),
+                    'window_end' => $windowEnd->toIso8601String(),
+                ],
+            ];
+        }
+
+        $locationEnabled = (bool) ($meta['is_location_enabled'] ?? true);
+        $lat = $meta['latitude'] ?? null;
+        $lng = $meta['longitude'] ?? null;
+
+        if (! $locationEnabled || $lat === null || $lng === null) {
+            $warnings[] = [
+                'code' => 'location_unavailable',
+                'message' => 'Lokasi perangkat tidak tersedia atau dinonaktifkan saat absensi.',
+                'detail' => [
+                    'is_location_enabled' => $locationEnabled,
+                ],
+            ];
+
+            return $warnings;
+        }
+
+        $centerLat = (float) config('geo_attendance.geofence.latitude');
+        $centerLng = (float) config('geo_attendance.geofence.longitude');
+        $radius = (float) config('geo_attendance.geofence.radius_meters', 300);
+        $distance = $this->distanceMeters((float) $lat, (float) $lng, $centerLat, $centerLng);
+
+        if ($distance > $radius) {
+            $warnings[] = [
+                'code' => 'outside_geofence',
+                'message' => 'Lokasi guru berada di luar area geofence pesantren.',
+                'detail' => [
+                    'distance_meters' => round($distance, 2),
+                    'allowed_radius_meters' => $radius,
+                ],
+            ];
+        }
+
+        return $warnings;
+    }
+
+    private function distanceMeters(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $earthRadius = 6371000.0;
+        $latDelta = deg2rad($lat2 - $lat1);
+        $lngDelta = deg2rad($lng2 - $lng1);
+
+        $a = sin($latDelta / 2) ** 2
+            + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($lngDelta / 2) ** 2;
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return $earthRadius * $c;
     }
 }

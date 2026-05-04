@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AdminAttendanceController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AdminKeuanganController;
 use App\Http\Controllers\Api\AdminScheduleController;
+use App\Http\Controllers\Api\AdminTeacherLocationController;
 use App\Http\Controllers\Api\AdminUserManagementController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\GuruAttendanceController;
@@ -85,14 +86,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/dashboard', [GuruController::class, 'dashboard']);
             Route::get('/teaching-assignments', [GuruController::class, 'teachingAssignments']);
             Route::get('/schedule', [GuruController::class, 'schedule']);
-            Route::get('/teacher-attendance/today', [GuruAttendanceController::class, 'teacherAttendanceToday']);
-            Route::post('/teacher-attendance/check-in', [GuruAttendanceController::class, 'teacherCheckIn']);
-            Route::post('/teacher-attendance/check-out', [GuruAttendanceController::class, 'teacherCheckOut']);
-            Route::get('/attendance-recap', [GuruAttendanceController::class, 'recap']);
             Route::get('/sessions', [GuruAttendanceController::class, 'index']);
             Route::get('/sessions/{session}/students', [GuruAttendanceController::class, 'students']);
             Route::post('/sessions/{session}/attendance', [GuruAttendanceController::class, 'storeAttendance']);
             Route::get('/sessions/{session}/attendance', [GuruAttendanceController::class, 'showAttendance']);
+            Route::post('/location-ping', [GuruAttendanceController::class, 'pingLocation']);
             Route::get('/kitab-grades', [GuruController::class, 'kitabGradesIndex']);
             Route::post('/kitab-grades', [GuruController::class, 'kitabGradesStore']);
             Route::get('/report-cards', [GuruController::class, 'reportCardsIndex']);
@@ -147,6 +145,11 @@ Route::prefix('v1')->group(function () {
             // Kehadiran santri
             Route::get('/attendances', [AdminAttendanceController::class, 'index']);
             Route::put('/attendances/{attendance}', [AdminAttendanceController::class, 'update']);
+        });
+
+        Route::middleware('role:super_admin,admin_akademik,admin_pendidikan')->prefix('admin')->group(function () {
+            Route::get('/teacher-location/latest', [AdminTeacherLocationController::class, 'latest']);
+            Route::get('/teacher-location/history', [AdminTeacherLocationController::class, 'history']);
         });
 
         // Admin Master Management (super_admin only)

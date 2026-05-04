@@ -18,3 +18,7 @@ Schedule::command('notifications:send-reminders')
     ->dailyAt('08:00')
     ->timezone('Asia/Jakarta')
     ->onOneServer();
+Schedule::command('location:prune-teacher-logs')
+    ->dailyAt('02:00')
+    ->timezone('Asia/Jakarta')
+    ->onOneServer();
