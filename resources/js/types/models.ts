@@ -439,20 +439,6 @@ export type ReportCard = {
     updated_at: string;
 };
 
-export type ReportCardTemplate = {
-    id: number;
-    name: string;
-    is_default: boolean;
-    config: {
-        layout: string[];
-        blocks: Record<string, { visible?: boolean }>;
-        style: Record<string, string | number>;
-        images: Record<string, string | null>;
-    };
-    created_at: string;
-    updated_at: string;
-};
-
 // --- Keuangan ---
 
 export type PaymentType = {

@@ -53,7 +53,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Kehadiran Santri', href: '/admin/attendances' },
 ];
 
-const statuses = ['hadir', 'izin', 'sakit', 'alpa'];
+const statuses = ['present', 'absent', 'sakit', 'alpa'];
 
 export default function AttendanceIndex({ attendances, classes, filters }: Props) {
     const [editOpen, setEditOpen] = useState(false);

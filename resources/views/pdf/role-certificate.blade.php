@@ -452,7 +452,8 @@
                 </td>
                 <td class="kop-text-cell">
                     <div class="kop-instansi">Pondok Pesantren Manarul Huda Pusat</div>
-                    <div class="kop-sub">Kp. Sukasirna &bull; Desa Sukarame &bull; Kec. Sukarame &bull; Kab. Tasikmalaya</div>
+                    <div class="kop-sub">Kp. Sukasirna &bull; Desa Sukarame &bull; Kec. Sukarame &bull; Kab. Tasikmalaya
+                    </div>
                     <div class="kop-contact">
                         Telp. (0265) 783-567 &bull; Email: info@manhoodpusat.com &bull; https://santri.manhoodpusat.com
                     </div>
@@ -488,9 +489,11 @@
                 </tr>
                 <tr>
                     <td class="meta-label">Berlaku Sejak</td>
-                    <td class="meta-value">{{ $certificate->valid_from?->locale('id')->translatedFormat('d F Y') ?? '—' }}</td>
+                    <td class="meta-value">
+                        {{ $certificate->valid_from?->locale('id')->translatedFormat('d F Y') ?? '—' }}</td>
                     <td class="meta-label">Berlaku Sampai</td>
-                    <td class="meta-value">{{ $certificate->valid_until?->locale('id')->translatedFormat('d F Y') ?? '—' }}</td>
+                    <td class="meta-value">
+                        {{ $certificate->valid_until?->locale('id')->translatedFormat('d F Y') ?? '—' }}</td>
                 </tr>
             </table>
 
@@ -526,7 +529,9 @@
                                 <td>{{ $assignment['subject_name'] ?? '—' }}</td>
                                 <td>{{ $assignment['class_names'] ?? ($assignment['class_name'] ?? '—') }}</td>
                                 <td class="center">
-                                    <span class="jam-badge">{{ $assignment['total_jam'] ?? ($assignment['target_jam'] ?? '—') }} Jam</span>
+                                    <span
+                                        class="jam-badge">{{ $assignment['total_jam'] ?? ($assignment['target_jam'] ?? '—') }}
+                                        Jam</span>
                                 </td>
                             </tr>
                         @empty
@@ -590,12 +595,13 @@
                 <tr>
                     <td class="sig-spacer"></td>
                     <td class="sig-block">
-                        <p class="sig-date">Ditetapkan di Tasikmalaya, {{ now()->locale('id')->translatedFormat('d F Y') }}</p>
+                        <p class="sig-date">Ditetapkan di Tasikmalaya,
+                            {{ now()->locale('id')->translatedFormat('d F Y') }}</p>
                         <p class="sig-authority">{{ $certificate->principal_title ?: 'Pimpinan Pondok Pesantren' }}</p>
                         <div class="sig-stamp">
-                            @if ($certificate->stamp_data_uri)
-                                <img src="{{ $certificate->stamp_data_uri ?? public_path('stamp.png') }}" alt="Stempel">
-                            @endif
+
+                            <img src="{{ $certificate->stamp_data_uri ?? public_path('stamp.png') }}" alt="Stempel">
+
                         </div>
                         <p class="sig-line">{{ $certificate->principal_name ?: 'H. Cecep \'Ilman Fahmi, SH.' }}</p>
                         <p class="sig-note">Nama Terang &amp; Stempel</p>
@@ -611,7 +617,8 @@
                 <tr>
                     <td>Dokumen resmi &mdash; harap tidak diubah</td>
                     <td class="footer-center">{{ $certificate->certificate_number }}</td>
-                    <td class="footer-right">Dicetak: {{ now()->locale('id')->translatedFormat('d F Y, H:i') }} WIB</td>
+                    <td class="footer-right">Dicetak: {{ now()->locale('id')->translatedFormat('d F Y, H:i') }} WIB
+                    </td>
                 </tr>
             </table>
         </div>

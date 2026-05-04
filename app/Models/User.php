@@ -32,6 +32,7 @@ class User extends Authenticatable
         'is_active',
         'must_change_password',
         'must_complete_profile',
+        'homeroom_signature_path',
     ];
 
     protected $hidden = [

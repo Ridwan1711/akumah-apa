@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Raport — {{ $student->full_name }}</title>
+    <title>Raport — <?php echo e($student->full_name); ?></title>
     <style>
         /* =====================================================
            PRINT-SAFE STYLESHEET
@@ -458,12 +458,12 @@
 <body>
     <div class="page-wrap">
 
-        {{-- ════════════════════ KOP SURAT ════════════════════ --}}
+        
         <table class="kop-table" cellspacing="0" cellpadding="0">
             <tr>
                 <td class="kop-logo-cell">
                     <div class="logo-circle">
-                        <img src="{{ public_path('/logo.png') }}" width="100%" height="100%" alt="Logo Institusi"
+                        <img src="<?php echo e(public_path('/logo.png')); ?>" width="100%" height="100%" alt="Logo Institusi"
                             style="vertical-align:middle;" onerror="this.style.display='none'" />
                     </div>
                 </td>
@@ -481,36 +481,36 @@
 
         <div class="rule-bar"></div>
 
-        {{-- ════════════════════ KONTEN ════════════════════ --}}
+        
         <div class="content-wrap">
 
-            {{-- Identitas Dokumen --}}
+            
             <div class="doc-identity">
                 <div class="doc-title">Laporan Hasil Belajar Santri</div>
                 <div class="doc-subtitle">
-                    Tahun Ajaran <strong>{{ $semester->academicYear?->name ?? '—' }}</strong>
+                    Tahun Ajaran <strong><?php echo e($semester->academicYear?->name ?? '—'); ?></strong>
                     &nbsp;&bull;&nbsp;
-                        <strong>{{ $semester->name === 'Ganjil' ? 'Ganjil' : 'Genap' }}</strong>
+                    <strong><?php echo e($semester->name ?? '—'); ?></strong>
                 </div>
             </div>
 
-            {{-- Meta Identitas Santri --}}
+            
             <table class="meta-table" cellspacing="0" cellpadding="0">
                 <tr>
                     <td class="meta-label">Nama Santri</td>
-                    <td class="meta-value">{{ $student->full_name }}</td>
+                    <td class="meta-value"><?php echo e($student->full_name); ?></td>
                     <td class="meta-label">NIS</td>
-                    <td class="meta-value">{{ $student->nis }}</td>
+                    <td class="meta-value"><?php echo e($student->nis); ?></td>
                 </tr>
                 <tr>
                     <td class="meta-label">Kelas</td>
-                    <td class="meta-value">{{ $student->currentClass?->name ?? '—' }}</td>
+                    <td class="meta-value"><?php echo e($student->currentClass?->name ?? '—'); ?></td>
                     <td class="meta-label">Semester</td>
-                    <td class="meta-value">{{ $semester->name ?? '—' }}</td>
+                    <td class="meta-value"><?php echo e($semester->name ?? '—'); ?></td>
                 </tr>
             </table>
 
-            {{-- ════════════════════ NILAI KITAB ════════════════════ --}}
+            
             <div class="section-label">Rincian Nilai Kitab</div>
 
             <table class="data-table" cellspacing="0" cellpadding="0">
@@ -524,8 +524,8 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse($grades as $i => $grade)
-                        @php
+                    <?php $__empty_1 = true; $__currentLoopData = $grades; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $i => $grade): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                        <?php
                             $score = (float) ($grade->score ?? 0);
                             $predicate = match (true) {
                                 $score >= 90 => 'Sangat Baik',
@@ -534,41 +534,42 @@
                                 $score >= 60 => 'Kurang',
                                 default => 'Sangat Kurang',
                             };
-                        @endphp
-                        <tr class="{{ $i % 2 === 1 ? 'even' : '' }}">
-                            <td class="num">{{ $i + 1 }}</td>
-                            <td>{{ $grade->subject?->name ?? '—' }}</td>
-                            <td class="center">{{ rtrim(rtrim(number_format($score, 2, '.', ''), '0'), '.') ?: '0' }}
+                        ?>
+                        <tr class="<?php echo e($i % 2 === 1 ? 'even' : ''); ?>">
+                            <td class="num"><?php echo e($i + 1); ?></td>
+                            <td><?php echo e($grade->subject?->name ?? '—'); ?></td>
+                            <td class="center"><?php echo e(rtrim(rtrim(number_format($score, 2, '.', ''), '0'), '.') ?: '0'); ?>
+
                             </td>
                             <td class="center">
-                                <span class="grade-badge">{{ $grade->grade_letter ?? '—' }}</span>
+                                <span class="grade-badge"><?php echo e($grade->grade_letter ?? '—'); ?></span>
                             </td>
-                            <td class="center">{{ $predicate }}</td>
+                            <td class="center"><?php echo e($predicate); ?></td>
                         </tr>
-                    @empty
+                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                         <tr class="empty-row">
                             <td colspan="5">Belum ada nilai untuk semester ini.</td>
                         </tr>
-                    @endforelse
+                    <?php endif; ?>
                 </tbody>
-                @if ($grades->count() > 0)
+                <?php if($grades->count() > 0): ?>
                     <tfoot>
                         <tr>
                             <td colspan="2" style="text-align:right;">Rata-rata Nilai</td>
-                            <td class="center">{{ $avgScore ?? '—' }}</td>
-                            <td colspan="2" class="center">{{ $grades->count() }} Mata Pelajaran</td>
+                            <td class="center"><?php echo e($avgScore ?? '—'); ?></td>
+                            <td colspan="2" class="center"><?php echo e($grades->count()); ?> Mata Pelajaran</td>
                         </tr>
                     </tfoot>
-                @endif
+                <?php endif; ?>
             </table>
 
-            {{-- ════════════════════ PELANGGARAN ════════════════════ --}}
-            @php
+            
+            <?php
                 $totalPoints = $violations->sum(fn($v) => $v->violationType?->points ?? 0);
-            @endphp
+            ?>
 
-            @if ($violations->count() > 0)
-                <div class="section-label">Catatan Pelanggaran ({{ $totalPoints }} Poin)</div>
+            <?php if($violations->count() > 0): ?>
+                <div class="section-label">Catatan Pelanggaran (<?php echo e($totalPoints); ?> Poin)</div>
 
                 <table class="data-table" cellspacing="0" cellpadding="0">
                     <thead>
@@ -581,104 +582,107 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach ($violations as $i => $v)
-                            <tr class="{{ $i % 2 === 1 ? 'even' : '' }}">
-                                <td class="num">{{ $i + 1 }}</td>
-                                <td>{{ \Illuminate\Support\Carbon::parse($v->date)->locale('id')->translatedFormat('d M Y') }}
+                        <?php $__currentLoopData = $violations; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $i => $v): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                            <tr class="<?php echo e($i % 2 === 1 ? 'even' : ''); ?>">
+                                <td class="num"><?php echo e($i + 1); ?></td>
+                                <td><?php echo e(\Illuminate\Support\Carbon::parse($v->date)->locale('id')->translatedFormat('d M Y')); ?>
+
                                 </td>
-                                <td>{{ $v->violationType?->name ?? '—' }}</td>
+                                <td><?php echo e($v->violationType?->name ?? '—'); ?></td>
                                 <td class="center">
-                                    @php
+                                    <?php
                                         $cat = $v->violationType?->category ?? '';
                                         $badgeClass = match ($cat) {
                                             'berat' => 'badge badge-danger',
                                             'ringan' => 'badge badge-light',
                                             default => 'badge',
                                         };
-                                    @endphp
-                                    <span class="{{ $badgeClass }}">{{ $cat ?: '—' }}</span>
+                                    ?>
+                                    <span class="<?php echo e($badgeClass); ?>"><?php echo e($cat ?: '—'); ?></span>
                                 </td>
-                                <td class="center">{{ $v->violationType?->points ?? 0 }}</td>
+                                <td class="center"><?php echo e($v->violationType?->points ?? 0); ?></td>
                             </tr>
-                        @endforeach
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                     </tbody>
                     <tfoot>
                         <tr>
                             <td colspan="4" style="text-align:right;">Total Poin Pelanggaran</td>
-                            <td class="center">{{ $totalPoints }}</td>
+                            <td class="center"><?php echo e($totalPoints); ?></td>
                         </tr>
                     </tfoot>
                 </table>
-            @endif
+            <?php endif; ?>
 
-            {{-- ════════════════════ CATATAN WALI KELAS ════════════════════ --}}
+            
             <div class="section-label">Catatan Wali Kelas</div>
             <div class="notes-box">
-                @if (!empty($reportCard->wali_kelas_notes))
-                    <div class="notes-content">{{ $reportCard->wali_kelas_notes }}</div>
-                @else
+                <?php if(!empty($reportCard->wali_kelas_notes)): ?>
+                    <div class="notes-content"><?php echo e($reportCard->wali_kelas_notes); ?></div>
+                <?php else: ?>
                     <div class="notes-empty">Tidak Ada Catatan Wali Kelas.</div>
-                @endif
+                <?php endif; ?>
             </div>
 
-            {{-- ════════════════════ TANDA TANGAN ════════════════════ --}}
+            
             <table class="sig-outer" cellspacing="0" cellpadding="0">
                 <tr>
                     <td class="sig-block">
                         <p class="sig-date">&nbsp;</p>
                         <p class="sig-authority">Wali Kelas</p>
                         <div class="sig-stamp">
-                            @if (!empty($homeroomSignatureAbsolutePath))
-                                <img src="{{ $homeroomSignatureAbsolutePath }}" alt="Tanda tangan wali kelas">
-                            @endif
+                            <?php if(!empty($homeroomSignatureAbsolutePath)): ?>
+                                <img src="<?php echo e($homeroomSignatureAbsolutePath); ?>" alt="Tanda tangan wali kelas">
+                            <?php endif; ?>
                         </div>
-                        <p class="sig-line">{{ $homeroomTeacherName ?: '(.................................)' }}</p>
+                        <p class="sig-line"><?php echo e($homeroomTeacherName ?: '(.................................)'); ?></p>
                         <p class="sig-note">Nama Terang &amp; Tanda Tangan</p>
                     </td>
                     <td class="sig-block">
-                        <p class="sig-date">Tasikmalaya, {{ now()->locale('id')->translatedFormat('d F Y') }}</p>
-                        <p class="sig-authority">{{ $principalTitle ?: 'Pimpinan Pondok Pesantren' }}</p>
+                        <p class="sig-date">Tasikmalaya, <?php echo e(now()->locale('id')->translatedFormat('d F Y')); ?></p>
+                        <p class="sig-authority"><?php echo e($principalTitle ?: 'Pimpinan Pondok Pesantren'); ?></p>
                         <div class="sig-stamp">
-                            <img src="{{ public_path('stamp.png') }}"
-                                alt="TTD A Haji 'Ilman Fahmi, SH.">
+                            <img src="<?php echo e(public_path('stamp.png')); ?>" width="40px"
+                                height="40px" style="position: absolute;bottom:40%;left:50%;transform:translateX(-50%);"
+                                alt="Stempel">
                         </div>
-                        <p class="sig-line">{{ $principalName ?: '(.................................)' }}</p>
+                        <p class="sig-line"><?php echo e($principalName ?: '(.................................)'); ?></p>
                         <p class="sig-note">Nama Terang &amp; Stempel</p>
                     </td>
                 </tr>
             </table>
 
-            {{-- ════════════════════ QR VERIFIKASI ════════════════════ --}}
+            
             <table class="qr-table" cellspacing="0" cellpadding="0">
                 <tr>
                     <td class="qr-img-cell">
-                        @if (!empty($qrCodeBase64))
-                            <img src="data:image/png;base64,{{ $qrCodeBase64 }}" alt="QR Verifikasi">
-                        @endif
+                        <?php if(!empty($qrCodeBase64)): ?>
+                            <img src="data:image/png;base64,<?php echo e($qrCodeBase64); ?>" alt="QR Verifikasi">
+                        <?php endif; ?>
                     </td>
                     <td class="qr-text-cell">
                         <strong>Verifikasi Keaslian Dokumen</strong><br>
                         Pindai QR Code di samping atau kunjungi tautan berikut untuk memverifikasi keaslian raport ini:
-                        <div class="qr-url">{{ $verificationUrl }}</div>
+                        <div class="qr-url"><?php echo e($verificationUrl); ?></div>
                     </td>
                 </tr>
             </table>
 
-        </div>{{-- /.content-wrap --}}
+        </div>
 
-        {{-- ════════════════════ FOOTER ════════════════════ --}}
+        
         <div class="page-footer">
             <table class="footer-table" cellspacing="0" cellpadding="0">
                 <tr>
                     <td>Dokumen resmi &mdash; harap tidak diubah</td>
-                    <td class="footer-center">{{ $reportCard->verification_token }}</td>
-                    <td class="footer-right">Dicetak: {{ now()->locale('id')->translatedFormat('d F Y, H:i') }} WIB
+                    <td class="footer-center"><?php echo e($reportCard->verification_token); ?></td>
+                    <td class="footer-right">Dicetak: <?php echo e(now()->locale('id')->translatedFormat('d F Y, H:i')); ?> WIB
                     </td>
                 </tr>
             </table>
         </div>
 
-    </div>{{-- /.page-wrap --}}
+    </div>
 </body>
 
 </html>
+<?php /**PATH C:\Users\Server\Project gueh\siakad-manhood\resources\views/pdf/report-card.blade.php ENDPATH**/ ?>

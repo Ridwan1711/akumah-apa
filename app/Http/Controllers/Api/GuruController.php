@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\Diniyyah\AssessmentComponent;
+use App\Models\Diniyyah\ClassWali;
 use App\Models\Diniyyah\KitabGradeSession;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Score;
@@ -13,7 +14,6 @@ use App\Models\Diniyyah\Subject;
 use App\Models\Diniyyah\TeacherAssignment;
 use App\Models\LessonSession;
 use App\Models\ReportCard;
-use App\Models\ReportCardTemplate;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Models\StudentViolation;
@@ -27,6 +27,7 @@ use Endroid\QrCode\Writer\PngWriter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -525,9 +526,7 @@ class GuruController extends Controller
 
         $data = $this->buildReportDataForPdf((int) $request->student_id, (int) $request->semester_id);
 
-        $template = ReportCardTemplate::getActive();
-        $view = ($template && $template->isCanva()) ? 'pdf.report-card-canva' : 'pdf.report-card';
-        $pdf = Pdf::loadView($view, $data);
+        $pdf = Pdf::loadView('pdf.report-card', $data);
 
         $student = Student::find($request->student_id);
         $filename = "raport_{$student->nis}_{$request->semester_id}.pdf";
@@ -562,11 +561,14 @@ class GuruController extends Controller
 
         $avgScore = $grades->count() > 0 ? round((float) $grades->avg('score'), 1) : null;
 
-        $template = ReportCardTemplate::getActive();
-        $templateConfig = $template?->config ?? ReportCardTemplate::defaultConfig();
-
         $verificationUrl = url('raport/verify/'.$reportCard->verification_token);
         $qrCodeBase64 = $this->generateQrCodeBase64($verificationUrl);
+        $homeroomTeacher = $this->resolveHomeroomTeacher($studentId, $semesterId);
+        $homeroomSignaturePath = $homeroomTeacher?->homeroom_signature_path;
+        $homeroomSignatureAbsolutePath = null;
+        if ($homeroomSignaturePath && Storage::disk('public')->exists($homeroomSignaturePath)) {
+            $homeroomSignatureAbsolutePath = Storage::disk('public')->path($homeroomSignaturePath);
+        }
 
         return [
             'student' => $student,
@@ -575,9 +577,12 @@ class GuruController extends Controller
             'violations' => $violations,
             'reportCard' => $reportCard,
             'avgScore' => $avgScore,
-            'templateConfig' => $templateConfig,
             'verificationUrl' => $verificationUrl,
             'qrCodeBase64' => $qrCodeBase64,
+            'homeroomTeacherName' => $homeroomTeacher?->name,
+            'homeroomSignatureAbsolutePath' => $homeroomSignatureAbsolutePath,
+            'principalName' => (string) config('role_certificate.defaults.principal_name'),
+            'principalTitle' => (string) config('role_certificate.defaults.principal_title', 'Pimpinan Pondok Pesantren'),
         ];
     }
 
@@ -602,5 +607,30 @@ class GuruController extends Controller
         $result = $writer->write($qrCode);
 
         return base64_encode($result->getString());
+    }
+
+    private function resolveHomeroomTeacher(int $studentId, int $semesterId): ?\App\Models\User
+    {
+        $student = Student::query()->select(['id', 'current_class_id'])->find($studentId);
+        if (! $student?->current_class_id) {
+            return null;
+        }
+
+        $wali = ClassWali::query()
+            ->where('class_id', $student->current_class_id)
+            ->whereHas('period', fn ($query) => $query->where('semester_id', $semesterId))
+            ->with('teacher:id,name,homeroom_signature_path')
+            ->latest('id')
+            ->first();
+
+        if ($wali?->teacher) {
+            return $wali->teacher;
+        }
+
+        return ClassWali::query()
+            ->where('class_id', $student->current_class_id)
+            ->with('teacher:id,name,homeroom_signature_path')
+            ->latest('id')
+            ->first()?->teacher;
     }
 }

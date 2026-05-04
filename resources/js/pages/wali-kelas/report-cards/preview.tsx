@@ -21,6 +21,9 @@ type Props = {
     saveUrl: string;
     backUrl: string;
     pdfUrl: string;
+    previewBladeUrl: string;
+    homeroomTeacherName?: string | null;
+    homeroomHasSignature?: boolean;
     breadcrumbs: BreadcrumbItem[];
 };
 
@@ -34,12 +37,16 @@ export default function WaliKelasReportPreview({
     saveUrl,
     backUrl,
     pdfUrl,
+    previewBladeUrl,
+    homeroomTeacherName,
+    homeroomHasSignature,
     breadcrumbs,
 }: Props) {
     const form = useForm({
         student_id: student.id,
         semester_id: semester.id,
         wali_kelas_notes: reportCard?.wali_kelas_notes ?? '',
+        wali_kelas_signature: null as File | null,
     });
 
     function handleSaveNotes(e: React.FormEvent) {
@@ -66,6 +73,9 @@ export default function WaliKelasReportPreview({
                             <a href={pdfUrl} target="_blank" rel="noreferrer">
                                 <FileDown className="mr-1 size-4" /> Download PDF
                             </a>
+                        </Button>
+                        <Button variant="outline" asChild>
+                            <a href={previewBladeUrl} target="_blank" rel="noreferrer">Preview Blade</a>
                         </Button>
                     </div>
                 </div>
@@ -153,6 +163,20 @@ export default function WaliKelasReportPreview({
                             placeholder="Tulis catatan wali kelas..."
                             rows={3}
                         />
+                        <div className="grid gap-1">
+                            <label className="text-sm font-medium">Upload tanda tangan Anda (global)</label>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => form.setData('wali_kelas_signature', e.target.files?.[0] ?? null)}
+                                className="block w-full text-sm"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Dipakai otomatis di PDF raport sebagai tanda tangan Wali Kelas
+                                {homeroomTeacherName ? ` (${homeroomTeacherName})` : ''}.
+                                {homeroomHasSignature ? ' Upload baru akan menggantikan tanda tangan lama.' : ''}
+                            </p>
+                        </div>
                         <Button type="submit" size="sm" disabled={form.processing}>
                             {form.processing && <Spinner />}
                             <Save className="mr-1 size-4" /> Simpan Catatan

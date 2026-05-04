@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Diniyyah\Score;
+use App\Models\Diniyyah\ClassWali;
 use App\Models\Diniyyah\SchoolClass;
+use App\Models\Diniyyah\Score;
 use App\Models\ReportCard;
-use App\Models\ReportCardTemplate;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Models\StudentViolation;
@@ -16,8 +16,10 @@ use Endroid\QrCode\Encoding\Encoding;
 use Endroid\QrCode\ErrorCorrectionLevel;
 use Endroid\QrCode\QrCode;
 use Endroid\QrCode\Writer\PngWriter;
+use Illuminate\Contracts\View\View as ViewResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -63,12 +65,25 @@ class ReportCardController extends Controller
         return Inertia::render('admin/report-cards/preview', $data);
     }
 
+    public function previewBlade(Request $request): ViewResponse
+    {
+        $request->validate([
+            'student_id' => ['required', 'exists:students,id'],
+            'semester_id' => ['required', 'exists:semesters,id'],
+        ]);
+
+        $data = $this->buildReportDataForPdf((int) $request->student_id, (int) $request->semester_id);
+
+        return view('pdf.report-card', $data);
+    }
+
     public function saveNotes(Request $request): RedirectResponse
     {
         $request->validate([
             'student_id' => ['required', 'exists:students,id'],
             'semester_id' => ['required', 'exists:semesters,id'],
             'wali_kelas_notes' => ['nullable', 'string', 'max:1000'],
+            'wali_kelas_signature' => ['nullable', 'image', 'max:2048'],
         ]);
 
         $reportCard = ReportCard::firstOrNew([
@@ -84,6 +99,14 @@ class ReportCardController extends Controller
         $reportCard->generated_by = $request->user()->id;
         $reportCard->generated_at = now();
         $reportCard->save();
+
+        if ($request->hasFile('wali_kelas_signature')) {
+            $homeroomTeacher = $this->resolveHomeroomTeacher((int) $reportCard->student_id, (int) $reportCard->semester_id);
+            if ($homeroomTeacher) {
+                $path = $request->file('wali_kelas_signature')->store('report-card-signatures/wali-kelas', 'public');
+                $homeroomTeacher->update(['homeroom_signature_path' => $path]);
+            }
+        }
 
         $reportCard->loadMissing('student.user', 'student.guardians.user');
         $student = $reportCard->student;
@@ -110,9 +133,7 @@ class ReportCardController extends Controller
 
         $data = $this->buildReportDataForPdf($request->student_id, $request->semester_id);
 
-        $template = ReportCardTemplate::getActive();
-        $view = ($template && $template->isCanva()) ? 'pdf.report-card-canva' : 'pdf.report-card';
-        $pdf = Pdf::loadView($view, $data);
+        $pdf = Pdf::loadView('pdf.report-card', $data);
 
         $student = Student::find($request->student_id);
         $filename = "raport_{$student->nis}_{$request->semester_id}.pdf";
@@ -147,11 +168,14 @@ class ReportCardController extends Controller
 
         $avgScore = $grades->count() > 0 ? round((float) $grades->avg('score'), 1) : null;
 
-        $template = ReportCardTemplate::getActive();
-        $templateConfig = $template?->config ?? ReportCardTemplate::defaultConfig();
-
         $verificationUrl = url('raport/verify/'.$reportCard->verification_token);
         $qrCodeBase64 = $this->generateQrCodeBase64($verificationUrl);
+        $homeroomTeacher = $this->resolveHomeroomTeacher($studentId, $semesterId);
+        $homeroomSignaturePath = $homeroomTeacher?->homeroom_signature_path;
+        $homeroomSignatureAbsolutePath = null;
+        if ($homeroomSignaturePath && Storage::disk('public')->exists($homeroomSignaturePath)) {
+            $homeroomSignatureAbsolutePath = Storage::disk('public')->path($homeroomSignaturePath);
+        }
 
         return [
             'student' => $student,
@@ -160,23 +184,27 @@ class ReportCardController extends Controller
             'violations' => $violations,
             'reportCard' => $reportCard,
             'avgScore' => $avgScore,
-            'templateConfig' => $templateConfig,
             'verificationUrl' => $verificationUrl,
             'qrCodeBase64' => $qrCodeBase64,
+            'homeroomTeacherName' => $homeroomTeacher?->name,
+            'homeroomSignatureAbsolutePath' => $homeroomSignatureAbsolutePath,
+            'principalName' => (string) config('role_certificate.defaults.principal_name'),
+            'principalTitle' => (string) config('role_certificate.defaults.principal_title', 'Pimpinan Pondok Pesantren'),
         ];
     }
 
     private function buildReportData(int $studentId, int $semesterId): array
     {
         $data = $this->buildReportDataForPdf($studentId, $semesterId);
-        unset($data['qrCodeBase64']);
+        $data['homeroomHasSignature'] = ! empty($data['homeroomSignatureAbsolutePath']);
+        unset($data['qrCodeBase64'], $data['homeroomSignatureAbsolutePath']);
 
         return $data;
     }
 
     private function generateQrCodeBase64(string $url): string
     {
-        $writer = new PngWriter();
+        $writer = new PngWriter;
         $qrCode = new QrCode(
             data: $url,
             encoding: new Encoding('UTF-8'),
@@ -187,5 +215,30 @@ class ReportCardController extends Controller
         $result = $writer->write($qrCode);
 
         return base64_encode($result->getString());
+    }
+
+    private function resolveHomeroomTeacher(int $studentId, int $semesterId): ?\App\Models\User
+    {
+        $student = Student::query()->select(['id', 'current_class_id'])->find($studentId);
+        if (! $student?->current_class_id) {
+            return null;
+        }
+
+        $wali = ClassWali::query()
+            ->where('class_id', $student->current_class_id)
+            ->whereHas('period', fn ($query) => $query->where('semester_id', $semesterId))
+            ->with('teacher:id,name,homeroom_signature_path')
+            ->latest('id')
+            ->first();
+
+        if ($wali?->teacher) {
+            return $wali->teacher;
+        }
+
+        return ClassWali::query()
+            ->where('class_id', $student->current_class_id)
+            ->with('teacher:id,name,homeroom_signature_path')
+            ->latest('id')
+            ->first()?->teacher;
     }
 }

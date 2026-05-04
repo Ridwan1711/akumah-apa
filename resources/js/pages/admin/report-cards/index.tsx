@@ -92,8 +92,13 @@ export default function ReportCardIndex({ classes, semesters, students, filters 
                                             <div className="flex items-center justify-end gap-1">
                                                 <Button variant="outline" size="sm" asChild>
                                                     <Link href={`/admin/report-cards/preview?student_id=${student.id}&semester_id=${semesterId}`}>
-                                                        <Eye className="mr-1 size-3" /> Preview
+                                                        <Eye className="mr-1 size-3" /> Detail
                                                     </Link>
+                                                </Button>
+                                                <Button variant="outline" size="sm" asChild>
+                                                    <a href={`/admin/report-cards/preview-blade?student_id=${student.id}&semester_id=${semesterId}`} target="_blank" rel="noreferrer">
+                                                        <Eye className="mr-1 size-3" /> Preview Blade
+                                                    </a>
                                                 </Button>
                                                 <Button variant="outline" size="sm" asChild>
                                                     <a href={`/admin/report-cards/pdf?student_id=${student.id}&semester_id=${semesterId}`} target="_blank" rel="noreferrer">

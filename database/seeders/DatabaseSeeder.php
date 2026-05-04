@@ -16,7 +16,6 @@ class DatabaseSeeder extends Seeder
             LevelSubjectDefaultSeeder::class,
             AssessmentComponentSeeder::class,
             ViolationTypeSeeder::class,
-            ReportCardTemplateSeeder::class,
         ]);
     }
 }

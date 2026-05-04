@@ -15,7 +15,6 @@ import {
     Home,
     KeyRound,
     LayoutGrid,
-    LayoutTemplate,
     ListChecks,
     PieChart,
     Receipt,
@@ -121,7 +120,6 @@ function buildSections(
                 { title: 'Nilai Kitab', href: '/admin/kitab-grades', icon: ClipboardList },
                 { title: 'Nilai Baca Kitab', href: '/admin/kitab-reading-assessments', icon: BookOpenCheck },
                 { title: 'Raport', href: '/admin/report-cards', icon: ScrollText },
-                { title: 'Template Raport', href: '/admin/report-card-templates', icon: LayoutTemplate },
                 { title: 'Kenaikan Kelas', href: '/admin/class-promotion', icon: ArrowUpDown },
             ],
         });

@@ -20,9 +20,7 @@ use App\Http\Controllers\Admin\LeavePermissionController;
 use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\PaymentReportController;
 use App\Http\Controllers\Admin\PaymentTypeController;
-use App\Http\Controllers\Admin\ReportCardAssetController;
 use App\Http\Controllers\Admin\ReportCardController;
-use App\Http\Controllers\Admin\ReportCardTemplateController;
 use App\Http\Controllers\Admin\RoleCertificateController;
 use App\Http\Controllers\Admin\ScheduleController;
 use App\Http\Controllers\Admin\ScheduleMatrixController;
@@ -223,21 +221,9 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         // Report Cards
         Route::get('report-cards', [ReportCardController::class, 'index'])->name('report-cards.index');
         Route::get('report-cards/preview', [ReportCardController::class, 'preview'])->name('report-cards.preview');
+        Route::get('report-cards/preview-blade', [ReportCardController::class, 'previewBlade'])->name('report-cards.preview-blade');
         Route::post('report-cards/save-notes', [ReportCardController::class, 'saveNotes'])->name('report-cards.save-notes');
         Route::get('report-cards/pdf', [ReportCardController::class, 'downloadPdf'])->name('report-cards.pdf');
-
-        // Report Card Assets (upload images for template)
-        Route::post('report-card-assets/upload', [ReportCardAssetController::class, 'upload'])->name('report-card-assets.upload');
-        Route::get('report-card-assets/list', [ReportCardAssetController::class, 'list'])->name('report-card-assets.list');
-
-        // Report Card Templates
-        Route::get('report-card-templates', [ReportCardTemplateController::class, 'index'])->name('report-card-templates.index');
-        Route::get('report-card-templates/create', [ReportCardTemplateController::class, 'create'])->name('report-card-templates.create');
-        Route::post('report-card-templates', [ReportCardTemplateController::class, 'store'])->name('report-card-templates.store');
-        Route::get('report-card-templates/{reportCardTemplate}/edit', [ReportCardTemplateController::class, 'edit'])->name('report-card-templates.edit');
-        Route::get('report-card-templates/{reportCardTemplate}/design', [ReportCardTemplateController::class, 'design'])->name('report-card-templates.design');
-        Route::put('report-card-templates/{reportCardTemplate}', [ReportCardTemplateController::class, 'update'])->name('report-card-templates.update');
-        Route::post('report-card-templates/{reportCardTemplate}/set-default', [ReportCardTemplateController::class, 'setDefault'])->name('report-card-templates.set-default');
 
         // Class Promotion
         Route::get('class-promotion', [ClassPromotionController::class, 'index'])->name('class-promotion.index');
@@ -356,6 +342,7 @@ Route::middleware(['auth', 'verified', 'password.changed', 'has.wali-kelas-recor
         Route::post('class-promotion-recaps', [WaliKelasClassPromotionRecapController::class, 'submit'])->name('class-promotion-recaps.submit');
         Route::get('report-cards', [WaliKelasReportController::class, 'index'])->name('report-cards.index');
         Route::get('report-cards/preview', [WaliKelasReportController::class, 'preview'])->name('report-cards.preview');
+        Route::get('report-cards/preview-blade', [WaliKelasReportController::class, 'previewBlade'])->name('report-cards.preview-blade');
         Route::post('report-cards/save-notes', [WaliKelasReportController::class, 'saveNotes'])->name('report-cards.save-notes');
         Route::get('report-cards/pdf', [WaliKelasReportController::class, 'downloadPdf'])->name('report-cards.pdf');
     });

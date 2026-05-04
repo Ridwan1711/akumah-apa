@@ -103,6 +103,11 @@ export default function WaliKelasReportIndex({ classes, semesters, students, fil
                                                             </Link>
                                                         </Button>
                                                         <Button variant="outline" size="sm" asChild>
+                                                            <a href={`/wali-kelas/report-cards/preview-blade?student_id=${student.id}&semester_id=${semesterId}`} target="_blank" rel="noreferrer">
+                                                                <Eye className="mr-1 size-3" /> Preview Blade
+                                                            </a>
+                                                        </Button>
+                                                        <Button variant="outline" size="sm" asChild>
                                                             <a href={`/wali-kelas/report-cards/pdf?student_id=${student.id}&semester_id=${semesterId}`} target="_blank" rel="noreferrer">
                                                                 <FileDown className="mr-1 size-3" /> PDF
                                                             </a>
