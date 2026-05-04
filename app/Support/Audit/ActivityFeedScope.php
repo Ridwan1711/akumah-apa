@@ -37,6 +37,9 @@ final class ActivityFeedScope
             return AuditLogModules::scopeDescription($user);
         }
 
+        // Selain Super Admin: hanya entri yang dilakukan oleh pengguna yang sedang login.
+        $query->where('user_id', $user->id);
+
         $modules = AuditLogModules::allowedModuleNames($user);
 
         if (count($modules) > 0) {
@@ -86,7 +89,7 @@ final class ActivityFeedScope
         if ($user->hasRole(Role::GURU)) {
             self::applyGuruConstraint($query, $user);
 
-            return 'Menampilkan nilai diniyah yang Anda input, kehadiran pelajaran yang Anda catat, dan aktivitas santri di kelas Anda.';
+            return 'Menampilkan aktivitas yang Anda lakukan (nilai diniyah, kehadiran pelajaran, dan data terkait kelas Anda).';
         }
 
         $query->whereRaw('1 = 0');

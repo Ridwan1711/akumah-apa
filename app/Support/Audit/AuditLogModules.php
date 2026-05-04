@@ -45,13 +45,13 @@ final class AuditLogModules
         $akademik = $user->hasPermission(Permissions::AUDIT_LOG_VIEW_AKADEMIK);
 
         if ($finance && $akademik) {
-            return 'Menampilkan aktivitas modul keuangan, akademik, dan operasional.';
+            return 'Menampilkan aktivitas yang Anda lakukan pada modul keuangan, akademik, dan operasional.';
         }
         if ($finance) {
-            return 'Menampilkan aktivitas keuangan dari semua pengguna (tagihan, pembayaran, jenis pembayaran, diskon santri).';
+            return 'Menampilkan aktivitas keuangan yang Anda lakukan (tagihan, pembayaran, jenis pembayaran, diskon santri).';
         }
         if ($akademik) {
-            return 'Menampilkan aktivitas akademik & operasional (santri, wali, nilai diniyah, kehadiran pelajaran, izin pulang, pelanggaran, asrama).';
+            return 'Menampilkan aktivitas akademik & operasional yang Anda lakukan (santri, wali, nilai diniyah, kehadiran pelajaran, izin pulang, pelanggaran, asrama).';
         }
 
         return '';

@@ -145,3 +145,42 @@ test('guru activity api returns lesson attendance summary', function () {
 
     expect($lines)->toContain('Kehadiran pelajaran dicatat untuk Santri Audit LA (Hadir)');
 });
+
+test('guru activity feed excludes audit rows created by other users', function () {
+    $this->actingAs($this->guru);
+
+    $attendance = LessonAttendance::query()->create([
+        'lesson_session_id' => $this->lessonSession->id,
+        'student_id' => $this->student->id,
+        'status' => 'present',
+        'reason' => null,
+        'leave_permission_id' => null,
+        'marked_by' => $this->guru->id,
+        'marked_at' => now(),
+    ]);
+
+    $otherGuru = User::factory()->create([
+        'is_active' => true,
+        'must_change_password' => false,
+        'must_complete_profile' => false,
+    ]);
+    $otherGuru->roles()->sync([Role::query()->where('name', Role::GURU)->value('id')]);
+
+    AuditLog::query()->create([
+        'user_id' => $otherGuru->id,
+        'module' => 'lessonattendance',
+        'action' => 'create',
+        'auditable_type' => $attendance->getMorphClass(),
+        'auditable_id' => $attendance->id,
+        'old_data' => null,
+        'new_data' => ['status' => 'present'],
+        'created_at' => now(),
+    ]);
+
+    Sanctum::actingAs($this->guru);
+
+    $data = $this->getJson('/api/v1/activity')->assertOk()->json('data');
+
+    expect($data)->toHaveCount(1);
+    expect($data[0]['summary_line'])->toBeString()->not->toBe('');
+});

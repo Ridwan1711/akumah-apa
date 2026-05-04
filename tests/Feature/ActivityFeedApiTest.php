@@ -82,7 +82,7 @@ test('santri only sees activity tied to their student record', function () {
     ]);
 
     AuditLog::query()->create([
-        'user_id' => null,
+        'user_id' => $santriUser->id,
         'module' => 'student',
         'action' => 'update',
         'auditable_type' => $mine->getMorphClass(),
@@ -93,7 +93,7 @@ test('santri only sees activity tied to their student record', function () {
     ]);
 
     AuditLog::query()->create([
-        'user_id' => null,
+        'user_id' => $santriUser->id,
         'module' => 'student',
         'action' => 'update',
         'auditable_type' => $other->getMorphClass(),
@@ -107,7 +107,7 @@ test('santri only sees activity tied to their student record', function () {
 
     $response = $this->getJson('/api/v1/activity')->assertOk();
 
+    expect($response->json('meta.total'))->toBe(1);
     $summaries = collect($response->json('data'))->pluck('summary_line')->implode(' ');
-    expect($summaries)->toContain('Santri Saya');
     expect($summaries)->not->toContain('Santri Orang');
 });
