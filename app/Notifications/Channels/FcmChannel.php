@@ -7,9 +7,9 @@ use Illuminate\Contracts\Container\Container;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Log;
 use Kreait\Firebase\Contract\Messaging;
+use Kreait\Firebase\Messaging\AndroidConfig;
 use Kreait\Firebase\Messaging\CloudMessage;
 use Kreait\Firebase\Messaging\Notification as FcmNotification;
-use Kreait\Firebase\Messaging\AndroidConfig;
 use Throwable;
 
 class FcmChannel
@@ -66,11 +66,18 @@ class FcmChannel
                 $payload['body'] ?? '',
             ))
             ->withData($data);
+        $androidConfig = [
+            'priority' => 'high',
+            'ttl' => '3600s',
+            'notification' => [
+                'channel_id' => 'siakad_default',
+                'sound' => 'default',
+            ],
+        ];
         if ($collapseKey !== null && $collapseKey !== '') {
-            $message = $message->withAndroidConfig(AndroidConfig::fromArray([
-                'collapse_key' => $collapseKey,
-            ]));
+            $androidConfig['collapse_key'] = $collapseKey;
         }
+        $message = $message->withAndroidConfig(AndroidConfig::fromArray($androidConfig));
 
         Log::info('notification_dispatch_attempt', [
             'channel' => 'fcm',

@@ -76,7 +76,7 @@ class SendTomorrowScheduleReminders extends Command
                 ->values()
                 ->all();
 
-            Notification::send($teacher, new ScheduleTomorrowNotification(
+            Notification::sendNow($teacher, new ScheduleTomorrowNotification(
                 role: 'guru',
                 entries: $entries,
                 dayName: $dayName,
@@ -117,7 +117,7 @@ class SendTomorrowScheduleReminders extends Command
                 ->values()
                 ->all();
 
-            Notification::send($user, new ScheduleTomorrowNotification(
+            Notification::sendNow($user, new ScheduleTomorrowNotification(
                 role: 'santri',
                 entries: $entries,
                 dayName: $dayName,
@@ -181,7 +181,7 @@ class SendTomorrowScheduleReminders extends Command
                 $entries = array_merge($entries, $childEntries);
             }
 
-            Notification::send($user, new ScheduleTomorrowNotification(
+            Notification::sendNow($user, new ScheduleTomorrowNotification(
                 role: 'wali',
                 entries: $entries,
                 dayName: $dayName,
