@@ -1,8 +1,10 @@
 import { Head, Link, useForm } from '@inertiajs/react';
-import { UserPlus } from 'lucide-react';
+import { Search, UserPlus, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import InputError from '@/components/input-error';
 import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
     Select,
@@ -35,6 +37,21 @@ export default function GuardianAttach({ student, existingGuardians }: Props) {
         relationship: 'ayah',
     });
 
+    const [guardianSearch, setGuardianSearch] = useState('');
+
+    const filteredGuardians = useMemo(() => {
+        const q = guardianSearch.toLowerCase().trim();
+        if (!q) return existingGuardians;
+        return existingGuardians.filter(
+            (g) =>
+                g.full_name.toLowerCase().includes(q) ||
+                (g.phone ?? '').includes(q) ||
+                (g.email ?? '').toLowerCase().includes(q),
+        );
+    }, [existingGuardians, guardianSearch]);
+
+    const selectedGuardian = existingGuardians.find((g) => String(g.id) === data.guardian_id);
+
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         post(`/admin/students/${student.id}/guardians/attach`);
@@ -61,20 +78,61 @@ export default function GuardianAttach({ student, existingGuardians }: Props) {
                     <form onSubmit={handleSubmit} className="max-w-xl space-y-6">
                         <div className="grid gap-2">
                             <Label>Wali *</Label>
-                            <Select value={data.guardian_id} onValueChange={(v) => setData('guardian_id', v)} required>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Pilih wali" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {existingGuardians.map((g) => (
-                                        <SelectItem key={g.id} value={String(g.id)}>
-                                            {g.full_name}
-                                            {g.phone && ` (${g.phone})`}
-                                            {g.students_count > 0 && ` - ${g.students_count} anak`}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+
+                            {/* Search box */}
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Cari nama, telepon, email..."
+                                    value={guardianSearch}
+                                    onChange={(e) => setGuardianSearch(e.target.value)}
+                                    className="pl-8 pr-8"
+                                />
+                                {guardianSearch && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setGuardianSearch('')}
+                                        className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                                    >
+                                        <X className="size-4" />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Guardian list */}
+                            <div className="max-h-64 overflow-y-auto rounded-md border divide-y">
+                                {filteredGuardians.length === 0 ? (
+                                    <p className="p-4 text-sm text-center text-muted-foreground">
+                                        Tidak ada wali yang cocok dengan pencarian.
+                                    </p>
+                                ) : (
+                                    filteredGuardians.map((g) => {
+                                        const isSelected = String(g.id) === data.guardian_id;
+                                        return (
+                                            <button
+                                                key={g.id}
+                                                type="button"
+                                                onClick={() => setData('guardian_id', isSelected ? '' : String(g.id))}
+                                                className={`w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors ${isSelected ? 'bg-primary/10 border-l-2 border-primary' : ''}`}
+                                            >
+                                                <div className="font-medium text-sm">{g.full_name}</div>
+                                                <div className="text-xs text-muted-foreground mt-0.5 flex gap-3">
+                                                    {g.phone && <span>{g.phone}</span>}
+                                                    {g.email && <span>{g.email}</span>}
+                                                    {g.students_count > 0 && <span>{g.students_count} anak terdaftar</span>}
+                                                </div>
+                                            </button>
+                                        );
+                                    })
+                                )}
+                            </div>
+
+                            {selectedGuardian && (
+                                <p className="text-sm text-primary font-medium">
+                                    Dipilih: {selectedGuardian.full_name}
+                                </p>
+                            )}
+
                             <InputError message={errors.guardian_id} />
                         </div>
 

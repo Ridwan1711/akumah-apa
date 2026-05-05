@@ -111,6 +111,7 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::post('students-import', [StudentDataTransferController::class, 'import'])->name('students.import');
         Route::get('students-import-errors/{token}', [StudentDataTransferController::class, 'downloadErrors'])->name('students.import-errors');
         Route::post('students-import-runs/{importRun}/retry', [StudentDataTransferController::class, 'retry'])->name('students.import-runs.retry');
+        Route::get('guardians', [GuardianController::class, 'index'])->name('guardians.index');
         Route::get('students/{student}/guardians/attach', [GuardianController::class, 'attach'])->name('students.guardians.attach');
         Route::post('students/{student}/guardians/attach', [GuardianController::class, 'storeAttach'])->name('students.guardians.attach.store');
         Route::resource('students.guardians', GuardianController::class)->except(['index', 'show']);

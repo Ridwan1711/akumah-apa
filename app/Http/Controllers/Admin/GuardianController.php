@@ -14,6 +14,26 @@ use Inertia\Response;
 
 class GuardianController extends Controller
 {
+    public function index(Request $request): Response
+    {
+        $search = $request->string('search')->trim()->value();
+
+        $guardians = Guardian::query()
+            ->when($search, fn ($q) => $q->where('full_name', 'like', "%{$search}%")
+                ->orWhere('phone', 'like', "%{$search}%")
+                ->orWhere('nik', 'like', "%{$search}%"))
+            ->withCount('students')
+            ->with('students:id,full_name,nis')
+            ->orderBy('full_name')
+            ->paginate(25)
+            ->withQueryString();
+
+        return Inertia::render('admin/guardians/index', [
+            'guardians' => $guardians,
+            'filters' => ['search' => $search],
+        ]);
+    }
+
     public function attach(Student $student): Response
     {
         $existingGuardians = Guardian::whereHas('students')

@@ -96,6 +96,7 @@ function buildSections(
             label: 'Data Master',
             items: [
                 { title: 'Data Santri', href: '/admin/students', icon: Users },
+                { title: 'Wali Santri', href: '/admin/guardians', icon: UserCheck },
                 { title: 'Pengurus Santri', href: '/admin/student-positions', icon: Shield },
                 { title: 'Enroll Kelas Santri', href: '/admin/student-enrollments', icon: UserPlus },
                 { title: 'Kelas Diniyah', href: '/admin/diniyah-classes', icon: GraduationCap },
