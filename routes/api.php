@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\AdminScheduleController;
 use App\Http\Controllers\Api\AdminTeacherLocationController;
 use App\Http\Controllers\Api\AdminUserManagementController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DashboardSummaryController;
 use App\Http\Controllers\Api\GuruAttendanceController;
 use App\Http\Controllers\Api\GuruController;
 use App\Http\Controllers\Api\PpdbSyncController;
@@ -51,6 +52,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
 
         Route::get('/activity', [ActivityController::class, 'index']);
+        Route::get('/dashboard/summary', DashboardSummaryController::class);
 
         // Santri
         Route::middleware('role:santri')->prefix('santri')->group(function () {
