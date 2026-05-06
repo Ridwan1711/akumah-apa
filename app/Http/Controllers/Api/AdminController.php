@@ -17,6 +17,7 @@ use App\Models\DormRoom;
 use App\Models\EmProfile;
 use App\Models\Guardian;
 use App\Models\LeavePermission;
+use App\Models\LessonSession;
 use App\Models\Role;
 use App\Models\Semester;
 use App\Models\Student;
@@ -66,6 +67,18 @@ class AdminController extends Controller
             ->whereIn('status', [Student::STATUS_ALUMNI, Student::STATUS_KELUAR, Student::STATUS_WAFAT])
             ->count();
 
+        $today = now()->toDateString();
+        $teacherSessionQuery = LessonSession::query()
+            ->whereDate('date', $today);
+        $teacherTotalSessionsToday = (clone $teacherSessionQuery)->count();
+        $teacherPresentSessionsToday = (clone $teacherSessionQuery)
+            ->where('status', 'completed')
+            ->count();
+        $teacherAbsentSessionsToday = max(0, $teacherTotalSessionsToday - $teacherPresentSessionsToday);
+        $teacherAttendanceRateToday = $teacherTotalSessionsToday > 0
+            ? round(($teacherPresentSessionsToday / $teacherTotalSessionsToday) * 100, 1)
+            : 0.0;
+
         $recentActivity = $this->buildAdminRecentActivity(
             $recentViolations,
             $pendingLeaves,
@@ -76,6 +89,10 @@ class AdminController extends Controller
                 'incompleteStudentProfiles' => $incompleteStudentProfiles,
                 'totalWali' => $totalWali,
                 'mutationsThisYear' => $mutationsThisYear,
+                'teacherTotalSessionsToday' => $teacherTotalSessionsToday,
+                'teacherPresentSessionsToday' => $teacherPresentSessionsToday,
+                'teacherAbsentSessionsToday' => $teacherAbsentSessionsToday,
+                'teacherAttendanceRateToday' => $teacherAttendanceRateToday,
             ]),
             'recentViolations' => $recentViolations,
             'pendingLeaves' => $pendingLeaves,
