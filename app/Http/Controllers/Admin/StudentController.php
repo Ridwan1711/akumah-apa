@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreStudentRequest;
 use App\Http\Requests\Admin\UpdateStudentRequest;
 use App\Models\Diniyyah\SchoolClass;
+use App\Models\EmProfile;
 use App\Models\ImportRun;
 use App\Models\Role;
 use App\Models\Student;
@@ -86,8 +87,10 @@ class StudentController extends Controller
         ]);
     }
 
-    public function create(): Response
+    public function create(Request $request): Response
     {
+        abort_unless($request->user()->hasAnyRole([Role::SUPER_ADMIN, Role::ADMIN_AKADEMIK]), 403, 'Anda tidak memiliki akses untuk menambah data santri.');
+
         return Inertia::render('admin/students/create', [
             'classes' => SchoolClass::with('gradeLevel')
                 ->orderBy('name')
@@ -97,6 +100,8 @@ class StudentController extends Controller
 
     public function store(StoreStudentRequest $request): RedirectResponse
     {
+        abort_unless($request->user()->hasAnyRole([Role::SUPER_ADMIN, Role::ADMIN_AKADEMIK]), 403, 'Anda tidak memiliki akses untuk menambah data santri.');
+
         Student::create([
             ...$request->validated(),
             'gender' => Student::GENDER_MALE,
@@ -109,17 +114,19 @@ class StudentController extends Controller
 
     public function show(Student $student): Response
     {
-        $student->load(['currentClass.gradeLevel', 'guardians.user', 'user']);
+        $student->load(['currentClass.gradeLevel', 'guardians.user', 'user', 'emisProfile']);
 
         return Inertia::render('admin/students/show', [
             'student' => $student,
         ]);
     }
 
-    public function edit(Student $student): Response
+    public function edit(Request $request, Student $student): Response
     {
+        abort_unless($request->user()->isSuperAdmin(), 403, 'Hanya Super Admin yang dapat mengedit data santri.');
+
         return Inertia::render('admin/students/edit', [
-            'student' => $student->load('user'),
+            'student' => $student->load(['user', 'emisProfile']),
             'classes' => SchoolClass::with('gradeLevel')
                 ->orderBy('name')
                 ->get(['id', 'name', 'level', 'grade_level_id']),
@@ -128,6 +135,7 @@ class StudentController extends Controller
 
     public function update(UpdateStudentRequest $request, Student $student): RedirectResponse
     {
+        abort_unless($request->user()->isSuperAdmin(), 403, 'Hanya Super Admin yang dapat mengubah data santri.');
         $validated = $request->validated();
         $targetGender = $validated['gender'] ?? $student->gender;
         $targetClassId = $validated['current_class_id'] ?? $student->current_class_id;
@@ -143,14 +151,28 @@ class StudentController extends Controller
             }
         }
 
+        $emProfileData = $request->input('em_profile', []);
+        unset($validated['em_profile']);
+
         $student->update($validated);
+
+        if (is_array($emProfileData) && count($emProfileData) > 0) {
+            $student->loadMissing('emisProfile');
+            $current = $student->emProfilePayload();
+            $merged = array_replace_recursive($current, $emProfileData);
+            $attributes = EmProfile::fromPayload($merged);
+            $student->emisProfile()->updateOrCreate([], $attributes);
+            $student->forceFill(['em_profile' => $merged])->save();
+        }
 
         return redirect()->route('admin.students.show', $student)
             ->with('success', 'Data santri berhasil diperbarui.');
     }
 
-    public function destroy(Student $student): RedirectResponse
+    public function destroy(Request $request, Student $student): RedirectResponse
     {
+        abort_unless($request->user()->hasAnyRole([Role::SUPER_ADMIN, Role::ADMIN_AKADEMIK]), 403, 'Anda tidak memiliki akses untuk menghapus data santri.');
+
         $student->delete();
 
         return redirect()->route('admin.students.index')

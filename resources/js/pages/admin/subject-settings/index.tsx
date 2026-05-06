@@ -141,7 +141,21 @@ export default function SubjectSettingsIndex({
                     left={(
                         <>
                             <span className="mcr-table-meta">Semester:</span>
-                            <AppSelect options={semesters.map((semester) => ({ value: semester.id, label: `${semester.name} (${semester.academic_year_name})` }))} />
+                            <AppSelect
+                                value={(() => {
+                                    const s = semesters.find((sem) => String(sem.id) === semesterId);
+                                    return s ? { value: s.id, label: `${s.name} (${s.academic_year_name})` } : null;
+                                })()}
+                                options={semesters.map((semester) => ({ value: semester.id, label: `${semester.name} (${semester.academic_year_name})` }))}
+                                onChange={(option) => {
+                                    if (option) {
+                                        setSemesterId(String(option.value));
+                                        refreshSemester(String(option.value));
+                                    }
+                                }}
+                                isDisabled={isRefreshing}
+                                placeholder="Pilih semester..."
+                            />
                         </>
                     )}
                     right={(

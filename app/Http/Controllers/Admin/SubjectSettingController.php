@@ -7,9 +7,11 @@ use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\GradeLevel;
 use App\Models\Diniyyah\GradeSubject;
 use App\Models\Diniyyah\SchoolClass;
+use App\Models\Diniyyah\ScheduleSet;
 use App\Models\Diniyyah\Subject;
 use App\Models\Diniyyah\SubjectClassOverride;
 use App\Models\Diniyyah\SubjectLevelSetting;
+use App\Models\Diniyyah\TeacherAssignment;
 use App\Models\Semester;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -116,9 +118,11 @@ class SubjectSettingController extends Controller
         ]);
         $this->ensureSubjectMappedToLevel((int) $payload['subject_id'], (int) $payload['level_id']);
 
+        $periodId = $this->resolvePeriodIdBySemesterId((int) $payload['semester_id']);
+
         SubjectLevelSetting::query()->updateOrCreate(
             [
-                'period_id' => $this->resolvePeriodIdBySemesterId((int) $payload['semester_id']),
+                'period_id' => $periodId,
                 'subject_id' => $payload['subject_id'],
                 'level_id' => $payload['level_id'],
             ],
@@ -129,9 +133,14 @@ class SubjectSettingController extends Controller
             ]
         );
 
+        // Sync TeacherAssignment.target_jam for all draft schedule classes in this level
+        $sync = $this->syncTargetJamByLevel($periodId, (int) $payload['subject_id'], (int) $payload['level_id']);
+        $message = 'Setting level mapel berhasil disimpan.';
+        $message .= $this->buildSyncMessage($sync);
+
         return redirect()
             ->route('admin.subject-settings.index', ['semester_id' => $payload['semester_id']])
-            ->with('success', 'Setting level mapel berhasil disimpan.');
+            ->with('success', $message);
     }
 
     public function upsertClassOverride(Request $request): RedirectResponse
@@ -170,9 +179,19 @@ class SubjectSettingController extends Controller
             ]
         );
 
+        // Sync TeacherAssignment.target_jam for this specific class
+        $sync = $this->syncTargetJamForClass(
+            $periodId,
+            (int) $payload['subject_id'],
+            (int) $payload['class_id'],
+            (int) $payload['override_hours'],
+        );
+        $message = 'Override jam per kelas berhasil disimpan.';
+        $message .= $this->buildSyncMessage($sync);
+
         return redirect()
             ->route('admin.subject-settings.index', ['semester_id' => $payload['semester_id']])
-            ->with('success', 'Override jam per kelas berhasil disimpan.');
+            ->with('success', $message);
     }
 
     public function assignSubjectToLevel(Request $request): RedirectResponse
@@ -218,12 +237,141 @@ class SubjectSettingController extends Controller
     public function destroyClassOverride(Request $request, SubjectClassOverride $subjectClassOverride): RedirectResponse
     {
         $semesterId = $request->integer('semester_id');
+
+        // Load relation data before deletion
+        $subjectClassOverride->load('levelSetting');
+        $levelSetting = $subjectClassOverride->levelSetting;
+        $classId = $subjectClassOverride->class_id;
+
         $subjectClassOverride->delete();
+
+        // Revert TeacherAssignment.target_jam back to level default for this class
+        $sync = ['synced' => 0, 'locked' => false];
+        if ($levelSetting) {
+            $sync = $this->syncTargetJamForClass(
+                $levelSetting->period_id,
+                $levelSetting->subject_id,
+                $classId,
+                $levelSetting->target_jam_default,
+            );
+        }
+
+        $message = 'Override jam per kelas berhasil dihapus.';
+        if ($levelSetting && $sync['synced'] > 0) {
+            $message .= " Target jam guru dikembalikan ke default ({$levelSetting->target_jam_default} jam/minggu).";
+        } elseif ($sync['locked']) {
+            $message .= ' Penugasan guru tidak disinkronkan karena jadwal pada periode ini sudah dipublish.';
+        }
 
         return redirect()
             ->route('admin.subject-settings.index', ['semester_id' => $semesterId > 0 ? $semesterId : null])
-            ->with('success', 'Override jam per kelas berhasil dihapus.');
+            ->with('success', $message);
     }
+
+    // -------------------------------------------------------------------------
+    // Sync helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Sync TeacherAssignment.target_jam for ALL classes in a level.
+     *
+     * Classes with a SubjectClassOverride get their override_hours;
+     * classes without an override get the level's target_jam_default.
+     * Only syncs when the period has NO published (is_active=true) ScheduleSet.
+     *
+     * @return array{synced: int, locked: bool}
+     */
+    private function syncTargetJamByLevel(int $periodId, int $subjectId, int $levelId): array
+    {
+        if ($this->isPeriodLocked($periodId)) {
+            return ['synced' => 0, 'locked' => true];
+        }
+
+        $levelSetting = SubjectLevelSetting::query()
+            ->where(['period_id' => $periodId, 'subject_id' => $subjectId, 'level_id' => $levelId])
+            ->first();
+
+        if (! $levelSetting) {
+            return ['synced' => 0, 'locked' => false];
+        }
+
+        // Map class_id => override_hours for this level setting
+        $overrides = SubjectClassOverride::query()
+            ->where('level_subject_default_id', $levelSetting->id)
+            ->pluck('override_hours', 'class_id');
+
+        $classIds = SchoolClass::query()
+            ->where('grade_level_id', $levelId)
+            ->pluck('id');
+
+        $synced = 0;
+        foreach ($classIds as $classId) {
+            $targetJam = $overrides->has($classId)
+                ? (int) $overrides->get($classId)
+                : $levelSetting->target_jam_default;
+
+            $rows = TeacherAssignment::query()
+                ->where(['period_id' => $periodId, 'subject_id' => $subjectId, 'class_id' => $classId])
+                ->update(['target_jam' => $targetJam]);
+
+            $synced += $rows;
+        }
+
+        return ['synced' => $synced, 'locked' => false];
+    }
+
+    /**
+     * Sync TeacherAssignment.target_jam for a single class.
+     * Only syncs when the period has NO published ScheduleSet.
+     *
+     * @return array{synced: int, locked: bool}
+     */
+    private function syncTargetJamForClass(int $periodId, int $subjectId, int $classId, int $targetJam): array
+    {
+        if ($this->isPeriodLocked($periodId)) {
+            return ['synced' => 0, 'locked' => true];
+        }
+
+        $rows = TeacherAssignment::query()
+            ->where(['period_id' => $periodId, 'subject_id' => $subjectId, 'class_id' => $classId])
+            ->update(['target_jam' => $targetJam]);
+
+        return ['synced' => $rows, 'locked' => false];
+    }
+
+    /**
+     * A period is "locked" when it has at least one published (is_active=true) ScheduleSet.
+     * Published schedules are immutable — no auto-sync allowed.
+     */
+    private function isPeriodLocked(int $periodId): bool
+    {
+        return ScheduleSet::query()
+            ->where('period_id', $periodId)
+            ->where('is_active', true)
+            ->exists();
+    }
+
+    /**
+     * Build a human-readable append to flash messages about the sync result.
+     *
+     * @param  array{synced: int, locked: bool}  $sync
+     */
+    private function buildSyncMessage(array $sync): string
+    {
+        if ($sync['locked']) {
+            return ' Penugasan guru tidak disinkronkan — jadwal pada periode ini sudah dipublish (terkunci).';
+        }
+
+        if ($sync['synced'] > 0) {
+            return " {$sync['synced']} penugasan guru berhasil disinkronkan.";
+        }
+
+        return '';
+    }
+
+    // -------------------------------------------------------------------------
+    // Shared helpers
+    // -------------------------------------------------------------------------
 
     protected function resolvePeriodIdBySemesterId(int $semesterId): int
     {

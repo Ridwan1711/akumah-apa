@@ -64,6 +64,45 @@ export type GradeLevel = {
 /** @deprecated Use `SchoolClass` — kept for gradual migration of imports. */
 export type DiniyahClass = SchoolClass;
 
+export type EmProfile = {
+    id: number;
+    student_id: number;
+    nisn: string | null;
+    nism: string | null;
+    kewarganegaraan: string | null;
+    anak_ke: string | null;
+    jumlah_saudara: string | null;
+    agama: string | null;
+    cita_cita: string | null;
+    no_hp: string | null;
+    email: string | null;
+    hobi: string | null;
+    pendidikan_sebelumnya: string | null;
+    sumber_pembiayaan: string | null;
+    kebutuhan_khusus: string | null;
+    no_kip: string | null;
+    no_kk: string | null;
+    nama_kepala_keluarga: string | null;
+    tanpa_handphone: boolean;
+    status_mukim: string | null;
+    status_tempat_tinggal: string | null;
+    jarak_tempat_tinggal_lembaga: string | null;
+    transportasi_ke_lembaga: string | null;
+    asal_daerah: string | null;
+    catatan_khusus: string | null;
+    santri_provinsi: string | null;
+    santri_kabupaten: string | null;
+    santri_kecamatan: string | null;
+    santri_kelurahan: string | null;
+    santri_dusun: string | null;
+    santri_rt: string | null;
+    santri_rw: string | null;
+    santri_alamat: string | null;
+    santri_kode_pos: string | null;
+    created_at: string;
+    updated_at: string;
+};
+
 export type Student = {
     id: number;
     user_id: number | null;
@@ -83,6 +122,7 @@ export type Student = {
     current_class_id: number | null;
     current_class?: SchoolClass;
     guardians?: Guardian[];
+    emis_profile?: EmProfile;
     em_profile?: {
         santri?: Record<string, unknown>;
         alamat?: Record<string, unknown>;

@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Wali;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Wali\UpdateChildProfileRequest;
 use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\Diniyyah\Score;
+use App\Models\EmProfile;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Models\StudentViolation;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -50,7 +53,7 @@ class WaliSantriController extends Controller
         $guardian = $request->user()->primaryGuardian();
         abort_unless($guardian && $guardian->students()->where('students.id', $student->id)->exists(), 403, 'Anda tidak memiliki akses ke data santri ini.');
 
-        $student->load(['currentClass:id,name', 'violationSummary']);
+        $student->load(['currentClass:id,name', 'violationSummary', 'emisProfile']);
 
         $activeSemester = AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester;
         $semesterId = $request->semester_id ?? $activeSemester?->id;
@@ -80,6 +83,43 @@ class WaliSantriController extends Controller
             'grades' => $grades,
             'recentViolations' => $recentViolations,
         ]);
+    }
+
+    public function editChild(Request $request, Student $student): Response
+    {
+        $guardian = $request->user()->primaryGuardian();
+        abort_unless($guardian && $guardian->students()->where('students.id', $student->id)->exists(), 403, 'Anda tidak memiliki akses ke data santri ini.');
+
+        $student->load(['currentClass:id,name', 'emisProfile']);
+
+        return Inertia::render('wali/child-edit', [
+            'student' => $student,
+        ]);
+    }
+
+    public function updateChild(UpdateChildProfileRequest $request, Student $student): RedirectResponse
+    {
+        $guardian = $request->user()->primaryGuardian();
+        abort_unless($guardian && $guardian->students()->where('students.id', $student->id)->exists(), 403, 'Anda tidak memiliki akses ke data santri ini.');
+
+        $validated = $request->validated();
+
+        $emProfileData = $validated['em_profile'] ?? [];
+        $studentFields = collect($validated)->except(['em_profile'])->all();
+
+        $student->update($studentFields);
+
+        if (is_array($emProfileData) && count($emProfileData) > 0) {
+            $student->loadMissing('emisProfile');
+            $current = $student->emProfilePayload();
+            $merged = array_replace_recursive($current, ['santri' => $emProfileData]);
+            $attributes = EmProfile::fromPayload($merged);
+            $student->emisProfile()->updateOrCreate([], $attributes);
+            $student->forceFill(['em_profile' => $merged])->save();
+        }
+
+        return redirect()->route('wali.children.show', $student)
+            ->with('success', 'Data anak berhasil diperbarui.');
     }
 
     public function childSchedule(Request $request, Student $student): Response

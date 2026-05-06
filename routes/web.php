@@ -78,10 +78,12 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::post('queue-runs/{importRun}/retry', [QueueRunController::class, 'retry'])->name('queue-runs.retry');
 });
 
-// Admin routes (super_admin + admin_akademik)
+// Admin routes (super_admin + admin_akademik + admin_keuangan)
+// admin_keuangan has read-only access; write operations are restricted at controller level
 Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', [
     Role::SUPER_ADMIN,
     Role::ADMIN_AKADEMIK,
+    Role::ADMIN_KEUANGAN,
 ])])
     ->prefix('admin')
     ->name('admin.')
@@ -364,6 +366,8 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.Role::WALI_SA
     ->group(function () {
         Route::get('children', [WaliSantriController::class, 'children'])->name('children');
         Route::get('children/{student}', [WaliSantriController::class, 'childDetail'])->name('children.show');
+        Route::get('children/{student}/edit', [WaliSantriController::class, 'editChild'])->name('children.edit');
+        Route::put('children/{student}', [WaliSantriController::class, 'updateChild'])->name('children.update');
         Route::get('children/{student}/schedule', [WaliSantriController::class, 'childSchedule'])->name('children.schedule');
 
         Route::get('invoices', [WaliPaymentController::class, 'invoices'])->name('invoices');

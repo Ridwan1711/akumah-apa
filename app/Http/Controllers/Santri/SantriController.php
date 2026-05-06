@@ -8,6 +8,7 @@ use App\Http\Requests\Santri\UpdateOwnProfileRequest;
 use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\Diniyyah\Score;
+use App\Models\EmProfile;
 use App\Models\Guardian;
 use App\Models\LessonAttendance;
 use App\Models\Semester;
@@ -88,7 +89,7 @@ class SantriController extends Controller
     public function profile(Request $request): Response
     {
         $student = $this->getStudent($request);
-        $student->load(['currentClass:id,name', 'guardians']);
+        $student->load(['currentClass:id,name', 'guardians', 'emisProfile']);
 
         return Inertia::render('santri/profile', [
             'student' => $student,
@@ -98,7 +99,7 @@ class SantriController extends Controller
     public function editProfile(Request $request): Response
     {
         $student = $this->getStudent($request);
-        $student->load(['currentClass:id,name', 'guardians']);
+        $student->load(['currentClass:id,name', 'guardians', 'emisProfile']);
 
         return Inertia::render('santri/profile-edit', [
             'student' => $student,
@@ -111,7 +112,10 @@ class SantriController extends Controller
         $student = $this->getStudent($request);
         $validated = $request->validated();
 
-        $student->update(collect($validated)->except(['whatsapp_phone', 'google_connected'])->all());
+        $emProfileData = $validated['em_profile'] ?? [];
+        $studentFields = collect($validated)->except(['whatsapp_phone', 'google_connected', 'em_profile'])->all();
+
+        $student->update($studentFields);
 
         $user = $request->user();
         $user->fill([
@@ -120,6 +124,15 @@ class SantriController extends Controller
         ]);
         $user->save();
         $this->accountLinkSync->syncUser($user);
+
+        if (is_array($emProfileData) && count($emProfileData) > 0) {
+            $student->loadMissing('emisProfile');
+            $current = $student->emProfilePayload();
+            $merged = array_replace_recursive($current, ['santri' => $emProfileData]);
+            $attributes = EmProfile::fromPayload($merged);
+            $student->emisProfile()->updateOrCreate([], $attributes);
+            $student->forceFill(['em_profile' => $merged])->save();
+        }
 
         return redirect()->route('santri.profile')
             ->with('success', 'Profil berhasil diperbarui.');
