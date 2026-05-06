@@ -25,16 +25,20 @@ class PaymentVerifiedNotification extends Notification implements ShouldQueue
     {
         $invoice = $this->payment->invoice;
         $student = $invoice?->student;
+        $roleTarget = $this->roleTarget($notifiable);
+        $url = $invoice?->id
+            ? '/'.$roleTarget.'/invoices/'.(string) $invoice->id
+            : '/'.$roleTarget.'/invoices';
 
         return [
             'type' => 'payment_verified',
             'title' => 'Pembayaran Terverifikasi',
             'body' => 'Pembayaran '.($this->payment->payment_number ?? '').' untuk '.($student?->full_name ?? 'santri').' telah diverifikasi.',
             'message' => 'Pembayaran '.($this->payment->payment_number ?? '').' untuk '.($student?->full_name ?? 'santri').' telah diverifikasi.',
-            'url' => $invoice?->id ? '/wali/invoices/'.(string) $invoice->id : '/wali/invoices',
+            'url' => $url,
             'entity_type' => 'invoice',
             'entity_id' => (string) ($invoice?->id ?? ''),
-            'role_target' => 'wali',
+            'role_target' => $roleTarget,
             'priority' => 'p0',
             'collapse_key' => 'payment_verified_'.(string) $this->payment->id,
             'sent_at' => now()->toIso8601String(),
@@ -49,7 +53,10 @@ class PaymentVerifiedNotification extends Notification implements ShouldQueue
     {
         $invoice = $this->payment->invoice;
         $student = $invoice?->student;
-        $url = $invoice?->id ? '/wali/invoices/'.(string) $invoice->id : '/wali/invoices';
+        $roleTarget = $this->roleTarget($notifiable);
+        $url = $invoice?->id
+            ? '/'.$roleTarget.'/invoices/'.(string) $invoice->id
+            : '/'.$roleTarget.'/invoices';
         $body = 'Pembayaran '.($this->payment->payment_number ?? '').' untuk '.($student?->full_name ?? 'santri').' telah diverifikasi.';
 
         return [
@@ -62,12 +69,21 @@ class PaymentVerifiedNotification extends Notification implements ShouldQueue
                 'url' => $url,
                 'entity_type' => 'invoice',
                 'entity_id' => (string) ($invoice?->id ?? ''),
-                'role_target' => 'wali',
+                'role_target' => $roleTarget,
                 'priority' => 'p0',
                 'collapse_key' => 'payment_verified_'.(string) $this->payment->id,
                 'sent_at' => now()->toIso8601String(),
                 'notification_id' => (string) $this->id,
             ],
         ];
+    }
+
+    private function roleTarget(object $notifiable): string
+    {
+        if (method_exists($notifiable, 'hasRole') && $notifiable->hasRole('santri')) {
+            return 'santri';
+        }
+
+        return 'wali';
     }
 }

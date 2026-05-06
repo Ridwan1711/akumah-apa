@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\PaymentGatewayController;
 use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\Diniyyah\Score;
@@ -10,8 +11,10 @@ use App\Models\EmProfile;
 use App\Models\Invoice;
 use App\Models\LeavePermission;
 use App\Models\LessonAttendance;
+use App\Models\Payment;
 use App\Models\Semester;
 use App\Models\Student;
+use App\Notifications\PaymentPendingNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -332,6 +335,66 @@ class SantriController extends Controller
         $invoice->remaining = $invoice->remainingAmount();
 
         return response()->json(['invoice' => $invoice]);
+    }
+
+    public function createCharge(Request $request, Invoice $invoice): JsonResponse
+    {
+        $student = $this->getStudent($request);
+        abort_unless($invoice->student_id === $student->id, 403, 'Anda tidak memiliki akses ke tagihan ini.');
+
+        $request->merge(['invoice_id' => $invoice->id]);
+
+        return app(PaymentGatewayController::class)->createCharge($request);
+    }
+
+    public function uploadProof(Request $request, Invoice $invoice): JsonResponse
+    {
+        $student = $this->getStudent($request);
+        abort_unless($invoice->student_id === $student->id, 403, 'Anda tidak memiliki akses ke tagihan ini.');
+
+        $request->validate([
+            'proof_file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:2048'],
+            'amount' => ['required', 'numeric', 'min:1'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        $proofPath = $request->file('proof_file')->store('payment-proofs', 'public');
+
+        $payment = Payment::create([
+            'payment_number' => Payment::generateNumber(),
+            'invoice_id' => $invoice->id,
+            'amount' => $request->amount,
+            'payment_method' => Payment::METHOD_BANK_TRANSFER,
+            'payment_date' => now()->toDateString(),
+            'proof_file' => $proofPath,
+            'status' => Payment::STATUS_PENDING,
+            'notes' => $request->notes,
+        ]);
+
+        \App\Models\User::whereHas('roles', fn ($q) => $q->whereIn('name', ['super_admin', 'admin_keuangan']))
+            ->where('is_active', true)
+            ->each(fn ($user) => $user->notify(new PaymentPendingNotification($payment)));
+
+        return response()->json([
+            'message' => 'Bukti pembayaran berhasil diupload. Menunggu verifikasi admin.',
+            'payment' => $payment->load('invoice:id,invoice_number'),
+        ], 201);
+    }
+
+    public function paymentHistory(Request $request): JsonResponse
+    {
+        $student = $this->getStudent($request);
+
+        $payments = Payment::whereHas('invoice', fn ($q) => $q->where('student_id', $student->id))
+            ->with([
+                'invoice:id,invoice_number,student_id,payment_type_id,final_amount',
+                'invoice.student:id,full_name',
+                'invoice.paymentType:id,name',
+            ])
+            ->orderByDesc('payment_date')
+            ->paginate(15);
+
+        return response()->json(['payments' => $payments]);
     }
 
     public function attendances(Request $request): JsonResponse

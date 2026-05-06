@@ -66,6 +66,9 @@ Route::prefix('v1')->group(function () {
             Route::get('/schedule', [SantriController::class, 'schedule']);
             Route::get('/invoices', [SantriController::class, 'invoices']);
             Route::get('/invoices/{invoice}', [SantriController::class, 'invoiceDetail']);
+            Route::post('/invoices/{invoice}/create-charge', [SantriController::class, 'createCharge']);
+            Route::post('/invoices/{invoice}/upload-proof', [SantriController::class, 'uploadProof']);
+            Route::get('/payment-history', [SantriController::class, 'paymentHistory']);
             Route::get('/attendances', [SantriController::class, 'attendances']);
         });
 
