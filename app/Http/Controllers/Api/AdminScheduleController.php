@@ -25,6 +25,7 @@ class AdminScheduleController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = AcademicSchedule::query()
+            ->whereIn('day', AcademicSchedule::TEACHING_DAYS)
             ->with(self::SCHEDULE_RELATIONS)
             ->orderBy('day')
             ->orderBy('time_start');
@@ -40,7 +41,10 @@ class AdminScheduleController extends Controller
         }
 
         if ($request->filled('day_of_week')) {
-            $query->where('day', (int) $request->day_of_week);
+            $day = (int) $request->day_of_week;
+            if (in_array($day, AcademicSchedule::TEACHING_DAYS, true)) {
+                $query->where('day', $day);
+            }
         }
 
         $schedules = $query->paginate(50);

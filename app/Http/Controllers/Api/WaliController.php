@@ -222,6 +222,7 @@ class WaliController extends Controller
 
         $schedules = AcademicSchedule::query()
             ->where('class_id', $student->currentClass->id)
+            ->whereIn('day', AcademicSchedule::TEACHING_DAYS)
             ->with([
                 'subject:id,name',
                 'teacher:id,name',

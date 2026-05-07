@@ -33,6 +33,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/user', [AuthController::class, 'user']);
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::patch('/user/profile', [AuthController::class, 'updateProfile']);
+        Route::post('/user/profile-photo', [AuthController::class, 'uploadProfilePhoto']);
+        Route::delete('/user/profile-photo/custom', [AuthController::class, 'removeCustomProfilePhoto']);
         Route::put('/user/password', [AuthController::class, 'updatePassword']);
         Route::post('/force-change-password', [AuthController::class, 'forceChangePassword']);
 
@@ -165,6 +167,7 @@ Route::prefix('v1')->group(function () {
             Route::put('/users/{user}', [AdminUserManagementController::class, 'updateUser']);
             Route::post('/users/{user}/toggle-active', [AdminUserManagementController::class, 'toggleActive']);
             Route::post('/users/{user}/reset-password', [AdminUserManagementController::class, 'resetPassword']);
+            Route::post('/users/{user}/official-photo', [AdminUserManagementController::class, 'uploadOfficialPhoto']);
             Route::post('/notifications/announcement', [AdminUserManagementController::class, 'sendAnnouncement']);
             Route::get('/notifications/token-diagnostics', [AdminUserManagementController::class, 'notificationTokenDiagnostics']);
         });

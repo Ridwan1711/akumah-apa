@@ -58,6 +58,7 @@ type UserRow = {
     is_active: boolean;
     roles?: Pick<Role, 'id' | 'name'>[];
     permissions?: PermissionLite[];
+    has_official_photo?: boolean;
 };
 
 type Props = {
@@ -70,6 +71,11 @@ type Props = {
         status?: string;
         role_name?: string;
         import_uploader_id?: string;
+        has_official_photo?: string;
+    };
+    photoCompliance?: {
+        with_official_photo: number;
+        without_official_photo: number;
     };
     isTeacherMode?: boolean;
     importRuns: ImportRun[];
@@ -159,6 +165,7 @@ export default function UserIndex({
                 search: debouncedSearch || undefined,
                 role_ids: selectedRoleFilters.length > 0 ? selectedRoleFilters : undefined,
                 status: filters.status,
+                has_official_photo: filters.has_official_photo,
                 import_uploader_id: filters.import_uploader_id,
                 role_name: isTeacherMode ? 'guru' : undefined,
                 ...params,
@@ -341,6 +348,10 @@ export default function UserIndex({
 
     const activeUsers = useMemo(() => users.data.filter((user) => user.is_active).length, [users.data]);
     const inactiveUsers = Math.max(0, users.data.length - activeUsers);
+    const withoutOfficialPhoto = useMemo(
+        () => users.data.filter((user) => !user.has_official_photo).length,
+        [users.data],
+    );
     const guruRows = useMemo(
         () => users.data.filter((user) => (user.roles ?? []).some((role) => role.name === 'guru')).length,
         [users.data],
@@ -351,8 +362,27 @@ export default function UserIndex({
         if (debouncedSearch.trim().length > 0) total += 1;
         if (selectedRoleFilters.length > 0) total += 1;
         if (filters.status) total += 1;
+        if (filters.has_official_photo && filters.has_official_photo !== 'all') total += 1;
         return total;
-    }, [debouncedSearch, selectedRoleFilters.length, filters.status]);
+    }, [debouncedSearch, selectedRoleFilters.length, filters.status, filters.has_official_photo]);
+
+    function handleOfficialPhotoFilter(value: string) {
+        visitWithFilters({ has_official_photo: value === 'all' ? undefined : value });
+    }
+
+    function handleUploadOfficialPhoto(userId: number, file: File | null) {
+        if (!file) return;
+        router.post(
+            `/admin/users/${userId}/official-photo`,
+            { photo: file },
+            {
+                forceFormData: true,
+                preserveScroll: true,
+                onSuccess: () => toast.success('Foto resmi berhasil diupload'),
+                onError: () => toast.error('Gagal upload foto resmi'),
+            },
+        );
+    }
 
     function resetFilters() {
         setSearch('');
@@ -398,6 +428,7 @@ export default function UserIndex({
                         { key: 'total', label: 'Total User', value: users.total, icon: <Users size={18} />, tone: 'blue' },
                         { key: 'active', label: 'Akun Aktif', value: activeUsers, icon: <ShieldCheck size={18} />, tone: 'green' },
                         { key: 'inactive', label: 'Akun Nonaktif', value: inactiveUsers, icon: <Power size={18} />, tone: 'amber' },
+                        { key: 'no-photo', label: 'Belum Foto Resmi (halaman)', value: withoutOfficialPhoto, icon: <UserCog size={18} />, tone: 'amber' },
                         { key: 'guru', label: 'Role Guru (halaman)', value: guruRows, icon: <UserCog size={18} />, tone: 'purple' },
                     ]}
                 />
@@ -432,6 +463,15 @@ export default function UserIndex({
                                 <option value="all">Semua Status</option>
                                 <option value="1">Aktif</option>
                                 <option value="0">Nonaktif</option>
+                            </select>
+                            <select
+                                className="mcr-filter-select"
+                                value={filters.has_official_photo ?? 'all'}
+                                onChange={(e) => handleOfficialPhotoFilter(e.target.value)}
+                            >
+                                <option value="all">Semua Foto Resmi</option>
+                                <option value="1">Sudah Foto Resmi</option>
+                                <option value="0">Belum Foto Resmi</option>
                             </select>
                             {activeFilterCount > 0 ? (
                                 <button type="button" className="mcr-btn ghost" onClick={resetFilters}>
@@ -497,13 +537,14 @@ export default function UserIndex({
                                 <th>Email</th>
                                 <th>Role</th>
                                 <th>Status</th>
+                                <th>Foto Resmi</th>
                                 <th style={{ textAlign: 'right' }}>Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
                             {users.data.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6}>
+                                    <td colSpan={7}>
                                         <CrudEmptyState
                                             title="Tidak ada data user"
                                             description="Coba ubah filter atau tambahkan user baru."
@@ -545,6 +586,11 @@ export default function UserIndex({
                                             </span>
                                         </td>
                                         <td>
+                                            <span className={`mcr-dot-badge ${user.has_official_photo ? 'active' : 'keluar'}`}>
+                                                {user.has_official_photo ? 'Sudah' : 'Belum'}
+                                            </span>
+                                        </td>
+                                        <td>
                                             <div className="mcr-action-group">
                                                 {canEditUsers ? (
                                                     <>
@@ -563,6 +609,17 @@ export default function UserIndex({
                                                     <Link href={`/admin/users/${user.id}`} className="mcr-icon-action" title="Detail">
                                                         <Eye size={13} />
                                                     </Link>
+                                                ) : null}
+                                                {canEditUsers ? (
+                                                    <label className="mcr-icon-action" title="Upload Foto Resmi">
+                                                        <FileUp size={13} />
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            style={{ display: 'none' }}
+                                                            onChange={(e) => handleUploadOfficialPhoto(user.id, e.target.files?.[0] ?? null)}
+                                                        />
+                                                    </label>
                                                 ) : null}
                                             </div>
                                         </td>

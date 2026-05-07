@@ -179,6 +179,7 @@ class SantriController extends Controller
 
         $schedules = AcademicSchedule::query()
             ->where('class_id', $class->id)
+            ->whereIn('day', AcademicSchedule::TEACHING_DAYS)
             ->with([
                 'subject:id,name',
                 'teacher:id,name',

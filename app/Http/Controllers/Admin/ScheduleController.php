@@ -41,6 +41,7 @@ class ScheduleController extends Controller
         $selectedSemesterId = (int) (DB::table('academic_periods')->where('id', $selectedPeriodId)->value('semester_id') ?? 0);
 
         $query = AcademicSchedule::query()
+            ->whereIn('day', AcademicSchedule::TEACHING_DAYS)
             ->with([
                 'schoolClass:id,name,grade_level_id',
                 'subject:id,name',
@@ -50,7 +51,10 @@ class ScheduleController extends Controller
             ->when($selectedPeriodId > 0, fn ($q) => $q->where('period_id', $selectedPeriodId))
             ->when($request->filled('class_id'), fn ($q) => $q->where('class_id', (int) $request->class_id))
             ->when($request->filled('teacher_id'), fn ($q) => $q->where('teacher_id', (int) $request->teacher_id))
-            ->when($request->filled('day_of_week'), fn ($q) => $q->where('day', (int) $request->day_of_week))
+            ->when(
+                $request->filled('day_of_week') && in_array((int) $request->day_of_week, AcademicSchedule::TEACHING_DAYS, true),
+                fn ($q) => $q->where('day', (int) $request->day_of_week)
+            )
             ->orderBy('day')
             ->orderBy('time_start');
 

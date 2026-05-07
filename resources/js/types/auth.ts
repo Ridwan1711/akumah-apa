@@ -12,6 +12,10 @@ export type User = {
     whatsapp_phone?: string | null;
     google_connected?: boolean;
     avatar?: string;
+    official_photo_path?: string | null;
+    custom_photo_path?: string | null;
+    profile_photo_url?: string | null;
+    has_official_photo?: boolean;
     email_verified_at: string | null;
     role_id: number | null;
     role: Role | null;

@@ -10,6 +10,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\Validation\ValidationException;
@@ -298,6 +300,62 @@ class AuthController extends Controller
         return response()->json([
             'message' => $deleted ? 'Token perangkat dihapus.' : 'Token tidak ditemukan.',
             'deleted' => (bool) $deleted,
+        ]);
+    }
+
+    /**
+     * Upload profile photo (official/custom) for current user.
+     */
+    public function uploadProfilePhoto(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'type' => ['required', Rule::in(['official', 'custom'])],
+            'photo' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        ]);
+
+        $user = $request->user();
+        $type = (string) $validated['type'];
+        /** @var UploadedFile $photo */
+        $photo = $validated['photo'];
+
+        if ($type === 'official' && $user->has_official_photo && ! $user->isAdmin()) {
+            return response()->json([
+                'message' => 'Foto resmi sudah terisi dan hanya admin yang dapat menggantinya.',
+            ], 403);
+        }
+
+        $field = $type === 'official' ? 'official_photo_path' : 'custom_photo_path';
+        $oldPath = $user->{$field};
+        if (is_string($oldPath) && $oldPath !== '' && Storage::disk('public')->exists($oldPath)) {
+            Storage::disk('public')->delete($oldPath);
+        }
+
+        $stored = $photo->store("profile-photos/{$user->id}", 'public');
+        $user->forceFill([$field => $stored])->save();
+        $user->refresh();
+
+        return response()->json([
+            'message' => $type === 'official' ? 'Foto resmi berhasil diunggah.' : 'Foto kustom berhasil diunggah.',
+            'user' => $user->load('roles'),
+        ]);
+    }
+
+    /**
+     * Remove custom profile photo and fallback to official photo.
+     */
+    public function removeCustomProfilePhoto(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $oldPath = $user->custom_photo_path;
+        if (is_string($oldPath) && $oldPath !== '' && Storage::disk('public')->exists($oldPath)) {
+            Storage::disk('public')->delete($oldPath);
+        }
+        $user->forceFill(['custom_photo_path' => null])->save();
+        $user->refresh();
+
+        return response()->json([
+            'message' => 'Foto kustom dihapus. Avatar kembali ke foto resmi.',
+            'user' => $user->load('roles'),
         ]);
     }
 

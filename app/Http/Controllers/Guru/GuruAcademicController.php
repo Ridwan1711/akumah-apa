@@ -32,6 +32,7 @@ class GuruAcademicController extends Controller
 
         $schedules = AcademicSchedule::query()
             ->where('teacher_id', $user->id)
+            ->whereIn('day', AcademicSchedule::TEACHING_DAYS)
             ->with([
                 'schoolClass:id,name,level',
                 'subject:id,name',

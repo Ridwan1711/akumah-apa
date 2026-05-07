@@ -27,6 +27,12 @@ class SendTomorrowScheduleReminders extends Command
         $dayName = $this->dayName($dayOfWeek);
         $dateStr = $target->toDateString();
 
+        if (! in_array($dayOfWeek, AcademicSchedule::TEACHING_DAYS, true)) {
+            $this->info("Lewati pengingat {$dayName} ({$dateStr}) karena hari libur KBM.");
+
+            return self::SUCCESS;
+        }
+
         $this->info("Mengirim pengingat untuk {$dayName} ({$dateStr}).");
 
         $schedules = AcademicSchedule::query()

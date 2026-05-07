@@ -9,6 +9,34 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AcademicSchedule extends Model
 {
+    public const DAY_MONDAY = 1;
+
+    public const DAY_TUESDAY = 2;
+
+    public const DAY_WEDNESDAY = 3;
+
+    public const DAY_THURSDAY = 4;
+
+    public const DAY_FRIDAY = 5;
+
+    public const DAY_SATURDAY = 6;
+
+    public const DAY_SUNDAY = 7;
+
+    /**
+     * Hari KBM aktif: malam Sabtu hingga Kamis.
+     *
+     * @var array<int, int>
+     */
+    public const TEACHING_DAYS = [
+        self::DAY_MONDAY,
+        self::DAY_TUESDAY,
+        self::DAY_WEDNESDAY,
+        self::DAY_THURSDAY,
+        self::DAY_SATURDAY,
+        self::DAY_SUNDAY,
+    ];
+
     protected $table = 'schedules';
 
     protected $fillable = [

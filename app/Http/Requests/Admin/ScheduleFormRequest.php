@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\Diniyyah\AcademicSchedule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class ScheduleFormRequest extends FormRequest
 {
@@ -26,7 +28,7 @@ class ScheduleFormRequest extends FormRequest
             'subject_id' => ['required', 'exists:subjects,id'],
             'teacher_id' => ['required', 'exists:users,id'],
             'semester_id' => ['required', 'exists:semesters,id'],
-            'day' => ['required', 'integer', 'between:1,7'],
+            'day' => ['required', 'integer', Rule::in(AcademicSchedule::TEACHING_DAYS)],
             'time_start' => ['required', 'date_format:H:i'],
             'time_end' => ['required', 'date_format:H:i', 'after:time_start'],
         ];

@@ -50,10 +50,11 @@ const dayLabels: Record<number, string> = {
     2: 'Selasa',
     3: 'Rabu',
     4: 'Kamis',
-    5: 'Jumat',
     6: 'Sabtu',
     7: 'Minggu',
 };
+
+const teachingDays = [1, 2, 3, 4, 6, 7];
 
 type ScheduleRow = {
     id: number;
@@ -96,7 +97,7 @@ const emptyForm = (periodId: number): FormState => ({
     subject_id: '',
     teacher_id: '',
     semester_id: String(periodId),
-    day: '1',
+    day: '6',
     time_start: '07:00',
     time_end: '08:00',
 });
@@ -289,9 +290,9 @@ export default function SchedulesIndex({
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">Semua</SelectItem>
-                                {Object.entries(dayLabels).map(([k, label]) => (
-                                    <SelectItem key={k} value={k}>
-                                        {label}
+                                {teachingDays.map((day) => (
+                                    <SelectItem key={String(day)} value={String(day)}>
+                                        {dayLabels[day]}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -459,9 +460,9 @@ export default function SchedulesIndex({
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {Object.entries(dayLabels).map(([k, label]) => (
-                                            <SelectItem key={k} value={k}>
-                                                {label}
+                                        {teachingDays.map((day) => (
+                                            <SelectItem key={String(day)} value={String(day)}>
+                                                {dayLabels[day]}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

@@ -10,6 +10,8 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -39,6 +41,15 @@ class UserController extends Controller
             }))
             ->when(! empty($roleIdsFilter), fn ($q) => $q->whereHas('roles', fn ($rq) => $rq->whereIn('roles.id', $roleIdsFilter)))
             ->when($request->status !== null && $request->status !== '', fn ($q) => $q->where('is_active', $request->status === '1'))
+            ->when($request->filled('has_official_photo') && $request->has_official_photo !== 'all', function ($q) use ($request) {
+                if ($request->has_official_photo === '1') {
+                    $q->whereNotNull('official_photo_path')->where('official_photo_path', '!=', '');
+                } else {
+                    $q->where(function ($qq) {
+                        $qq->whereNull('official_photo_path')->orWhere('official_photo_path', '');
+                    });
+                }
+            })
             ->orderByDesc('created_at');
 
         $importRunsQuery = ImportRun::query()
@@ -65,8 +76,15 @@ class UserController extends Controller
             'permissions' => Permission::orderBy('name')->get(['id', 'name']),
             'filters' => [
                 ...$request->only(['search', 'status', 'import_uploader_id']),
+                'has_official_photo' => $request->input('has_official_photo'),
                 'role_ids' => $roleIdsFilter,
                 'role_name' => $request->input('role_name'),
+            ],
+            'photoCompliance' => [
+                'with_official_photo' => User::query()->whereNotNull('official_photo_path')->where('official_photo_path', '!=', '')->count(),
+                'without_official_photo' => User::query()->where(function ($q) {
+                    $q->whereNull('official_photo_path')->orWhere('official_photo_path', '');
+                })->count(),
             ],
             'isTeacherMode' => in_array((int) $guruRoleId, $roleIdsFilter, true),
             'importRuns' => in_array((int) $guruRoleId, $roleIdsFilter, true)
@@ -163,6 +181,25 @@ class UserController extends Controller
         $status = $user->is_active ? 'diaktifkan' : 'dinonaktifkan';
 
         return redirect()->back()->with('success', "User {$user->name} berhasil {$status}.");
+    }
+
+    public function uploadOfficialPhoto(Request $request, User $user): RedirectResponse
+    {
+        $validated = $request->validate([
+            'photo' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        ]);
+
+        /** @var UploadedFile $photo */
+        $photo = $validated['photo'];
+        $oldPath = $user->official_photo_path;
+        if (is_string($oldPath) && $oldPath !== '' && Storage::disk('public')->exists($oldPath)) {
+            Storage::disk('public')->delete($oldPath);
+        }
+
+        $stored = $photo->store("profile-photos/{$user->id}", 'public');
+        $user->forceFill(['official_photo_path' => $stored])->save();
+
+        return redirect()->back()->with('success', "Foto resmi user {$user->name} berhasil diperbarui.");
     }
 
     /**

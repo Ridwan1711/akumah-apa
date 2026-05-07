@@ -107,6 +107,7 @@ class SantriController extends Controller
 
         return response()->json([
             'student' => $this->studentPayload($student),
+            'user' => $request->user()->load('roles'),
             'dorm_label' => $this->dormLabel($student),
             'role_label' => $request->user()->roles()->orderBy('roles.id')->value('roles.name'),
             'photo_url' => $this->publicPhotoUrl($student->photo),
@@ -171,6 +172,7 @@ class SantriController extends Controller
 
         return response()->json([
             'student' => $this->studentPayload($student),
+            'user' => $request->user()->load('roles'),
             'dorm_label' => $this->dormLabel($student),
             'role_label' => $request->user()->roles()->orderBy('roles.id')->value('roles.name'),
             'photo_url' => $this->publicPhotoUrl($student->photo),
@@ -256,6 +258,7 @@ class SantriController extends Controller
 
         $schedulesQuery = AcademicSchedule::query()
             ->where('class_id', $class->id)
+            ->whereIn('day', AcademicSchedule::TEACHING_DAYS)
             ->with([
                 'subject:id,name',
                 'teacher:id,name',

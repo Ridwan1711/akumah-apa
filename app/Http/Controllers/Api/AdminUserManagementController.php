@@ -8,8 +8,10 @@ use App\Models\Role;
 use App\Models\User;
 use App\Notifications\AnnouncementSegmentedNotification;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -152,6 +154,29 @@ class AdminUserManagementController extends Controller
         return response()->json([
             'message' => "Password user {$user->name} berhasil direset.",
             'default_password' => 'password',
+            'user' => $user->load('roles'),
+        ]);
+    }
+
+    public function uploadOfficialPhoto(Request $request, User $user): JsonResponse
+    {
+        $validated = $request->validate([
+            'photo' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        ]);
+
+        /** @var UploadedFile $photo */
+        $photo = $validated['photo'];
+        $oldPath = $user->official_photo_path;
+        if (is_string($oldPath) && $oldPath !== '' && Storage::disk('public')->exists($oldPath)) {
+            Storage::disk('public')->delete($oldPath);
+        }
+
+        $stored = $photo->store("profile-photos/{$user->id}", 'public');
+        $user->forceFill(['official_photo_path' => $stored])->save();
+        $user->refresh();
+
+        return response()->json([
+            'message' => "Foto resmi user {$user->name} berhasil diperbarui.",
             'user' => $user->load('roles'),
         ]);
     }

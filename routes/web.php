@@ -244,6 +244,7 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::post('teachers-import-runs/{importRun}/retry', [TeacherDataTransferController::class, 'retry'])->name('teachers.import-runs.retry');
         Route::post('users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
         Route::post('users/{user}/toggle-active', [UserController::class, 'toggleActive'])->name('users.toggle-active');
+        Route::post('users/{user}/official-photo', [UserController::class, 'uploadOfficialPhoto'])->name('users.official-photo');
         Route::get('system-logs', [SystemLogController::class, 'index'])->name('system-logs.index');
         Route::get('notifications/manual', [AdminNotificationController::class, 'index'])
             ->middleware('permission:'.Permissions::NOTIFICATION_MANUAL_SEND)

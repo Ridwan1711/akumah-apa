@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Sanctum\HasApiTokens;
 
@@ -33,6 +34,8 @@ class User extends Authenticatable
         'must_change_password',
         'must_complete_profile',
         'homeroom_signature_path',
+        'official_photo_path',
+        'custom_photo_path',
     ];
 
     protected $hidden = [
@@ -44,6 +47,8 @@ class User extends Authenticatable
 
     protected $appends = [
         'role',
+        'profile_photo_url',
+        'has_official_photo',
     ];
 
     protected function casts(): array
@@ -57,6 +62,25 @@ class User extends Authenticatable
             'must_complete_profile' => 'boolean',
             'google_connected' => 'boolean',
         ];
+    }
+
+    public function getProfilePhotoUrlAttribute(): ?string
+    {
+        $path = $this->custom_photo_path ?: $this->official_photo_path;
+        if (! is_string($path) || $path === '') {
+            return null;
+        }
+
+        if (! Storage::disk('public')->exists($path)) {
+            return null;
+        }
+
+        return Storage::url($path);
+    }
+
+    public function getHasOfficialPhotoAttribute(): bool
+    {
+        return is_string($this->official_photo_path) && $this->official_photo_path !== '';
     }
 
     public function roles(): BelongsToMany
