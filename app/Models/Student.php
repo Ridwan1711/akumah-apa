@@ -14,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class Student extends Model
 {
@@ -72,6 +74,26 @@ class Student extends Model
     public const SEX_MALE = self::GENDER_MALE;
 
     public const SEX_FEMALE = self::GENDER_FEMALE;
+    public const NIS_PREFIX = 'MH';
+    public const NSM_CODE = '510032060393';
+
+    protected static function booted(): void
+    {
+        static::creating(function (Student $student): void {
+            if (! is_int($student->admission_year) || $student->admission_year < 2000) {
+                $student->admission_year = (int) now()->format('Y');
+            }
+
+            if (! is_string($student->nis) || trim($student->nis) === '') {
+                $allocatedSequence = self::allocateYearlySequence($student->admission_year);
+                $student->nis = self::buildNis(
+                    $student->admission_year,
+                    (string) $student->full_name,
+                    $allocatedSequence
+                );
+            }
+        });
+    }
 
     // --- Core relationships ---
 
@@ -200,6 +222,96 @@ class Student extends Model
     public function hasAccount(): bool
     {
         return $this->user_id !== null;
+    }
+
+    public static function generateNis(int $admissionYear, string $fullName): string
+    {
+        $sequence = self::allocateYearlySequence($admissionYear);
+
+        return self::buildNis($admissionYear, $fullName, $sequence);
+    }
+
+    public static function generateNism(int $admissionYear, int $sequence): string
+    {
+        $yy = substr((string) $admissionYear, -2);
+
+        return self::NSM_CODE.$yy.str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
+    }
+
+    public static function extractSequenceFromNis(?string $nis): int
+    {
+        if (! is_string($nis) || $nis === '') {
+            return 0;
+        }
+        $numberPart = substr($nis, 4, -2);
+        if (! is_string($numberPart) || $numberPart === '' || ! ctype_digit($numberPart)) {
+            return 0;
+        }
+
+        return (int) $numberPart;
+    }
+
+    private static function allocateYearlySequence(int $admissionYear): int
+    {
+        return DB::transaction(function () use ($admissionYear): int {
+            $existing = DB::table('student_number_sequences')
+                ->where('admission_year', $admissionYear)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $existing) {
+                DB::table('student_number_sequences')->insert([
+                    'admission_year' => $admissionYear,
+                    'last_sequence' => 0,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                $existing = DB::table('student_number_sequences')
+                    ->where('admission_year', $admissionYear)
+                    ->lockForUpdate()
+                    ->first();
+            }
+
+            $next = ((int) ($existing->last_sequence ?? 0)) + 1;
+            DB::table('student_number_sequences')
+                ->where('admission_year', $admissionYear)
+                ->update([
+                    'last_sequence' => $next,
+                    'updated_at' => now(),
+                ]);
+
+            return $next;
+        }, 3);
+    }
+
+    private static function buildNis(int $admissionYear, string $fullName, int $sequence): string
+    {
+        $yy = substr((string) $admissionYear, -2);
+        $initials = self::extractInitials($fullName);
+
+        return self::NIS_PREFIX.$yy.str_pad((string) $sequence, 3, '0', STR_PAD_LEFT).$initials;
+    }
+
+    private static function extractInitials(string $fullName): string
+    {
+        $parts = collect(preg_split('/\s+/', trim($fullName)) ?: [])
+            ->map(function (string $part) {
+                return preg_replace('/[^a-zA-Z]/', '', $part) ?? '';
+            })
+            ->filter()
+            ->values();
+
+        if ($parts->isEmpty()) {
+            return 'XX';
+        }
+
+        if ($parts->count() === 1) {
+            $word = strtoupper((string) $parts->first());
+            return str_pad(Str::substr($word, 0, 2), 2, 'X');
+        }
+
+        return strtoupper(Str::substr((string) $parts->first(), 0, 1).Str::substr((string) $parts->get(1), 0, 1));
     }
 
     /**

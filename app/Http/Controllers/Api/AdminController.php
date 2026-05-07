@@ -1069,10 +1069,8 @@ class AdminController extends Controller
         $validated = $request->validate([
             'student' => ['required', 'array'],
             'student.full_name' => ['required', 'string', 'max:255'],
-            'student.nis' => ['required', 'string', 'max:32', 'unique:students,nis'],
             'student.nik' => ['nullable', 'string', 'max:32'],
             'student.nisn' => ['nullable', 'string', 'max:32'],
-            'student.nism' => ['nullable', 'string', 'max:32'],
             'student.gender' => ['required', Rule::in([Student::GENDER_MALE, Student::GENDER_FEMALE])],
             'student.birth_place' => ['nullable', 'string', 'max:120'],
             'student.birth_date' => ['nullable', 'date'],
@@ -1156,7 +1154,6 @@ class AdminController extends Controller
 
             $student = Student::create([
                 'user_id' => $santriUser->id,
-                'nis' => $studentInput['nis'],
                 'nik' => $studentInput['nik'] ?? null,
                 'full_name' => $studentInput['full_name'],
                 'birth_place' => $studentInput['birth_place'] ?? null,
@@ -1236,6 +1233,10 @@ class AdminController extends Controller
                 $ibuAddress,
                 $waliAddress,
                 $santriAddress,
+                Student::generateNism(
+                    (int) $student->admission_year,
+                    Student::extractSequenceFromNis($student->nis),
+                ),
             );
             $student->forceFill(['em_profile' => $emPayload])->save();
             $student->emisProfile()->create(EmProfile::fromPayload($emPayload));
@@ -1350,7 +1351,6 @@ class AdminController extends Controller
             'em_profile' => 'nullable|array',
             'full_name' => 'sometimes|nullable|string|max:255',
             'nik' => 'sometimes|nullable|string|max:32',
-            'nis' => 'sometimes|nullable|string|max:32',
             'birth_place' => 'sometimes|nullable|string|max:120',
             'birth_date' => 'sometimes|nullable|date',
             'gender' => 'sometimes|nullable|in:'.implode(',', [Student::GENDER_MALE, Student::GENDER_FEMALE]),
@@ -1367,9 +1367,6 @@ class AdminController extends Controller
         }
         if (array_key_exists('nik', $validated)) {
             $student->nik = $validated['nik'];
-        }
-        if (array_key_exists('nis', $validated)) {
-            $student->nis = $validated['nis'];
         }
         if (array_key_exists('birth_place', $validated)) {
             $student->birth_place = $validated['birth_place'];
@@ -1402,6 +1399,10 @@ class AdminController extends Controller
 
     private function upsertEmProfile(Student $student, array $incoming): void
     {
+        if (isset($incoming['santri']) && is_array($incoming['santri'])) {
+            unset($incoming['santri']['nism']);
+        }
+
         $student->loadMissing('emisProfile');
         $current = $student->emProfilePayload();
         $merged = array_replace_recursive($current, $incoming);
@@ -1453,11 +1454,12 @@ class AdminController extends Controller
         array $ibuAddress,
         array $waliAddress,
         array $santriAddress,
+        string $generatedNism,
     ): array {
         return [
             'santri' => [
                 'nisn' => $studentInput['nisn'] ?? null,
-                'nism' => $studentInput['nism'] ?? null,
+                'nism' => $generatedNism,
                 'kewarganegaraan' => $studentInput['kewarganegaraan'] ?? null,
                 'agama' => $studentInput['agama'] ?? null,
                 'no_hp' => $studentInput['no_hp'] ?? null,

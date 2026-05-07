@@ -126,7 +126,6 @@ class SantriController extends Controller
             'em_profile' => 'nullable|array',
             'full_name' => 'sometimes|nullable|string|max:255',
             'nik' => 'sometimes|nullable|string|max:32',
-            'nis' => 'sometimes|nullable|string|max:32',
             'birth_place' => 'sometimes|nullable|string|max:120',
             'birth_date' => 'sometimes|nullable|date',
             'gender' => 'sometimes|nullable|in:'.implode(',', [Student::GENDER_MALE, Student::GENDER_FEMALE]),
@@ -143,9 +142,6 @@ class SantriController extends Controller
         }
         if (array_key_exists('nik', $validated)) {
             $student->nik = $validated['nik'];
-        }
-        if (array_key_exists('nis', $validated)) {
-            $student->nis = $validated['nis'];
         }
         if (array_key_exists('birth_place', $validated)) {
             $student->birth_place = $validated['birth_place'];
@@ -182,6 +178,10 @@ class SantriController extends Controller
 
     private function upsertEmProfile(Student $student, array $incoming): void
     {
+        if (isset($incoming['santri']) && is_array($incoming['santri'])) {
+            unset($incoming['santri']['nism']);
+        }
+
         $student->loadMissing('emisProfile');
         $current = $student->emProfilePayload();
         $merged = array_replace_recursive($current, $incoming);

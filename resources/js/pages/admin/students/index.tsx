@@ -96,7 +96,6 @@ export default function StudentIndex({
 
     const createForm = useForm({
         user_id: '',
-        nis: '',
         full_name: '',
         admission_year: String(new Date().getFullYear()),
     });
@@ -812,16 +811,8 @@ export default function StudentIndex({
                             <InputError message={createForm.errors.full_name} />
                         </div>
                         <div className="mcr-form-group">
-                            <label htmlFor="nis">NIS *</label>
-                            <input
-                                id="nis"
-                                className="mcr-input"
-                                value={createForm.data.nis}
-                                onChange={(e) => createForm.setData('nis', e.target.value)}
-                                placeholder="Masukkan NIS"
-                                required
-                            />
-                            <InputError message={createForm.errors.nis} />
+                            <label>NIS & NISM</label>
+                            <input className="mcr-input" value="Auto-generate by system" readOnly />
                         </div>
                     </div>
 

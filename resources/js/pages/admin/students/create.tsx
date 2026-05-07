@@ -20,7 +20,6 @@ const breadcrumbs: BreadcrumbItem[] = [
 export default function StudentCreate() {
     const { data, setData, post, processing, errors } = useForm({
         user_id: '',
-        nis: '',
         full_name: '',
         admission_year: String(new Date().getFullYear()),
     });
@@ -94,11 +93,7 @@ export default function StudentCreate() {
                         <InputError message={errors.user_id} />
                     </div>
 
-                    <div className="grid gap-2">
-                        <Label htmlFor="nis">NIS *</Label>
-                        <Input id="nis" value={data.nis} onChange={(e) => setData('nis', e.target.value)} required />
-                        <InputError message={errors.nis} />
-                    </div>
+                    <p className="text-xs text-muted-foreground">NIS dan NISM dibuat otomatis oleh sistem saat santri disimpan.</p>
 
                     <div className="grid gap-2">
                         <Label htmlFor="full_name">Nama Lengkap *</Label>

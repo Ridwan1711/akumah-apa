@@ -38,7 +38,6 @@ export default function StudentEdit({ student, classes }: Props) {
 
     const { data, setData, put, processing, errors } = useForm<{
         user_id: string;
-        nis: string;
         nik: string;
         full_name: string;
         birth_place: string;
@@ -51,7 +50,6 @@ export default function StudentEdit({ student, classes }: Props) {
         em_profile: EmProfileFormData;
     }>({
         user_id: student.user_id ? String(student.user_id) : '',
-        nis: student.nis,
         nik: student.nik ?? '',
         full_name: student.full_name,
         birth_place: student.birth_place ?? '',
@@ -122,9 +120,8 @@ export default function StudentEdit({ student, classes }: Props) {
                             <div className="py-6 space-y-5">
                                 <div className="grid gap-4 sm:grid-cols-2">
                                     <div className="grid gap-2">
-                                        <Label htmlFor="nis">NIS *</Label>
-                                        <Input id="nis" value={data.nis} onChange={(e) => setData('nis', e.target.value)} required />
-                                        <InputError message={errors.nis} />
+                                        <Label htmlFor="nis-static">NIS (Terkunci)</Label>
+                                        <Input id="nis-static" value={student.nis} readOnly />
                                     </div>
                                     <div className="grid gap-2">
                                         <Label htmlFor="nik">NIK</Label>

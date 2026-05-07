@@ -157,6 +157,10 @@ class StudentController extends Controller
         $student->update($validated);
 
         if (is_array($emProfileData) && count($emProfileData) > 0) {
+            if (isset($emProfileData['santri']) && is_array($emProfileData['santri'])) {
+                unset($emProfileData['santri']['nism']);
+            }
+
             $student->loadMissing('emisProfile');
             $current = $student->emProfilePayload();
             $merged = array_replace_recursive($current, $emProfileData);
