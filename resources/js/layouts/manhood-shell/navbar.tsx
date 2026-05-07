@@ -17,8 +17,8 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppearance } from '@/hooks/use-appearance';
-import { useQueueRunsPoll } from '@/hooks/use-queue-runs-poll';
 import { useInitials } from '@/hooks/use-initials';
+import { useQueueRunsPoll } from '@/hooks/use-queue-runs-poll';
 import { logout } from '@/routes';
 import { edit as editProfile } from '@/routes/profile';
 import type { Auth, BreadcrumbItem } from '@/types';

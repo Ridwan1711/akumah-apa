@@ -3,11 +3,11 @@ import { AlertTriangle } from 'lucide-react';
 import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { can } from '@/lib/authz';
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { can } from '@/lib/authz';
 import type { Auth, BreadcrumbItem, DiniyahClass, Invoice, PaginatedData, PaymentType } from '@/types';
 
 const breadcrumbs: BreadcrumbItem[] = [

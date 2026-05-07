@@ -15,7 +15,8 @@ import type {
     ScheduleSet,
     ScheduleTimeSlot,
 } from '@/types';
-import ConflictDialog, { type ConflictAction } from './editor-parts/ConflictDialog';
+import ConflictDialog from './editor-parts/ConflictDialog';
+import type {ConflictAction} from './editor-parts/ConflictDialog';
 import MatrixGrid from './editor-parts/MatrixGrid';
 import PengampuPicker from './editor-parts/PengampuPicker';
 import SubjectPickDialog from './editor-parts/SubjectPickDialog';

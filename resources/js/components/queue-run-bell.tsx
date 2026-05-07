@@ -7,7 +7,8 @@ import {
     DropdownMenuContent,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { type QueueRunListItem, useQueueRunsPoll } from '@/hooks/use-queue-runs-poll';
+import {  useQueueRunsPoll } from '@/hooks/use-queue-runs-poll';
+import type {QueueRunListItem} from '@/hooks/use-queue-runs-poll';
 import { cn } from '@/lib/utils';
 
 const statusLabel: Record<QueueRunListItem['status'], string> = {

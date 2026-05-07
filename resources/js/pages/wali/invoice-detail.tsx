@@ -1,7 +1,7 @@
 import { Head, router, useForm } from '@inertiajs/react';
 import { ArrowLeft, Copy, Upload } from 'lucide-react';
-import { useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import { useRef, useState } from 'react';
 import FlashMessage from '@/components/flash-message';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';

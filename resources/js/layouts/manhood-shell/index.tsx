@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
-import { ShellSidebar } from './sidebar';
-import { ShellBreadcrumbs, ShellNavbar } from './navbar';
-import { useShellState } from './use-shell-state';
 import type { BreadcrumbItem } from '@/types';
+import { ShellBreadcrumbs, ShellNavbar } from './navbar';
+import { ShellSidebar } from './sidebar';
+import { useShellState } from './use-shell-state';
 
 type Props = {
     children: ReactNode;

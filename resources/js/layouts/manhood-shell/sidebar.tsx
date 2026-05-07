@@ -24,9 +24,10 @@ import {
     UserCheck,
     UserPlus,
     Users,
-    Wallet,
-    type LucideIcon,
+    Wallet
+    
 } from 'lucide-react';
+import type {LucideIcon} from 'lucide-react';
 import { useMemo } from 'react';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import { useInitials } from '@/hooks/use-initials';

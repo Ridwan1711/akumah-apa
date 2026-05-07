@@ -12,8 +12,8 @@ import {
     CrudTableShell,
     CrudToolbar,
 } from '@/components/manhood';
-import { can } from '@/lib/authz';
 import AppLayout from '@/layouts/app-layout';
+import { can } from '@/lib/authz';
 import type { Auth, BreadcrumbItem, PaginatedData, Payment, PaymentType } from '@/types';
 
 const breadcrumbs: BreadcrumbItem[] = [

@@ -1,4 +1,5 @@
 import { router, usePage } from '@inertiajs/react';
+import axios from 'axios';
 import { Bell, Check, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -8,7 +9,6 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import axios from 'axios';
 
 type NotificationItem = {
     id: string;

@@ -1,11 +1,12 @@
 import { Head, router, useForm } from '@inertiajs/react';
 import { Pencil, Plus, RotateCcw, Search, ShieldCheck, ShieldX, Trash2, Users } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import FlashMessage from '@/components/flash-message';
 import InputError from '@/components/input-error';
 import {
     AppMultiSelect,
-    type SelectOption,
+    
     CrudCard,
     CrudConfirmModal,
     CrudEmptyState,
@@ -15,11 +16,11 @@ import {
     CrudStatStrip,
     CrudTableShell,
     CrudToolbar,
-    AppSelect,
+    AppSelect
 } from '@/components/manhood';
+import type {SelectOption} from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem, PaginatedData, Student, StudentPosition } from '@/types';
-import { toast } from 'sonner';
 
 const positionTypes: { id: number; name: string; code: string }[] = [
     { id: 1, name: 'Keamanan', code: "KMN" },

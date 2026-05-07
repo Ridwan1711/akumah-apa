@@ -1,6 +1,7 @@
 import { Head, router, useForm } from '@inertiajs/react';
 import { BedDouble, Building2, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import FlashMessage from '@/components/flash-message';
 import InputError from '@/components/input-error';
 import {
@@ -14,7 +15,6 @@ import {
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem, DormBuilding, DormRoom } from '@/types';
-import { toast } from 'sonner';
 
 type BuildingRow = DormBuilding & {
     rooms?: (DormRoom & { musyrif?: { user?: { name?: string } | null } | null })[];

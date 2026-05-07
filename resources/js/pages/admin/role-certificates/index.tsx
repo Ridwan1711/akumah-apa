@@ -1,11 +1,12 @@
 import { Head, router, useForm } from '@inertiajs/react';
 import { Download, Eye, Pencil, Plus, RotateCcw, Search, ScrollText } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import FlashMessage from '@/components/flash-message';
 import InputError from '@/components/input-error';
 import {
     AppSelect,
-    type SelectOption,
+    
     CrudCard,
     CrudEmptyState,
     CrudModal,
@@ -13,11 +14,11 @@ import {
     CrudPagination,
     CrudStatStrip,
     CrudTableShell,
-    CrudToolbar,
+    CrudToolbar
 } from '@/components/manhood';
+import type {SelectOption} from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem, PaginatedData } from '@/types';
-import { toast } from 'sonner';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/dashboard' },

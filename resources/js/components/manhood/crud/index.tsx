@@ -1,6 +1,6 @@
 import { Link, router } from '@inertiajs/react';
-import type { ReactNode } from 'react';
 import { AlertTriangle, Trash2, X } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 type StatTone = 'blue' | 'green' | 'amber' | 'purple';
 

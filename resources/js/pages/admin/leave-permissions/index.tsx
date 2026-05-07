@@ -11,9 +11,10 @@ import {
     CrudPagination,
     CrudStatStrip,
     CrudTableShell,
-    CrudToolbar,
-    type SelectOption,
+    CrudToolbar
+    
 } from '@/components/manhood';
+import type {SelectOption} from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem, LeavePermission, PaginatedData, Student } from '@/types';
 

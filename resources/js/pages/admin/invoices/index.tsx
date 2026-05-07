@@ -9,8 +9,8 @@ import {
     CrudTableShell,
     CrudToolbar,
 } from '@/components/manhood';
-import { can } from '@/lib/authz';
 import AppLayout from '@/layouts/app-layout';
+import { can } from '@/lib/authz';
 import type { AcademicYear, Auth, BreadcrumbItem, Invoice, PaginatedData, PaymentType, SchoolClass } from '@/types';
 
 const breadcrumbs: BreadcrumbItem[] = [

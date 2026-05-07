@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const POLL_ACTIVE_MS = 15_000;
 const POLL_IDLE_MS = 60_000;

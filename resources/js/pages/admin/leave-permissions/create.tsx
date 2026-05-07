@@ -2,7 +2,8 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useMemo } from 'react';
 import InputError from '@/components/input-error';
-import { AppSelect, CrudCard, CrudPageHeader, CrudToolbar, type SelectOption } from '@/components/manhood';
+import { AppSelect, CrudCard, CrudPageHeader, CrudToolbar  } from '@/components/manhood';
+import type {SelectOption} from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem, Student } from '@/types';
 
