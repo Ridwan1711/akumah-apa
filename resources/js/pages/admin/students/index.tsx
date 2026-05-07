@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import FlashMessage from '@/components/flash-message';
 import InputError from '@/components/input-error';
 import {
+    AppSelect,
     CrudBulkActionBar,
     CrudCard,
     CrudConfirmModal,
@@ -31,6 +32,7 @@ import {
     CrudToolbar,
     openDownload,
 } from '@/components/manhood';
+import type { SelectOption } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
 import type {
     BreadcrumbItem,
@@ -93,10 +95,15 @@ export default function StudentIndex({
     });
 
     const createForm = useForm({
+        user_id: '',
         nis: '',
         full_name: '',
         admission_year: String(new Date().getFullYear()),
     });
+    const [existingUserOptions, setExistingUserOptions] = useState<SelectOption[]>([]);
+    const [isLoadingExistingUsers, setIsLoadingExistingUsers] = useState(false);
+    const selectedExistingUserOption =
+        existingUserOptions.find((item) => item.value === createForm.data.user_id) ?? null;
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -159,6 +166,34 @@ export default function StudentIndex({
                 toast.error('Gagal menambah santri');
             },
         });
+    }
+
+    async function loadEligibleUsers(searchTerm = '') {
+        setIsLoadingExistingUsers(true);
+        try {
+            const url = new URL('/admin/students/eligible-users', window.location.origin);
+            if (searchTerm.trim() !== '') {
+                url.searchParams.set('search', searchTerm.trim());
+            }
+
+            const response = await fetch(url.toString(), {
+                method: 'GET',
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            const payload = await response.json();
+            const options: SelectOption[] = (payload?.data ?? []).map(
+                (user: { id: number; name: string; email: string }) => ({
+                    value: String(user.id),
+                    label: `${user.name} (${user.email})`,
+                }),
+            );
+            setExistingUserOptions(options);
+        } catch {
+            setExistingUserOptions([]);
+        } finally {
+            setIsLoadingExistingUsers(false);
+        }
     }
 
     function handleImportSubmit(e: React.FormEvent) {
@@ -733,6 +768,35 @@ export default function StudentIndex({
                 wide
             >
                 <form onSubmit={handleCreateSubmit}>
+                    <div className="mcr-section-title">Akun Existing</div>
+                    <div className="mcr-form-grid">
+                        <div className="mcr-form-group full">
+                            <label htmlFor="existing-user">Pilih User Existing (Opsional)</label>
+                            <AppSelect
+                                inputId="existing-user"
+                                placeholder="Cari user..."
+                                options={existingUserOptions}
+                                isLoading={isLoadingExistingUsers}
+                                value={selectedExistingUserOption}
+                                onChange={(option) =>
+                                    createForm.setData('user_id', String(option?.value ?? ''))
+                                }
+                                onInputChange={(value, meta) => {
+                                    if (meta.action === 'input-change') {
+                                        void loadEligibleUsers(value);
+                                    }
+                                    return value;
+                                }}
+                                onMenuOpen={() => {
+                                    if (existingUserOptions.length === 0) {
+                                        void loadEligibleUsers();
+                                    }
+                                }}
+                            />
+                            <InputError message={createForm.errors.user_id} />
+                        </div>
+                    </div>
+
                     <div className="mcr-section-title">Data Pribadi</div>
                     <div className="mcr-form-grid">
                         <div className="mcr-form-group">

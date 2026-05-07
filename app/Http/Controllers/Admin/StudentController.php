@@ -94,7 +94,7 @@ class StudentController extends Controller
         return Inertia::render('admin/students/create', [
             'classes' => SchoolClass::with('gradeLevel')
                 ->orderBy('name')
-                ->get(['id', 'name', 'level', 'grade_level_id']),
+                ->get(['id', 'name', 'grade_level_id']),
         ]);
     }
 
@@ -129,7 +129,7 @@ class StudentController extends Controller
             'student' => $student->load(['user', 'emisProfile']),
             'classes' => SchoolClass::with('gradeLevel')
                 ->orderBy('name')
-                ->get(['id', 'name', 'level', 'grade_level_id']),
+                ->get(['id', 'name', 'grade_level_id']),
         ]);
     }
 
