@@ -3,6 +3,7 @@ import {
     AlertTriangle,
     ArrowUpDown,
     Banknote,
+    Bell,
     BookOpen,
     BookOpenCheck,
     Building,
@@ -131,6 +132,9 @@ function buildSections(
                 { title: 'Asrama', href: '/admin/asrama', icon: Building },
                 { title: 'Pelanggaran', href: '/admin/violations', icon: AlertTriangle },
                 { title: 'Perizinan Pulang', href: '/admin/leave-permissions', icon: Home },
+                ...(can(auth, 'notification.manual.send')
+                    ? [{ title: 'Kirim Notifikasi', href: '/admin/notifications/manual', icon: Bell }]
+                    : []),
             ],
         });
         if (isSuperAdmin) {

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AcademicYearController;
 use App\Http\Controllers\Admin\AccountGeneratorController;
+use App\Http\Controllers\Admin\AdminNotificationController;
 use App\Http\Controllers\Admin\AdminStudentPositionController;
 use App\Http\Controllers\Admin\AsramaController;
 use App\Http\Controllers\Admin\AssessmentComponentController;
@@ -52,6 +53,7 @@ use App\Http\Controllers\WaliKelas\WaliKelasClassPromotionRecapController;
 use App\Http\Controllers\WaliKelas\WaliKelasGradeReviewController;
 use App\Http\Controllers\WaliKelas\WaliKelasReportController;
 use App\Models\Role;
+use App\Support\Authorization\Permissions;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -243,6 +245,15 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::post('users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
         Route::post('users/{user}/toggle-active', [UserController::class, 'toggleActive'])->name('users.toggle-active');
         Route::get('system-logs', [SystemLogController::class, 'index'])->name('system-logs.index');
+        Route::get('notifications/manual', [AdminNotificationController::class, 'index'])
+            ->middleware('permission:'.Permissions::NOTIFICATION_MANUAL_SEND)
+            ->name('notifications.manual.index');
+        Route::post('notifications/manual/preview', [AdminNotificationController::class, 'previewTargets'])
+            ->middleware('permission:'.Permissions::NOTIFICATION_MANUAL_SEND)
+            ->name('notifications.manual.preview');
+        Route::post('notifications/manual/send', [AdminNotificationController::class, 'send'])
+            ->middleware('permission:'.Permissions::NOTIFICATION_MANUAL_SEND)
+            ->name('notifications.manual.send');
     });
 
 // Audit log: super_admin (semua modul), admin_keuangan (keuangan), admin_akademik (akademik & operasional)

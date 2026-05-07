@@ -10,6 +10,7 @@ return [
         Role::ADMIN_AKADEMIK => [
             Permissions::DASHBOARD_ADMIN,
             Permissions::DASHBOARD_GURU,
+            Permissions::NOTIFICATION_MANUAL_SEND,
             Permissions::LEAVE_PERMISSION_VIEW,
             Permissions::LEAVE_PERMISSION_APPROVE,
             Permissions::AUDIT_LOG_VIEW_AKADEMIK,

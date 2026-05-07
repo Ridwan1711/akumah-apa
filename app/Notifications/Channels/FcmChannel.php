@@ -23,7 +23,9 @@ class FcmChannel
         }
 
         $tokens = [];
-        if (method_exists($notifiable, 'routeNotificationFor')) {
+        if (method_exists($notification, 'tokensForNotifiable')) {
+            $tokens = $notification->tokensForNotifiable($notifiable) ?? [];
+        } elseif (method_exists($notifiable, 'routeNotificationFor')) {
             $tokens = $notifiable->routeNotificationFor('fcm', $notification) ?? [];
         }
 

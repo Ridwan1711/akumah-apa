@@ -38,6 +38,8 @@ final class Permissions
 
     public const USER_MANAGEMENT_EDIT = 'user.management.edit';
 
+    public const NOTIFICATION_MANUAL_SEND = 'notification.manual.send';
+
     public const LEAVE_PERMISSION_VIEW = 'leave_permission.view';
 
     public const LEAVE_PERMISSION_APPROVE = 'leave_permission.approve';
