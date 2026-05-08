@@ -17,7 +17,7 @@ class AdminAttendanceController extends Controller
     {
         $query = LessonAttendance::query()
             ->with([
-                'lessonSession.schedule.schoolClass:id,name,level',
+                'lessonSession.schedule.schoolClass:id,name,grade_level_id',
                 'lessonSession.schedule.subject:id,name',
                 'student:id,nis,full_name',
             ])
@@ -78,7 +78,7 @@ class AdminAttendanceController extends Controller
 
         $query = LessonAttendance::query()
             ->with([
-                'lessonSession.schedule.schoolClass:id,name,level',
+                'lessonSession.schedule.schoolClass:id,name,grade_level_id',
                 'lessonSession.schedule.subject:id,name',
                 'lessonSession.schedule.teacher:id,name',
                 'student:id,nis,full_name,current_class_id',
