@@ -199,10 +199,12 @@ class AdminUserManagementController extends Controller
         }
 
         $sent = 0;
+        $usersWithTokens = 0;
+        $usersWithoutTokens = 0;
         $query->chunkById(200, function ($users) use (&$sent, $validated, $roleTarget, $url) {
             foreach ($users as $user) {
                 /** @var User $user */
-                $user->notify(new AnnouncementSegmentedNotification(
+                $user->notifyNow(new AnnouncementSegmentedNotification(
                     titleText: (string) $validated['title'],
                     bodyText: (string) $validated['body'],
                     roleTarget: $roleTarget,
@@ -212,10 +214,23 @@ class AdminUserManagementController extends Controller
             }
         });
 
+        $countQuery = User::query()
+            ->where('is_active', true);
+        if ($roleTarget !== 'multi') {
+            $countQuery->whereHas('roles', fn ($q) => $q->whereIn('name', $this->roleNamesForTarget($roleTarget)));
+        }
+        $usersWithTokens = (clone $countQuery)->whereHas('deviceTokens')->count();
+        $usersWithoutTokens = max(0, $sent - $usersWithTokens);
+
         return response()->json([
             'message' => 'Pengumuman berhasil dikirim.',
             'sent_count' => $sent,
             'role_target' => $roleTarget,
+            'summary' => [
+                'targeted_users' => $sent,
+                'users_with_tokens' => $usersWithTokens,
+                'users_without_tokens' => $usersWithoutTokens,
+            ],
         ]);
     }
 
