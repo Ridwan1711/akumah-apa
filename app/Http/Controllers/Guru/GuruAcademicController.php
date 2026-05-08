@@ -34,7 +34,7 @@ class GuruAcademicController extends Controller
             ->where('teacher_id', $user->id)
             ->whereIn('day', AcademicSchedule::TEACHING_DAYS)
             ->with([
-                'schoolClass:id,name,level',
+                'schoolClass:id,name,grade_level_id',
                 'subject:id,name',
             ])
             ->orderBy('day')
@@ -58,7 +58,7 @@ class GuruAcademicController extends Controller
                 'class' => [
                     'id' => $item->schoolClass?->id,
                     'name' => $item->schoolClass?->name,
-                    'level' => $item->schoolClass?->level,
+                    'grade_level_id' => $item->schoolClass?->grade_level_id,
                 ],
                 'subject' => [
                     'id' => $item->subject?->id,

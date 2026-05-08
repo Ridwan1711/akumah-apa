@@ -30,7 +30,7 @@ class GuruAttendanceController extends Controller
             ->where('day', $dayOfWeek)
             ->where('teacher_id', $user->id)
             ->with([
-                'schoolClass:id,name,level',
+                'schoolClass:id,name,grade_level_id',
                 'subject:id,name',
             ])
             ->orderBy('time_start')
@@ -61,7 +61,7 @@ class GuruAttendanceController extends Controller
                 'class' => [
                     'id' => $schedule->schoolClass?->id,
                     'name' => $schedule->schoolClass?->name,
-                    'level' => $schedule->schoolClass?->level,
+                    'grade_level_id' => $schedule->schoolClass?->grade_level_id,
                 ],
                 'subject' => [
                     'id' => $schedule->subject?->id,
@@ -84,7 +84,7 @@ class GuruAttendanceController extends Controller
         $this->authorizeSession($session, $user);
 
         $schedule = $session->schedule()->with([
-            'schoolClass:id,name,level',
+            'schoolClass:id,name,grade_level_id',
             'subject:id,name',
         ])->firstOrFail();
         $class = $schedule->schoolClass;
@@ -108,7 +108,7 @@ class GuruAttendanceController extends Controller
                 'class' => [
                     'id' => $class->id,
                     'name' => $class->name,
-                    'level' => $class->level,
+                    'grade_level_id' => $class->grade_level_id,
                 ],
                 'subject' => [
                     'id' => $schedule->subject?->id,

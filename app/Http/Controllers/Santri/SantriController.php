@@ -229,7 +229,7 @@ class SantriController extends Controller
 
         $query = LessonAttendance::where('student_id', $student->id)
             ->with([
-                'lessonSession.schedule.schoolClass:id,name,level',
+                'lessonSession.schedule.schoolClass:id,name,grade_level_id',
                 'lessonSession.schedule.subject:id,name',
             ])
             ->orderByDesc('lesson_session_id');
