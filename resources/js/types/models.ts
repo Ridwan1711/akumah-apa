@@ -396,10 +396,12 @@ export type DormAssignment = {
     id: number;
     student_id: number;
     room_id: number;
+    academic_year_id: number;
     checkin_date: string;
     checkout_date: string | null;
     student?: Student;
     room?: DormRoom;
+    academic_year?: AcademicYear;
     created_at: string;
     updated_at: string;
 };

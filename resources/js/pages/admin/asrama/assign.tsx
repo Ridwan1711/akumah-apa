@@ -15,15 +15,18 @@ import {
     CrudToolbar,
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
-import type { BreadcrumbItem, DormRoom, PaginatedData, Student } from '@/types';
+import type { AcademicYear, BreadcrumbItem, DormRoom, PaginatedData, Student } from '@/types';
 
 type AvailableRoom = DormRoom & { building?: { id: number; name: string } };
 
 type Props = {
     unassignedStudents: PaginatedData<Pick<Student, 'id' | 'nis' | 'full_name'>>;
     availableRooms: AvailableRoom[];
-    filters: { per_page?: string };
+    filters: { per_page?: string; academic_year_id?: string };
     perPageOptions: number[];
+    academicYears: Pick<AcademicYear, 'id' | 'name'>[];
+    selectedAcademicYearId: number;
+    copySourceAcademicYear?: Pick<AcademicYear, 'id' | 'name'> | null;
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -32,13 +35,23 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Assign Kamar', href: '/admin/asrama/assign' },
 ];
 
-export default function AsramaAssign({ unassignedStudents, availableRooms, filters, perPageOptions }: Props) {
+export default function AsramaAssign({
+    unassignedStudents,
+    availableRooms,
+    filters,
+    perPageOptions,
+    academicYears,
+    selectedAcademicYearId,
+    copySourceAcademicYear,
+}: Props) {
     const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
+    const [copyProcessing, setCopyProcessing] = useState(false);
     const assignForm = useForm<{ student_ids: number[]; room_id: string; checkin_date: string }>({
         student_ids: [],
         room_id: '',
         checkin_date: new Date().toISOString().slice(0, 10),
     });
+    const currentAcademicYearId = Number(filters.academic_year_id ?? String(selectedAcademicYearId));
 
     const availableSlots = useMemo(
         () => availableRooms.reduce((sum, room) => sum + Math.max(0, room.capacity - (room.occupants_count ?? 0)), 0),
@@ -46,7 +59,11 @@ export default function AsramaAssign({ unassignedStudents, availableRooms, filte
     );
 
     function setPerPage(value: string) {
-        router.get('/admin/asrama/assign', { per_page: value }, { preserveState: true, preserveScroll: true });
+        router.get('/admin/asrama/assign', { per_page: value, academic_year_id: currentAcademicYearId }, { preserveState: true, preserveScroll: true });
+    }
+
+    function setAcademicYear(value: string) {
+        router.get('/admin/asrama/assign', { per_page: filters.per_page ?? perPageOptions[0], academic_year_id: value }, { preserveState: true, preserveScroll: true });
     }
 
     function toggleStudent(id: number) {
@@ -65,6 +82,7 @@ export default function AsramaAssign({ unassignedStudents, availableRooms, filte
             return;
         }
         assignForm.setData('student_ids', selectedStudents);
+        assignForm.transform((data) => ({ ...data, academic_year_id: currentAcademicYearId }));
         assignForm.post('/admin/asrama/assignments', {
             onSuccess: () => {
                 setSelectedStudents([]);
@@ -72,6 +90,24 @@ export default function AsramaAssign({ unassignedStudents, availableRooms, filte
                 toast.success('Santri berhasil ditempatkan');
             },
             onError: () => toast.error('Gagal melakukan penempatan kamar'),
+        });
+    }
+
+    function copyFromPreviousAcademicYear() {
+        if (!copySourceAcademicYear) return;
+        const ok = window.confirm(`Salin assignment dari ${copySourceAcademicYear.name} ke tahun ajaran aktif ini? Data santri yang sudah punya kobong akan di-skip.`);
+        if (!ok) return;
+
+        setCopyProcessing(true);
+        router.post('/admin/asrama/assignments/copy-from-year', {
+            source_academic_year_id: copySourceAcademicYear.id,
+            target_academic_year_id: currentAcademicYearId,
+            checkin_date: assignForm.data.checkin_date,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => toast.success('Copy assignment selesai'),
+            onError: () => toast.error('Gagal copy assignment'),
+            onFinish: () => setCopyProcessing(false),
         });
     }
 
@@ -97,6 +133,11 @@ export default function AsramaAssign({ unassignedStudents, availableRooms, filte
                             <select className="mcr-filter-select" value={filters.per_page ?? String(perPageOptions[0] ?? 25)} onChange={(e) => setPerPage(e.target.value)}>
                                 {perPageOptions.map((opt) => (
                                     <option key={opt} value={String(opt)}>{opt} / halaman</option>
+                                ))}
+                            </select>
+                            <select className="mcr-filter-select" value={String(currentAcademicYearId)} onChange={(e) => setAcademicYear(e.target.value)}>
+                                {academicYears.map((year) => (
+                                    <option key={year.id} value={String(year.id)}>{year.name}</option>
                                 ))}
                             </select>
                             <span className="mcr-table-meta">Pilih santri, lalu tentukan kamar dan tanggal check-in.</span>
@@ -157,6 +198,13 @@ export default function AsramaAssign({ unassignedStudents, availableRooms, filte
                             <InputError message={assignForm.errors.checkin_date} />
                         </div>
                     </div>
+                    {copySourceAcademicYear ? (
+                        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+                            <button type="button" className="mcr-btn secondary" onClick={copyFromPreviousAcademicYear} disabled={copyProcessing}>
+                                {copyProcessing ? 'Menyalin...' : `Copy dari ${copySourceAcademicYear.name}`}
+                            </button>
+                        </div>
+                    ) : null}
                     <CrudBulkActionBar visible={selectedStudents.length > 0} selectedCount={selectedStudents.length} onClear={() => setSelectedStudents([])}>
                         <button type="button" className="mcr-btn primary" onClick={submitAssign} disabled={assignForm.processing}>
                             <Plus size={14} />

@@ -104,7 +104,7 @@ class StudentController extends Controller
 
         Student::create([
             ...$request->validated(),
-            'gender' => Student::GENDER_MALE,
+            'gender' => $request->gender ?? Student::GENDER_MALE,
             'status' => Student::STATUS_ACTIVE,
         ]);
 

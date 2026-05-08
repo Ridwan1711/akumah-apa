@@ -12,7 +12,7 @@ class DormAssignment extends Model
 {
     use Auditable, HasFactory;
 
-    protected $fillable = ['student_id', 'room_id', 'checkin_date', 'checkout_date'];
+    protected $fillable = ['student_id', 'room_id', 'academic_year_id', 'checkin_date', 'checkout_date'];
 
     protected function casts(): array
     {
@@ -27,6 +27,16 @@ class DormAssignment extends Model
         return $query->whereNull('checkout_date');
     }
 
+    public function scopeForAcademicYear(Builder $query, int $academicYearId): Builder
+    {
+        return $query->where('academic_year_id', $academicYearId);
+    }
+
+    public function scopeActiveInAcademicYear(Builder $query, int $academicYearId): Builder
+    {
+        return $query->forAcademicYear($academicYearId)->active();
+    }
+
     public function student(): BelongsTo
     {
         return $this->belongsTo(Student::class);
@@ -35,5 +45,10 @@ class DormAssignment extends Model
     public function room(): BelongsTo
     {
         return $this->belongsTo(DormRoom::class, 'room_id');
+    }
+
+    public function academicYear(): BelongsTo
+    {
+        return $this->belongsTo(AcademicYear::class, 'academic_year_id');
     }
 }

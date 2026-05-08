@@ -2,8 +2,8 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
-import { AppSelect  } from '@/components/manhood';
-import type {SelectOption} from '@/components/manhood';
+import { AppSelect } from '@/components/manhood';
+import type { SelectOption } from '@/components/manhood';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,6 +21,7 @@ export default function StudentCreate() {
     const { data, setData, post, processing, errors } = useForm({
         user_id: '',
         full_name: '',
+        gender: 'L',
         admission_year: String(new Date().getFullYear()),
     });
 
@@ -100,7 +101,13 @@ export default function StudentCreate() {
                         <Input id="full_name" value={data.full_name} onChange={(e) => setData('full_name', e.target.value)} required />
                         <InputError message={errors.full_name} />
                     </div>
-
+                    <div>
+                        <Label htmlFor='gender'>Jenis Kelamin</Label>
+                        <select name="gender" id="gender" onChange={(e) => setData('gender', e.target.value)}>
+                            <option value="L">Laki</option>
+                            <option value="P">Perempuan</option>
+                        </select>
+                    </div>
                     <div className="grid gap-2">
                         <Label htmlFor="admission_year">Tahun Masuk *</Label>
                         <Input id="admission_year" type="number" min={2000} max={2099} value={data.admission_year} onChange={(e) => setData('admission_year', e.target.value)} required />

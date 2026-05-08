@@ -200,6 +200,7 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::delete('asrama/rooms/{room}', [AsramaController::class, 'destroyRoom'])->name('asrama.rooms.destroy');
         Route::get('asrama/assign', [AsramaController::class, 'assign'])->name('asrama.assign');
         Route::post('asrama/assignments', [AsramaController::class, 'storeAssignment'])->name('asrama.assignments.store');
+        Route::post('asrama/assignments/copy-from-year', [AsramaController::class, 'copyAssignmentsFromAcademicYear'])->name('asrama.assignments.copy-from-year');
         Route::post('asrama/assignments/{assignment}/checkout', [AsramaController::class, 'checkout'])->name('asrama.assignments.checkout');
 
         // Violations

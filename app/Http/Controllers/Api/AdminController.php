@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AcademicPeriod;
+use App\Models\AcademicYear;
 use App\Models\Diniyyah\AssessmentComponent;
 use App\Models\Diniyyah\ClassWali;
 use App\Models\Diniyyah\SchoolClass;
@@ -18,6 +19,7 @@ use App\Models\EmProfile;
 use App\Models\Guardian;
 use App\Models\LeavePermission;
 use App\Models\LessonSession;
+use App\Models\Musyrif;
 use App\Models\Role;
 use App\Models\Semester;
 use App\Models\Student;
@@ -416,6 +418,7 @@ class AdminController extends Controller
 
     public function dormManagement(Request $request): JsonResponse
     {
+        $academicYearId = $this->resolveDormAcademicYearId((int) $request->input('academic_year_id', 0));
         $buildingId = (int) $request->input('building_id', 0);
         $buildingId = $buildingId > 0 ? $buildingId : null;
 
@@ -428,7 +431,7 @@ class AdminController extends Controller
                 'building:id,name',
                 'musyrif.user:id,name',
             ])
-            ->withCount(['activeAssignments as occupied_count'])
+            ->withCount(['assignments as occupied_count' => fn ($q) => $q->activeInAcademicYear($academicYearId)])
             ->when($buildingId, fn ($q) => $q->where('building_id', $buildingId))
             ->orderBy('building_id')
             ->orderBy('room_number')
@@ -436,7 +439,7 @@ class AdminController extends Controller
 
         $roomIds = $rooms->pluck('id');
         $assignmentsByRoom = DormAssignment::query()
-            ->whereNull('checkout_date')
+            ->activeInAcademicYear($academicYearId)
             ->when($roomIds->isNotEmpty(), fn ($q) => $q->whereIn('room_id', $roomIds->all()), fn ($q) => $q->whereRaw('0 = 1'))
             ->get(['room_id', 'student_id'])
             ->groupBy('room_id');
@@ -482,6 +485,7 @@ class AdminController extends Controller
             'rooms' => $roomsPayload,
             'filters' => [
                 'building_id' => $buildingId,
+                'academic_year_id' => $academicYearId,
             ],
         ]);
     }
@@ -618,15 +622,16 @@ class AdminController extends Controller
      */
     public function dormRoomMembers(DormRoom $room): JsonResponse
     {
+        $academicYearId = $this->resolveDormAcademicYearId((int) request()->input('academic_year_id', 0));
         $room->load([
             'building:id,name',
             'musyrif.user:id,name',
         ]);
-        $room->loadCount(['activeAssignments as occupied_count']);
+        $room->loadCount(['assignments as occupied_count' => fn ($q) => $q->activeInAcademicYear($academicYearId)]);
 
         $assignments = DormAssignment::query()
             ->where('room_id', $room->id)
-            ->whereNull('checkout_date')
+            ->activeInAcademicYear($academicYearId)
             ->with([
                 'student' => fn ($q) => $q
                     ->select('id', 'user_id', 'full_name', 'nik', 'birth_date', 'address', 'photo', 'gender', 'current_class_id')
@@ -718,19 +723,20 @@ class AdminController extends Controller
 
     public function dormRoomAssignableStudents(Request $request, DormRoom $room): JsonResponse
     {
+        $academicYearId = $this->resolveDormAcademicYearId((int) $request->input('academic_year_id', 0));
         $search = trim((string) $request->input('search', ''));
         $includeAssigned = filter_var($request->input('include_assigned', false), FILTER_VALIDATE_BOOL);
         $limit = (int) $request->input('limit', 50);
         $limit = max(10, min(200, $limit));
 
         $activeAssignments = DormAssignment::query()
-            ->active()
+            ->activeInAcademicYear($academicYearId)
             ->with(['room:id,room_number,building_id', 'room.building:id,name'])
             ->get(['student_id', 'room_id'])
             ->keyBy('student_id');
 
         $currentRoomStudentIds = DormAssignment::query()
-            ->active()
+            ->activeInAcademicYear($academicYearId)
             ->where('room_id', $room->id)
             ->pluck('student_id')
             ->map(fn ($id) => (int) $id)
@@ -785,17 +791,20 @@ class AdminController extends Controller
             'filters' => [
                 'search' => $search,
                 'include_assigned' => $includeAssigned,
+                'academic_year_id' => $academicYearId,
             ],
         ]);
     }
 
     public function storeDormRoomMembers(Request $request, DormRoom $room): JsonResponse
     {
+        $academicYearId = $this->resolveDormAcademicYearId((int) $request->input('academic_year_id', 0));
         $validated = $request->validate([
             'student_ids' => ['required', 'array', 'min:1'],
             'student_ids.*' => ['required', 'integer', 'distinct', 'exists:students,id'],
             'move_existing' => ['nullable', 'boolean'],
             'checkin_date' => ['nullable', 'date'],
+            'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
         ]);
 
         $studentIds = collect($validated['student_ids'])
@@ -816,7 +825,7 @@ class AdminController extends Controller
         }
 
         $activeExisting = DormAssignment::query()
-            ->active()
+            ->activeInAcademicYear($academicYearId)
             ->whereIn('student_id', $studentIds->all())
             ->get(['id', 'student_id', 'room_id']);
 
@@ -843,7 +852,7 @@ class AdminController extends Controller
             ->reject(fn ($id) => $alreadyInRoomIds->contains($id))
             ->values();
 
-        $occupied = $room->activeAssignments()->count();
+        $occupied = $room->assignments()->activeInAcademicYear($academicYearId)->count();
         $availableSlots = max(0, (int) $room->capacity - $occupied);
         if ($incomingNewIds->count() > $availableSlots) {
             return response()->json([
@@ -851,14 +860,14 @@ class AdminController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($incomingNewIds, $moveExisting, $room, $checkinDate) {
+        DB::transaction(function () use ($incomingNewIds, $moveExisting, $room, $checkinDate, $academicYearId) {
             if ($incomingNewIds->isEmpty()) {
                 return;
             }
 
             if ($moveExisting) {
                 DormAssignment::query()
-                    ->active()
+                    ->activeInAcademicYear($academicYearId)
                     ->whereIn('student_id', $incomingNewIds->all())
                     ->update(['checkout_date' => now()->toDateString()]);
             }
@@ -866,6 +875,7 @@ class AdminController extends Controller
             $rows = $incomingNewIds->map(fn ($studentId) => [
                 'student_id' => (int) $studentId,
                 'room_id' => $room->id,
+                'academic_year_id' => $academicYearId,
                 'checkin_date' => $checkinDate,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -883,13 +893,15 @@ class AdminController extends Controller
 
     public function setDormRoomLeader(Request $request, DormRoom $room): JsonResponse
     {
+        $academicYearId = $this->resolveDormAcademicYearId((int) $request->input('academic_year_id', 0));
         $validated = $request->validate([
             'student_id' => ['required', 'integer', 'exists:students,id'],
+            'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
         ]);
 
         $student = Student::query()->findOrFail((int) $validated['student_id']);
         $isMember = DormAssignment::query()
-            ->active()
+            ->activeInAcademicYear($academicYearId)
             ->where('room_id', $room->id)
             ->where('student_id', $student->id)
             ->exists();
@@ -976,6 +988,21 @@ class AdminController extends Controller
             'gender' => $student->gender,
             'photo_url' => $this->dormRoomPhotoUrl($student->photo),
         ];
+    }
+
+    private function resolveDormAcademicYearId(?int $requestedAcademicYearId = null): int
+    {
+        if (($requestedAcademicYearId ?? 0) > 0 && AcademicYear::query()->whereKey($requestedAcademicYearId)->exists()) {
+            return (int) $requestedAcademicYearId;
+        }
+
+        $activeAcademicYearId = AcademicPeriod::query()->active()->value('academic_year_id');
+        if ($activeAcademicYearId) {
+            return (int) $activeAcademicYearId;
+        }
+
+        return (int) (AcademicYear::query()->orderByDesc('start_date')->value('id')
+            ?? AcademicYear::query()->orderByDesc('id')->value('id'));
     }
 
     public function studentFormOptions(Request $request): JsonResponse
