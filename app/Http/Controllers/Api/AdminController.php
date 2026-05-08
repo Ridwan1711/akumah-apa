@@ -19,6 +19,7 @@ use App\Models\EmProfile;
 use App\Models\Guardian;
 use App\Models\LeavePermission;
 use App\Models\LessonSession;
+use App\Models\Diniyyah\KitabGradeSession;
 use App\Models\Musyrif;
 use App\Models\Role;
 use App\Models\Semester;
@@ -1584,7 +1585,24 @@ class AdminController extends Controller
         }
         $componentId = $request->input('component_id') ?? AssessmentComponent::query()->orderByDesc('is_core_required')->orderBy('id')->value('id');
 
+        $gradeMatrix = [];
+        $lockedSession = null;
+
         if ($request->class_id && $subjectId && $periodId && $componentId) {
+            $lockedSession = KitabGradeSession::query()
+                ->where('teacher_id', (int) $request->user()->id)
+                ->where('class_id', (int) $request->class_id)
+                ->where('subject_id', (int) $subjectId)
+                ->where('period_id', (int) $periodId)
+                ->first();
+            $lockedComponentIds = collect($lockedSession?->active_component_ids ?? [])
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn ($id) => $id > 0)
+                ->values();
+            if ($lockedComponentIds->isNotEmpty()) {
+                $componentId = (int) $lockedComponentIds->first();
+            }
+
             $students = Student::where('current_class_id', $request->class_id)
                 ->where('status', Student::STATUS_ACTIVE)
                 ->orderBy('full_name')
@@ -1596,6 +1614,26 @@ class AdminController extends Controller
                 ->whereIn('student_id', $students->pluck('id'))
                 ->get()
                 ->keyBy('student_id');
+
+            $targetComponentIds = $lockedComponentIds->isNotEmpty()
+                ? $lockedComponentIds
+                : collect([(int) $componentId]);
+            if ($targetComponentIds->isNotEmpty()) {
+                $gradeRows = Score::query()
+                    ->where('subject_id', $subjectId)
+                    ->where('period_id', $periodId)
+                    ->whereIn('component_id', $targetComponentIds->all())
+                    ->whereIn('student_id', $students->pluck('id'))
+                    ->get(['student_id', 'component_id', 'score']);
+                foreach ($gradeRows as $row) {
+                    $sid = (int) $row->student_id;
+                    $cid = (int) $row->component_id;
+                    if (! isset($gradeMatrix[$sid])) {
+                        $gradeMatrix[$sid] = [];
+                    }
+                    $gradeMatrix[$sid][$cid] = (float) $row->score;
+                }
+            }
         }
 
         return response()->json([
@@ -1606,7 +1644,15 @@ class AdminController extends Controller
             'assessmentComponents' => AssessmentComponent::orderByDesc('is_core_required')->orderBy('type')->orderBy('name')->get(['id', 'name', 'type', 'is_core_required']),
             'students' => $students,
             'grades' => $grades,
+            'grade_matrix' => $gradeMatrix,
             'filters' => $request->only(['class_id', 'kitab_subject_id', 'subject_id', 'semester_id', 'period_id', 'component_id']),
+            'selected_component_id' => $componentId ? (int) $componentId : null,
+            'locked_component_ids' => collect($lockedSession?->active_component_ids ?? [])
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn ($id) => $id > 0)
+                ->values()
+                ->all(),
+            'is_component_locked' => $lockedSession !== null,
             'activeSemester' => AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester?->only(['id', 'name']),
         ]);
     }

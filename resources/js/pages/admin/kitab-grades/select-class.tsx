@@ -43,7 +43,7 @@ export default function KitabGradesSelectClass({
                             {classes.map((item) => (
                                 <Link
                                     key={item.id}
-                                    href={`/admin/kitab-grades/${academicPeriod.id}/${subject.id}/${item.id}/setting`}
+                                    href={`/admin/kitab-grades/${academicPeriod.id}/${subject.id}/${item.id}`}
                                     className="mcr-btn secondary"
                                     style={{ justifyContent: 'space-between', height: 44, textDecoration: 'none' }}
                                 >

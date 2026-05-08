@@ -231,6 +231,7 @@ class GuruController extends Controller
             $periodId = AcademicPeriod::where('semester_id', $request->semester_id)->value('id');
         }
         $componentId = $request->input('component_id') ?? AssessmentComponent::query()->orderByDesc('is_core_required')->orderBy('id')->value('id');
+        $gradeMatrix = [];
         $lockedSession = null;
 
         if ($request->class_id && $subjectId && $periodId && $componentId) {
@@ -268,6 +269,30 @@ class GuruController extends Controller
                 ->whereIn('student_id', $students->pluck('id'))
                 ->get()
                 ->keyBy('student_id');
+
+            $targetComponentIds = collect($lockedSession?->active_component_ids ?? [])
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn ($id) => $id > 0)
+                ->values();
+            if ($targetComponentIds->isEmpty() && $componentId) {
+                $targetComponentIds = collect([(int) $componentId]);
+            }
+            if ($targetComponentIds->isNotEmpty()) {
+                $gradeRows = Score::query()
+                    ->where('subject_id', $subjectId)
+                    ->where('period_id', $periodId)
+                    ->whereIn('component_id', $targetComponentIds->all())
+                    ->whereIn('student_id', $students->pluck('id'))
+                    ->get(['student_id', 'component_id', 'score']);
+                foreach ($gradeRows as $row) {
+                    $sid = (int) $row->student_id;
+                    $cid = (int) $row->component_id;
+                    if (! isset($gradeMatrix[$sid])) {
+                        $gradeMatrix[$sid] = [];
+                    }
+                    $gradeMatrix[$sid][$cid] = (float) $row->score;
+                }
+            }
         }
 
         $classSubjectMap = [];
@@ -287,9 +312,15 @@ class GuruController extends Controller
             'assessmentComponents' => AssessmentComponent::orderByDesc('is_core_required')->orderBy('type')->orderBy('name')->get(['id', 'name', 'type', 'is_core_required']),
             'students' => $students,
             'grades' => $grades,
+            'grade_matrix' => $gradeMatrix,
             'filters' => $request->only(['class_id', 'kitab_subject_id', 'subject_id', 'semester_id', 'period_id', 'component_id']),
             'selected_component_id' => $componentId ? (int) $componentId : null,
             'locked_component_id' => (int) collect($lockedSession?->active_component_ids ?? [])->first(),
+            'locked_component_ids' => collect($lockedSession?->active_component_ids ?? [])
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn ($id) => $id > 0)
+                ->values()
+                ->all(),
             'is_component_locked' => $lockedSession !== null,
             'isGuru' => $hasLimitedView,
             'classSubjectMap' => $classSubjectMap,
@@ -317,6 +348,8 @@ class GuruController extends Controller
             'subject_id' => ['required', 'exists:subjects,id'],
             'period_id' => ['required', 'exists:academic_periods,id'],
             'component_id' => ['required', 'exists:assessment_components,id'],
+            'active_component_ids' => ['nullable', 'array', 'min:1', 'max:3'],
+            'active_component_ids.*' => ['required', 'integer', 'exists:assessment_components,id', 'distinct'],
             'class_id' => ['required', 'exists:classes,id'],
         ];
 
@@ -337,6 +370,12 @@ class GuruController extends Controller
         }
 
         $requestedComponentId = (int) $request->component_id;
+        $requestedActiveComponentIds = collect($request->input('active_component_ids', []))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->push($requestedComponentId)
+            ->unique()
+            ->values();
         $gradeSession = KitabGradeSession::query()
             ->where('teacher_id', $user->id)
             ->where('subject_id', (int) $request->subject_id)
@@ -344,13 +383,19 @@ class GuruController extends Controller
             ->where('period_id', (int) $request->period_id)
             ->first();
         if ($gradeSession) {
-            $lockedComponentId = (int) collect($gradeSession->active_component_ids ?? [])
+            $lockedComponentIds = collect($gradeSession->active_component_ids ?? [])
                 ->map(fn ($id) => (int) $id)
-                ->first(fn ($id) => $id > 0);
-            if ($lockedComponentId > 0 && $lockedComponentId !== $requestedComponentId) {
+                ->filter(fn ($id) => $id > 0)
+                ->values();
+            if ($lockedComponentIds->isNotEmpty() && ! $lockedComponentIds->contains($requestedComponentId)) {
                 throw ValidationException::withMessages([
                     'component_id' => ['Komponen penilaian sudah dikunci untuk semester ini dan tidak bisa diubah.'],
                 ]);
+            }
+            if ($lockedComponentIds->isEmpty() && $requestedActiveComponentIds->isNotEmpty()) {
+                $gradeSession->forceFill([
+                    'active_component_ids' => $requestedActiveComponentIds->all(),
+                ])->save();
             }
         } else {
             $gradeSession = KitabGradeSession::query()->create([
@@ -358,7 +403,7 @@ class GuruController extends Controller
                 'subject_id' => (int) $request->subject_id,
                 'class_id' => (int) $request->class_id,
                 'period_id' => (int) $request->period_id,
-                'active_component_ids' => [$requestedComponentId],
+                'active_component_ids' => $requestedActiveComponentIds->all(),
                 'status' => KitabGradeSession::STATUS_SUBMITTED,
                 'submitted_at' => now(),
             ]);

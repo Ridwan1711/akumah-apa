@@ -27,7 +27,7 @@ class KitabGradeController extends Controller
     public function entry(Request $request): RedirectResponse
     {
         if ($request->filled('class_id') && $request->filled('subject_id') && $request->filled('period_id')) {
-            $url = route('guru.admin.kitab-grades.setting', [
+            $url = route('guru.admin.kitab-grades.input', [
                 'academic_period' => (int) $request->query('period_id'),
                 'kitab_subject' => (int) $request->query('subject_id'),
                 'diniyah_class' => (int) $request->query('class_id'),
