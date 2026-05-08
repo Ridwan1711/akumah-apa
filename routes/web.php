@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\KitabReadingAssessmentController;
 use App\Http\Controllers\Admin\KitabReadingExaminerAssignmentController;
 use App\Http\Controllers\Admin\KitabSubjectController;
 use App\Http\Controllers\Admin\KitabTeachingAssignmentController;
+use App\Http\Controllers\Admin\LaravelLogController;
 use App\Http\Controllers\Admin\LeavePermissionController;
 use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\PaymentReportController;
@@ -247,6 +248,8 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::post('users/{user}/toggle-active', [UserController::class, 'toggleActive'])->name('users.toggle-active');
         Route::post('users/{user}/official-photo', [UserController::class, 'uploadOfficialPhoto'])->name('users.official-photo');
         Route::get('system-logs', [SystemLogController::class, 'index'])->name('system-logs.index');
+        Route::get('laravel-logs', [LaravelLogController::class, 'index'])->name('laravel-logs.index');
+        Route::get('laravel-logs/data', [LaravelLogController::class, 'fetch'])->name('laravel-logs.data');
         Route::get('notifications/manual', [AdminNotificationController::class, 'index'])
             ->middleware('permission:'.Permissions::NOTIFICATION_MANUAL_SEND)
             ->name('notifications.manual.index');

@@ -143,6 +143,7 @@ function buildSections(
                 items: [
                     { title: 'Manajemen User', href: '/admin/users', icon: Shield },
                     { title: 'Log Sistem', href: '/admin/system-logs', icon: FileText },
+                    { title: 'Laravel Log', href: '/admin/laravel-logs', icon: FileText },
                     { title: 'Log Aktivitas', href: '/admin/audit-logs', icon: FileText },
                 ],
             });
