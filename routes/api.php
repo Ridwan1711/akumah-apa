@@ -108,9 +108,13 @@ Route::prefix('v1')->group(function () {
             Route::get('/report-cards/pdf', [GuruController::class, 'reportCardsPdf']);
         });
 
+        // Admin dashboard (super_admin, admin_akademik, admin_keuangan)
+        Route::middleware('role:super_admin,admin_akademik,admin_keuangan')->prefix('admin')->group(function () {
+            Route::get('/dashboard', [AdminController::class, 'dashboard']);
+        });
+
         // Admin (super_admin, admin_akademik)
         Route::middleware('role:super_admin,admin_akademik')->prefix('admin')->group(function () {
-            Route::get('/dashboard', [AdminController::class, 'dashboard']);
             Route::get('/classes', [AdminController::class, 'classes']);
             Route::put('/classes/{class}', [AdminController::class, 'updateClassSettings']);
             Route::get('/classes/{class}/teachers', [AdminController::class, 'classTeachers']);

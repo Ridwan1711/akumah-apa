@@ -14,9 +14,11 @@ use App\Models\Diniyyah\Subject;
 use App\Models\Diniyyah\TeacherAssignment;
 use App\Models\LessonSession;
 use App\Models\ReportCard;
+use App\Models\Role;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Models\StudentViolation;
+use App\Models\User;
 use App\Notifications\GradeUpdatedNotification;
 use App\Notifications\ReportCardPublishedNotification;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -33,6 +35,14 @@ use Illuminate\Validation\ValidationException;
 
 class GuruController extends Controller
 {
+    private function canBypassKitabAssignment(User $user): bool
+    {
+        return $user->hasAnyRole([
+            Role::SUPER_ADMIN,
+            Role::ADMIN_AKADEMIK,
+        ]);
+    }
+
     private function getMyClassIds(Request $request): array
     {
         return $request->user()->homeroomAssignments()->pluck('class_id')->unique()->values()->all();
@@ -112,7 +122,7 @@ class GuruController extends Controller
     public function teachingAssignments(Request $request): JsonResponse
     {
         $user = $request->user();
-        $hasLimitedView = ! $user->isAdmin();
+        $hasLimitedView = ! $this->canBypassKitabAssignment($user);
 
         $classesQuery = SchoolClass::query()->orderBy('order')->orderBy('name');
         $subjectsQuery = Subject::query()->orderBy('name');
@@ -210,7 +220,7 @@ class GuruController extends Controller
     public function kitabGradesIndex(Request $request): JsonResponse
     {
         $user = $request->user();
-        $hasLimitedView = ! $user->isAdmin();
+        $hasLimitedView = ! $this->canBypassKitabAssignment($user);
 
         $classesQuery = SchoolClass::query()->orderBy('order')->orderBy('name');
         $subjectsQuery = Subject::query()->orderBy('name');
@@ -356,7 +366,7 @@ class GuruController extends Controller
         $request->validate($rules);
 
         $user = $request->user();
-        if (! $user->isAdmin()) {
+        if (! $this->canBypassKitabAssignment($user)) {
             $allowed = TeacherAssignment::where('teacher_id', $user->id)
                 ->where('class_id', $request->class_id)
                 ->where('subject_id', $request->subject_id)
@@ -367,6 +377,25 @@ class GuruController extends Controller
                     'subject_id' => ['Anda tidak ditugaskan untuk mengajar mata pelajaran ini di kelas ini.'],
                 ]);
             }
+        }
+
+        $requestedStudentIds = collect($request->grades)
+            ->pluck('student_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+        $classStudentIds = Student::query()
+            ->where('current_class_id', (int) $request->class_id)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values();
+        $invalidStudentIds = $requestedStudentIds
+            ->diff($classStudentIds)
+            ->values();
+        if ($invalidStudentIds->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'grades' => ['Terdapat santri di luar kelas yang dipilih. Permintaan ditolak.'],
+            ]);
         }
 
         $requestedComponentId = (int) $request->component_id;

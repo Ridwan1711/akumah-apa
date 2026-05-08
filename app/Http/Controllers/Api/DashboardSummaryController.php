@@ -98,7 +98,7 @@ class DashboardSummaryController extends Controller
 
     private function canAccessAdmin(User $user): bool
     {
-        return $user->hasRole(Role::SUPER_ADMIN, Role::ADMIN_AKADEMIK)
+        return $user->hasRole(Role::SUPER_ADMIN, Role::ADMIN_AKADEMIK, Role::ADMIN_KEUANGAN)
             || $user->hasPermission(Permissions::DASHBOARD_ADMIN);
     }
 
