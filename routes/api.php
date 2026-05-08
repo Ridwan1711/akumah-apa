@@ -151,6 +151,7 @@ Route::prefix('v1')->group(function () {
 
             // Kehadiran santri
             Route::get('/attendances', [AdminAttendanceController::class, 'index']);
+            Route::get('/attendances/weekly-recap', [AdminAttendanceController::class, 'weeklyRecap']);
             Route::put('/attendances/{attendance}', [AdminAttendanceController::class, 'update']);
         });
 
