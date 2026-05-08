@@ -97,6 +97,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/sessions/{session}/students', [GuruAttendanceController::class, 'students']);
             Route::post('/sessions/{session}/attendance', [GuruAttendanceController::class, 'storeAttendance']);
             Route::get('/sessions/{session}/attendance', [GuruAttendanceController::class, 'showAttendance']);
+            Route::get('/teacher-presence/pending', [GuruAttendanceController::class, 'pendingTeacherPresence']);
+            Route::post('/sessions/{session}/teacher-presence', [GuruAttendanceController::class, 'submitTeacherPresence']);
             Route::post('/location-ping', [GuruAttendanceController::class, 'pingLocation']);
             Route::get('/kitab-grades', [GuruController::class, 'kitabGradesIndex']);
             Route::post('/kitab-grades', [GuruController::class, 'kitabGradesStore']);
@@ -153,6 +155,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/attendances', [AdminAttendanceController::class, 'index']);
             Route::get('/attendances/weekly-recap', [AdminAttendanceController::class, 'weeklyRecap']);
             Route::put('/attendances/{attendance}', [AdminAttendanceController::class, 'update']);
+            Route::get('/teacher-attendance/recap', [AdminAttendanceController::class, 'teacherRecap']);
+            Route::post('/teacher-attendance/sessions/{session}/override', [AdminAttendanceController::class, 'teacherSessionOverride']);
         });
 
         Route::middleware('role:super_admin,admin_akademik,admin_pendidikan')->prefix('admin')->group(function () {

@@ -122,6 +122,11 @@ class GuruAttendanceController extends Controller
                     'absent' => $absent,
                 ],
                 'attendance_percent' => $attendancePercent,
+                'teacher_presence_status' => $this->normalizeTeacherPresenceStatus($session),
+                'teacher_presence_reason' => $session->teacher_presence_reason,
+                'teacher_presence_deadline_at' => $session->teacher_presence_deadline_at?->toIso8601String(),
+                'teacher_presence_cutoff_at' => $this->resolveSessionCutoffAt($session)->toIso8601String(),
+                'teacher_presence_cutoff_passed' => now()->gte($this->resolveSessionCutoffAt($session)),
                 'class' => [
                     'id' => $class->id,
                     'name' => $class->name,
@@ -206,6 +211,11 @@ class GuruAttendanceController extends Controller
                 'end_time' => $session->end_time,
                 'status' => $session->status,
                 'notes' => $session->notes,
+                'teacher_presence_status' => $this->normalizeTeacherPresenceStatus($session),
+                'teacher_presence_reason' => $session->teacher_presence_reason,
+                'teacher_presence_deadline_at' => $session->teacher_presence_deadline_at?->toIso8601String(),
+                'teacher_presence_cutoff_at' => $this->resolveSessionCutoffAt($session)->toIso8601String(),
+                'teacher_presence_cutoff_passed' => now()->gte($this->resolveSessionCutoffAt($session)),
                 'class' => [
                     'id' => $class->id,
                     'name' => $class->name,
@@ -233,6 +243,15 @@ class GuruAttendanceController extends Controller
     {
         $user = $request->user();
         $this->authorizeSession($session, $user->id);
+
+        $cutoffAt = $this->resolveSessionCutoffAt($session);
+        if (now()->gt($cutoffAt)) {
+            return response()->json([
+                'message' => 'Waktu input absensi untuk sesi ini sudah habis. Mohon konfirmasi status kehadiran mengajar Anda.',
+                'code' => 'teacher_presence_cutoff_passed',
+                'cutoff_at' => $cutoffAt->toIso8601String(),
+            ], 422);
+        }
 
         $schedule = $session->schedule()->with('schoolClass')->firstOrFail();
         $class = $schedule->schoolClass;
@@ -298,6 +317,18 @@ class GuruAttendanceController extends Controller
             $session->status = 'completed';
         }
 
+        if (! in_array($session->teacher_presence_status, [
+            LessonSession::TEACHER_PRESENCE_EXCUSED,
+            LessonSession::TEACHER_PRESENCE_SICK,
+            LessonSession::TEACHER_PRESENCE_ABSENT,
+        ], true)) {
+            $session->teacher_presence_status = LessonSession::TEACHER_PRESENCE_PRESENT;
+            $session->teacher_presence_source = 'auto_student_attendance';
+            $session->teacher_presence_reason = null;
+            $session->teacher_presence_confirmed_at = now();
+            $session->teacher_presence_deadline_at = null;
+        }
+
         $session->save();
 
         $geoWarnings = $this->buildGeoWarnings($session, $validated['meta'] ?? null);
@@ -321,6 +352,90 @@ class GuruAttendanceController extends Controller
         return response()->json([
             'message' => 'Kehadiran santri berhasil disimpan.',
             'warnings' => $geoWarnings,
+        ]);
+    }
+
+    public function pendingTeacherPresence(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $targetDate = $request->filled('date')
+            ? Carbon::parse((string) $request->input('date'))->toDateString()
+            : null;
+
+        $sessions = LessonSession::query()
+            ->with(['schedule.schoolClass:id,name,grade_level_id', 'schedule.subject:id,name', 'schedule.teacher:id,name'])
+            ->whereHas('schedule', fn ($q) => $q->where('teacher_id', $user->id))
+            ->when($targetDate, fn ($q) => $q->whereDate('date', $targetDate))
+            ->where(function ($q) {
+                $q->where('teacher_presence_status', LessonSession::TEACHER_PRESENCE_PENDING)
+                    ->orWhereNull('teacher_presence_status');
+            })
+            ->orderBy('date')
+            ->orderBy('start_time')
+            ->get()
+            ->filter(fn (LessonSession $s) => now()->gte($this->resolveSessionCutoffAt($s)))
+            ->values();
+
+        return response()->json([
+            'pending_sessions' => $sessions->map(function (LessonSession $session) {
+                $schedule = $session->schedule;
+                $dayName = $this->dayName((int) ($schedule?->day ?? Carbon::parse($session->date)->isoWeekday()));
+
+                return [
+                    'session_id' => $session->id,
+                    'date' => $session->date->toDateString(),
+                    'day_name' => $dayName,
+                    'start_time' => $session->start_time,
+                    'end_time' => $session->end_time,
+                    'jam_no' => $schedule?->jam_no,
+                    'class' => [
+                        'id' => $schedule?->schoolClass?->id,
+                        'name' => $schedule?->schoolClass?->name,
+                        'grade_level_id' => $schedule?->schoolClass?->grade_level_id,
+                    ],
+                    'subject' => [
+                        'id' => $schedule?->subject?->id,
+                        'name' => $schedule?->subject?->name,
+                    ],
+                    'teacher_presence_status' => $this->normalizeTeacherPresenceStatus($session),
+                    'teacher_presence_reason' => $session->teacher_presence_reason,
+                    'teacher_presence_cutoff_at' => $this->resolveSessionCutoffAt($session)->toIso8601String(),
+                    'teacher_presence_deadline_at' => $this->resolvePresenceDeadlineAt($session)->toIso8601String(),
+                ];
+            })->values(),
+        ]);
+    }
+
+    public function submitTeacherPresence(Request $request, LessonSession $session): JsonResponse
+    {
+        $user = $request->user();
+        $this->authorizeSession($session, $user->id);
+
+        $validated = $request->validate([
+            'status' => ['required', 'in:excused,sick,absent'],
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $cutoffAt = $this->resolveSessionCutoffAt($session);
+        if (now()->lt($cutoffAt)) {
+            return response()->json([
+                'message' => 'Konfirmasi status kehadiran hanya tersedia setelah batas waktu sesi terlewat.',
+                'code' => 'teacher_presence_confirm_too_early',
+                'cutoff_at' => $cutoffAt->toIso8601String(),
+            ], 422);
+        }
+
+        $session->forceFill([
+            'teacher_presence_status' => $validated['status'],
+            'teacher_presence_reason' => $validated['reason'] ?? null,
+            'teacher_presence_source' => 'teacher_confirm',
+            'teacher_presence_confirmed_at' => now(),
+            'teacher_presence_deadline_at' => null,
+        ])->save();
+
+        return response()->json([
+            'message' => 'Status kehadiran guru berhasil dikonfirmasi.',
+            'teacher_presence_status' => $session->teacher_presence_status,
         ]);
     }
 
@@ -542,6 +657,49 @@ class GuruAttendanceController extends Controller
         }
 
         return $warnings;
+    }
+
+    private function resolveSessionCutoffAt(LessonSession $session): Carbon
+    {
+        $graceAfter = (int) config('teacher_presence.cutoff_grace_minutes', (int) config('geo_attendance.time_window.grace_after_minutes', 20));
+
+        return Carbon::parse("{$session->date->toDateString()} {$session->end_time}")->addMinutes($graceAfter);
+    }
+
+    private function resolvePresenceDeadlineAt(LessonSession $session): Carbon
+    {
+        if ($session->teacher_presence_deadline_at) {
+            return Carbon::parse($session->teacher_presence_deadline_at);
+        }
+
+        $window = (int) config('teacher_presence.confirm_window_minutes', 180);
+
+        return $this->resolveSessionCutoffAt($session)->copy()->addMinutes($window);
+    }
+
+    private function normalizeTeacherPresenceStatus(LessonSession $session): string
+    {
+        if ($session->teacher_presence_status) {
+            return $session->teacher_presence_status;
+        }
+
+        return $session->status === LessonSession::STATUS_COMPLETED
+            ? LessonSession::TEACHER_PRESENCE_PRESENT
+            : LessonSession::TEACHER_PRESENCE_PENDING;
+    }
+
+    private function dayName(int $day): string
+    {
+        return match ($day) {
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            7 => 'Ahad',
+            default => 'Hari',
+        };
     }
 
     private function distanceMeters(float $lat1, float $lng1, float $lat2, float $lng2): float

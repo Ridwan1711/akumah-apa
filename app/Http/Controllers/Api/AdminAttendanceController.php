@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateLessonAttendanceRequest;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\LessonAttendance;
+use App\Models\LessonSession;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Http\JsonResponse;
@@ -65,6 +66,127 @@ class AdminAttendanceController extends Controller
         return response()->json([
             'message' => 'Kehadiran berhasil diperbarui.',
             'attendance' => $attendance->fresh(),
+        ]);
+    }
+
+    public function teacherRecap(Request $request): JsonResponse
+    {
+        $period = (string) $request->input('period', 'weekly');
+        $anchor = $request->filled('date')
+            ? CarbonImmutable::parse((string) $request->input('date'))
+            : CarbonImmutable::now();
+
+        $rangeStart = $period === 'daily'
+            ? $anchor->startOfDay()
+            : $this->resolveTeachingWeekStart($anchor);
+        $rangeEnd = $period === 'daily'
+            ? $anchor->endOfDay()
+            : $rangeStart->addDays(5)->endOfDay();
+
+        $query = LessonSession::query()
+            ->with([
+                'schedule.schoolClass:id,name,grade_level_id',
+                'schedule.subject:id,name',
+                'schedule.teacher:id,name',
+            ])
+            ->whereDate('date', '>=', $rangeStart->toDateString())
+            ->whereDate('date', '<=', $rangeEnd->toDateString())
+            ->whereHas('schedule', fn ($q) => $q->whereIn('day', AcademicSchedule::TEACHING_DAYS));
+
+        if ($request->filled('teacher_id')) {
+            $teacherId = (int) $request->input('teacher_id');
+            $query->whereHas('schedule', fn ($q) => $q->where('teacher_id', $teacherId));
+        }
+
+        /** @var Collection<int, LessonSession> $sessions */
+        $sessions = $query->orderBy('date')->orderBy('start_time')->get();
+
+        $grouped = $sessions->groupBy(fn (LessonSession $s) => (int) ($s->schedule?->teacher_id ?? 0));
+
+        $teachers = $grouped->map(function (Collection $teacherSessions, int $teacherId) {
+            /** @var LessonSession|null $first */
+            $first = $teacherSessions->first();
+            $teacherName = (string) ($first?->schedule?->teacher?->name ?? '-');
+
+            $hadirTotal = 0;
+            $alpaTotal = 0;
+            $izinSakitTotal = 0;
+            $pendingTotal = 0;
+            $alpaDetails = [];
+            $izinSakitDetails = [];
+
+            foreach ($teacherSessions as $session) {
+                $status = $session->teacher_presence_status
+                    ?: ($session->status === LessonSession::STATUS_COMPLETED
+                        ? LessonSession::TEACHER_PRESENCE_PRESENT
+                        : LessonSession::TEACHER_PRESENCE_PENDING);
+                $detail = $this->teacherSessionDetail($session, $status);
+
+                if ($status === LessonSession::TEACHER_PRESENCE_PRESENT) {
+                    $hadirTotal++;
+                    continue;
+                }
+
+                if ($status === LessonSession::TEACHER_PRESENCE_ABSENT) {
+                    $alpaTotal++;
+                    $alpaDetails[] = $detail;
+                    continue;
+                }
+
+                if (in_array($status, [LessonSession::TEACHER_PRESENCE_EXCUSED, LessonSession::TEACHER_PRESENCE_SICK], true)) {
+                    $izinSakitTotal++;
+                    $izinSakitDetails[] = $detail;
+                    continue;
+                }
+
+                $pendingTotal++;
+            }
+
+            return [
+                'teacher_id' => $teacherId,
+                'teacher_name' => $teacherName,
+                'hadir_total' => $hadirTotal,
+                'alpa_total' => $alpaTotal,
+                'izin_sakit_total' => $izinSakitTotal,
+                'pending_total' => $pendingTotal,
+                'total_jam' => $teacherSessions->count(),
+                'alpa_details' => $alpaDetails,
+                'izin_sakit_details' => $izinSakitDetails,
+            ];
+        })->sortBy('teacher_name')->values();
+
+        return response()->json([
+            'period' => $period,
+            'date_anchor' => $anchor->toDateString(),
+            'period_start' => $rangeStart->toDateString(),
+            'period_end' => $rangeEnd->toDateString(),
+            'teachers' => $teachers,
+            'meta' => [
+                'teacher_count' => $teachers->count(),
+                'total_sessions' => $sessions->count(),
+            ],
+        ]);
+    }
+
+    public function teacherSessionOverride(Request $request, LessonSession $session): JsonResponse
+    {
+        $validated = $request->validate([
+            'status' => ['required', 'in:present,excused,sick,absent,pending'],
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $session->forceFill([
+            'teacher_presence_status' => $validated['status'],
+            'teacher_presence_reason' => $validated['reason'] ?? null,
+            'teacher_presence_source' => 'admin_override',
+            'teacher_presence_confirmed_at' => now(),
+            'teacher_presence_deadline_at' => null,
+        ])->save();
+
+        return response()->json([
+            'message' => 'Status kehadiran guru berhasil di-override.',
+            'session_id' => $session->id,
+            'teacher_presence_status' => $session->teacher_presence_status,
         ]);
     }
 
@@ -193,5 +315,45 @@ class AdminAttendanceController extends Controller
             ->sortBy('student_name')
             ->values()
             ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function teacherSessionDetail(LessonSession $session, string $status): array
+    {
+        $schedule = $session->schedule;
+        $day = (int) ($schedule?->day ?? CarbonImmutable::parse($session->date)->dayOfWeekIso);
+
+        return [
+            'session_id' => $session->id,
+            'date' => $session->date?->toDateString(),
+            'day_of_week' => $day,
+            'day_name' => $this->dayName($day),
+            'jam_no' => $schedule?->jam_no,
+            'class_id' => $schedule?->class_id,
+            'class_name' => $schedule?->schoolClass?->name,
+            'subject_id' => $schedule?->subject_id,
+            'subject_name' => $schedule?->subject?->name,
+            'start_time' => $session->start_time,
+            'end_time' => $session->end_time,
+            'status' => $status,
+            'reason' => $session->teacher_presence_reason,
+            'source' => $session->teacher_presence_source,
+        ];
+    }
+
+    protected function dayName(int $day): string
+    {
+        return match ($day) {
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+            7 => 'Ahad',
+            default => 'Hari',
+        };
     }
 }
