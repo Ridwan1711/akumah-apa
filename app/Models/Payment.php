@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use App\Concerns\Auditable;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 
 class Payment extends Model
 {
@@ -30,6 +32,10 @@ class Payment extends Model
         'notes',
     ];
 
+    protected $appends = [
+        'proof_url',
+    ];
+
     protected function casts(): array
     {
         return [
@@ -38,6 +44,26 @@ class Payment extends Model
             'verified_at' => 'datetime',
             'gateway_expiry_time' => 'datetime',
         ];
+    }
+
+    /**
+     * URL publik bukti transfer (jika ada). Otomatis ikut serialisasi JSON
+     * supaya klien Flutter/Inertia bisa langsung memuat preview.
+     */
+    protected function proofUrl(): Attribute
+    {
+        return Attribute::get(function (): ?string {
+            $path = $this->proof_file;
+            if (! is_string($path) || trim($path) === '') {
+                return null;
+            }
+
+            if (preg_match('#^https?://#i', $path) === 1) {
+                return $path;
+            }
+
+            return Storage::disk('public')->url($path);
+        });
     }
 
     public const STATUS_PENDING = 'pending';

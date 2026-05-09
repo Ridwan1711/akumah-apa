@@ -271,6 +271,8 @@ class AdminKeuanganController extends Controller
             ->when($request->status, fn ($q, $s) => $q->where('status', $s))
             ->when($request->payment_method, fn ($q, $m) => $q->where('payment_method', $m))
             ->when($request->search, fn ($q, $s) => $q->whereHas('invoice.student', fn ($sq) => $sq->where('full_name', 'ilike', "%{$s}%")->orWhere('nis', 'like', "%{$s}%")))
+            ->when($request->date_from, fn ($q, $d) => $q->whereDate('payment_date', '>=', $d))
+            ->when($request->date_to, fn ($q, $d) => $q->whereDate('payment_date', '<=', $d))
             ->orderByDesc('created_at');
         $query->whereHas('invoice', fn (Builder $invoiceQuery) => $this->invoiceVisibilityScope->applyToInvoiceQuery($invoiceQuery, $request->user()));
 
