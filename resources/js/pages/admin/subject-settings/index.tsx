@@ -86,11 +86,25 @@ export default function SubjectSettingsIndex({
     }, [gradeSubjects, levels, subjects]);
 
     const jamSummaryPerLevel = useMemo(() => {
-        const map = new Map<number, { total: number; classCount: number; subjectCount: number }>();
+        const map = new Map<
+            number,
+            { total: number; defaultTotal: number; classCount: number; subjectCount: number; mandatorySubjectCount: number }
+        >();
         for (const level of levels) {
             const levelSubjects = subjectsByLevel.get(level.id) ?? [];
             const levelClasses = classes.filter((c) => c.grade_level_id === level.id);
             let total = 0;
+            let defaultTotal = 0;
+            let mandatorySubjectCount = 0;
+            for (const subject of levelSubjects) {
+                const setting = settingLookup.get(`${subject.id}:${level.id}`);
+                const isTaught = setting?.is_mandatory_teaching ?? true;
+                if (!isTaught) {
+                    continue;
+                }
+                mandatorySubjectCount += 1;
+                defaultTotal += setting?.target_jam_default ?? 0;
+            }
             for (const schoolClass of levelClasses) {
                 for (const subject of levelSubjects) {
                     total += effectiveWeeklyHoursForClass(subject.id, level.id, schoolClass.id, settingLookup);
@@ -98,8 +112,10 @@ export default function SubjectSettingsIndex({
             }
             map.set(level.id, {
                 total,
+                defaultTotal,
                 classCount: levelClasses.length,
                 subjectCount: levelSubjects.length,
+                mandatorySubjectCount,
             });
         }
         return map;
@@ -107,6 +123,11 @@ export default function SubjectSettingsIndex({
 
     const grandTotalJam = useMemo(
         () => [...jamSummaryPerLevel.values()].reduce((acc, row) => acc + row.total, 0),
+        [jamSummaryPerLevel],
+    );
+
+    const grandDefaultJam = useMemo(
+        () => [...jamSummaryPerLevel.values()].reduce((acc, row) => acc + row.defaultTotal, 0),
         [jamSummaryPerLevel],
     );
 
@@ -174,8 +195,15 @@ export default function SubjectSettingsIndex({
                         { key: 'subjects', label: 'Total Mapel', value: subjects.length, icon: <BookOpen size={18} />, tone: 'blue' },
                         { key: 'levels', label: 'Total Tingkat', value: levels.length, icon: <Layers3 size={18} />, tone: 'green' },
                         {
+                            key: 'jam-default-total',
+                            label: 'Total Jam Default (Σ default)',
+                            value: grandDefaultJam,
+                            icon: <Clock3 size={18} />,
+                            tone: 'amber',
+                        },
+                        {
                             key: 'jam-total',
-                            label: 'Total Jam (semua tingkat)',
+                            label: 'Total Jam (kelas × mapel)',
                             value: grandTotalJam,
                             icon: <Clock3 size={18} />,
                             tone: 'amber',
@@ -220,13 +248,17 @@ export default function SubjectSettingsIndex({
                     const levelSubjects = subjectsByLevel.get(level.id) ?? [];
                     const jamInfo = jamSummaryPerLevel.get(level.id) ?? {
                         total: 0,
+                        defaultTotal: 0,
                         classCount: 0,
                         subjectCount: 0,
+                        mandatorySubjectCount: 0,
                     };
-                    const subtitle =
+                    const defaultLine = `Σ Jam Default tingkat: ${jamInfo.defaultTotal} jam/minggu (per 1 kelas, dari ${jamInfo.mandatorySubjectCount} mapel “Dipelajari”).`;
+                    const totalLine =
                         jamInfo.classCount === 0
-                            ? `Total jam acuan tingkat ini: ${jamInfo.total} jam/minggu (belum ada kelas di tingkat ini).`
-                            : `Total jam acuan tingkat ini: ${jamInfo.total} jam/minggu — ${jamInfo.classCount} kelas × ${jamInfo.subjectCount} mapel (hanya mapel “Dipelajari”; override per kelas dihitung).`;
+                            ? `Total beban tingkat: ${jamInfo.total} jam/minggu (belum ada kelas di tingkat ini).`
+                            : `Total beban tingkat: ${jamInfo.total} jam/minggu — ${jamInfo.classCount} kelas × ${jamInfo.mandatorySubjectCount} mapel (override per kelas dihitung).`;
+                    const subtitle = `${defaultLine} | ${totalLine}`;
                     return (
                         <CrudCard key={level.id} title={`Setting ${level.name}`} subtitle={subtitle}>
                             <div className="mcr-table-wrap">
