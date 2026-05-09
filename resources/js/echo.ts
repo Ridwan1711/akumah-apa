@@ -27,13 +27,25 @@ function readMeta(name: string): string {
     return value?.trim() ?? '';
 }
 
+function normalizeRealtimeHost(host: string): string {
+    const raw = host.trim();
+    // 0.0.0.0 valid untuk bind server, tapi INVALID untuk host tujuan browser.
+    if (!raw || raw === '0.0.0.0' || raw === '::') {
+        return window.location.hostname;
+    }
+
+    return raw;
+}
+
 export function getEcho(): EchoInstance {
     if (instance) return instance;
 
     window.Pusher = Pusher;
 
     const appKey = import.meta.env.VITE_REVERB_APP_KEY || readMeta('reverb-app-key');
-    const host = import.meta.env.VITE_REVERB_HOST || readMeta('reverb-host') || window.location.hostname;
+    const host = normalizeRealtimeHost(
+        import.meta.env.VITE_REVERB_HOST || readMeta('reverb-host') || window.location.hostname,
+    );
     const port = Number(import.meta.env.VITE_REVERB_PORT || readMeta('reverb-port') || 8080);
     const scheme = (import.meta.env.VITE_REVERB_SCHEME || readMeta('reverb-scheme') || 'http') as
         | 'http'
