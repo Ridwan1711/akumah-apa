@@ -100,11 +100,29 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix: initialMatri
     const [movingCell, setMovingCell] = useState<ScheduleMatrixCell | null>(null);
     const [activityItems, setActivityItems] = useState<Array<{ id: string; at: string; text: string }>>([]);
     const gridRef = useRef<HTMLDivElement | null>(null);
+    const reloadTimerRef = useRef<number | null>(null);
     const { presence, lockMap, onEvent } = useScheduleRealtime(scheduleSet.id);
 
     useEffect(() => {
         setMatrix(initialMatrix);
     }, [initialMatrix]);
+
+    const requestMatrixRefresh = useCallback(() => {
+        if (reloadTimerRef.current != null) return;
+        reloadTimerRef.current = window.setTimeout(() => {
+            router.reload({ only: ['matrix'] });
+            reloadTimerRef.current = null;
+        }, 200);
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            if (reloadTimerRef.current != null) {
+                window.clearTimeout(reloadTimerRef.current);
+                reloadTimerRef.current = null;
+            }
+        };
+    }, []);
 
     const isMultiSelect = selectedTeacherIds.length > 1;
     const isSingleSelect = selectedTeacherIds.length === 1;
@@ -144,23 +162,44 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix: initialMatri
 
             if (type === 'cell.assigned') {
                 const cell = payload.cell as ScheduleMatrixCell | undefined;
-                if (!cell) return;
+                if (!cell) {
+                    requestMatrixRefresh();
+                    return;
+                }
+                const day = Number((cell as Partial<ScheduleMatrixCell>).day ?? 0);
+                const jamNo = Number((cell as Partial<ScheduleMatrixCell>).jam_no ?? 0);
+                const classId = Number((cell as Partial<ScheduleMatrixCell>).class_id ?? 0);
+                if (!day || !jamNo || !classId) {
+                    requestMatrixRefresh();
+                    return;
+                }
                 setMatrix((prev) => ({
                     ...prev,
-                    cells: { ...prev.cells, [`${cell.day}:${cell.jam_no}:${cell.class_id}`]: cell },
+                    cells: { ...prev.cells, [`${day}:${jamNo}:${classId}`]: cell },
                 }));
                 if (byId !== currentUserId) {
                     toast.info(`${byName} menambah jadwal ${cell.subject_name ?? '-'} (${cell.teacher_name ?? '-'})`);
                 }
                 pushActivity(`${byName} menambah ${cell.subject_name ?? '-'} pada ${dayLabels[cell.day] ?? `Hari ${cell.day}`} jam ${cell.jam_no}`);
+                requestMatrixRefresh();
 
                 return;
             }
 
             if (type === 'cell.deleted') {
                 const cell = payload.cell as { class_id: number; day: number; jam_no: number } | undefined;
-                if (!cell) return;
-                const key = `${cell.day}:${cell.jam_no}:${cell.class_id}`;
+                if (!cell) {
+                    requestMatrixRefresh();
+                    return;
+                }
+                const day = Number(cell.day ?? 0);
+                const jamNo = Number(cell.jam_no ?? 0);
+                const classId = Number(cell.class_id ?? 0);
+                if (!day || !jamNo || !classId) {
+                    requestMatrixRefresh();
+                    return;
+                }
+                const key = `${day}:${jamNo}:${classId}`;
                 setMatrix((prev) => {
                     if (!prev.cells[key]) return prev;
                     const next = { ...prev.cells };
@@ -172,6 +211,7 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix: initialMatri
                     toast.info(`${byName} menghapus satu cell jadwal`);
                 }
                 pushActivity(`${byName} menghapus cell pada ${dayLabels[cell.day] ?? `Hari ${cell.day}`} jam ${cell.jam_no}`);
+                requestMatrixRefresh();
 
                 return;
             }
@@ -195,19 +235,20 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix: initialMatri
                     toast.info(`${byName} memindahkan cell jadwal`);
                 }
                 pushActivity(`${byName} memindahkan cell jadwal`);
+                requestMatrixRefresh();
 
                 return;
             }
 
             if (type === 'cells.bulk_deleted' || type === 'cells.restored' || type === 'time_slots.updated') {
-                router.reload({ only: ['matrix'] });
+                requestMatrixRefresh();
                 if (byId !== currentUserId) {
                     toast.info(`${byName} memperbarui data jadwal`);
                 }
                 pushActivity(`${byName} memperbarui data jadwal (${type})`);
             }
         });
-    }, [currentUserId, onEvent]);
+    }, [currentUserId, onEvent, requestMatrixRefresh]);
 
     /** Union dari kelas yang diampu semua guru terpilih (urut sesuai matrix.classes). */
     const teacherClassIds = useMemo(() => {
