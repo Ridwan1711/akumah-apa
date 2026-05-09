@@ -19,20 +19,37 @@ function readCsrfToken(): string {
     return token?.trim() ?? '';
 }
 
+function readMeta(name: string): string {
+    const value = document
+        .querySelector(`meta[name="${name}"]`)
+        ?.getAttribute('content');
+
+    return value?.trim() ?? '';
+}
+
 export function getEcho(): EchoInstance {
     if (instance) return instance;
 
     window.Pusher = Pusher;
 
-    const host = import.meta.env.VITE_REVERB_HOST ?? window.location.hostname;
-    const port = Number(import.meta.env.VITE_REVERB_PORT ?? 8080);
-    const scheme = (import.meta.env.VITE_REVERB_SCHEME ?? 'http') as 'http' | 'https';
+    const appKey = import.meta.env.VITE_REVERB_APP_KEY || readMeta('reverb-app-key');
+    const host = import.meta.env.VITE_REVERB_HOST || readMeta('reverb-host') || window.location.hostname;
+    const port = Number(import.meta.env.VITE_REVERB_PORT || readMeta('reverb-port') || 8080);
+    const scheme = (import.meta.env.VITE_REVERB_SCHEME || readMeta('reverb-scheme') || 'http') as
+        | 'http'
+        | 'https';
     const forceTLS = scheme === 'https';
     const csrf = readCsrfToken();
 
+    if (!appKey) {
+        throw new Error(
+            'Realtime misconfigured: REVERB_APP_KEY tidak tersedia (cek env + restart build/container).',
+        );
+    }
+
     instance = new Echo({
         broadcaster: 'reverb',
-        key: import.meta.env.VITE_REVERB_APP_KEY,
+        key: appKey,
         wsHost: host,
         wsPort: port,
         wssPort: port,
