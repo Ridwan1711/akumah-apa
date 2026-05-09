@@ -545,6 +545,19 @@ export type Invoice = {
     updated_at: string;
 };
 
+export type StudentInvoiceGroup = {
+    student_id: number;
+    student_nis: string;
+    student_name: string;
+    class_name: string | null;
+    invoice_count: number;
+    total_amount: number;
+    total_paid: number;
+    pending_amount: number;
+    total_remaining: number;
+    invoices: Invoice[];
+};
+
 export type Payment = {
     id: number;
     payment_number: string;

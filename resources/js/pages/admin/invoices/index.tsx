@@ -11,7 +11,15 @@ import {
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
 import { can } from '@/lib/authz';
-import type { AcademicYear, Auth, BreadcrumbItem, Invoice, PaginatedData, PaymentType, SchoolClass } from '@/types';
+import type {
+    AcademicYear,
+    Auth,
+    BreadcrumbItem,
+    PaginatedData,
+    PaymentType,
+    SchoolClass,
+    StudentInvoiceGroup,
+} from '@/types';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/dashboard' },
@@ -33,7 +41,8 @@ function formatCurrency(amount: number) {
 }
 
 type Props = {
-    invoices: PaginatedData<Invoice>;
+    studentGroups: PaginatedData<StudentInvoiceGroup>;
+    totalInvoiceCount: number;
     paymentTypes: Pick<PaymentType, 'id' | 'name' | 'code'>[];
     academicYears: Pick<AcademicYear, 'id' | 'name'>[];
     classes: Pick<SchoolClass, 'id' | 'name'>[];
@@ -42,39 +51,18 @@ type Props = {
     statusCounts: Record<string, number>;
 };
 
-export default function InvoiceIndex({ invoices, paymentTypes, academicYears, classes, divisionOptions, filters, statusCounts }: Props) {
+export default function InvoiceIndex({
+    studentGroups,
+    totalInvoiceCount,
+    paymentTypes,
+    academicYears,
+    classes,
+    divisionOptions,
+    filters,
+    statusCounts,
+}: Props) {
     const { auth } = usePage<{ auth?: Auth }>().props;
     const canCreateInvoice = can(auth, 'invoice.create');
-    const groupedByStudent = invoices.data.reduce<Record<string, {
-        studentName: string;
-        studentNis: string;
-        studentId: number | null;
-        invoices: Invoice[];
-        invoiceCount: number;
-        totalAmount: number;
-        totalRemaining: number;
-    }>>((acc, invoice) => {
-        const key = String(invoice.student_id ?? `unknown-${invoice.id}`);
-        if (!acc[key]) {
-            acc[key] = {
-                studentName: invoice.student?.full_name ?? 'Santri tidak diketahui',
-                studentNis: invoice.student?.nis ?? '-',
-                studentId: invoice.student_id ?? null,
-                invoices: [],
-                invoiceCount: 0,
-                totalAmount: 0,
-                totalRemaining: 0,
-            };
-        }
-
-        acc[key].invoices.push(invoice);
-        acc[key].invoiceCount += 1;
-        acc[key].totalAmount += Number(invoice.final_amount ?? 0);
-        acc[key].totalRemaining += Number(invoice.remaining ?? invoice.final_amount ?? 0);
-
-        return acc;
-    }, {});
-    const studentGroups = Object.values(groupedByStudent);
 
     function handleFilter(key: string, value: string) {
         router.get(
@@ -95,7 +83,7 @@ export default function InvoiceIndex({ invoices, paymentTypes, academicYears, cl
 
                 <CrudStatStrip
                     items={[
-                        { key: 'all', label: 'Total Tagihan', value: statusCounts.all ?? invoices.total, icon: <Wallet size={18} />, tone: 'blue' },
+                        { key: 'all', label: 'Total Tagihan', value: statusCounts.all ?? totalInvoiceCount, icon: <Wallet size={18} />, tone: 'blue' },
                         { key: 'pending', label: 'Belum Bayar', value: statusCounts.pending ?? 0, icon: <Wallet size={18} />, tone: 'amber' },
                         { key: 'paid', label: 'Lunas', value: statusCounts.paid ?? 0, icon: <Wallet size={18} />, tone: 'green' },
                         { key: 'overdue', label: 'Jatuh Tempo', value: statusCounts.overdue ?? 0, icon: <Wallet size={18} />, tone: 'purple' },
@@ -152,23 +140,29 @@ export default function InvoiceIndex({ invoices, paymentTypes, academicYears, cl
                 />
 
                 <CrudCard>
-                    {invoices.data.length === 0 ? (
+                    {studentGroups.data.length === 0 ? (
                         <CrudEmptyState title="Tidak ada tagihan" description="Belum ada invoice sesuai filter saat ini." />
                     ) : (
                         <div className="space-y-4">
                             <div className="text-sm text-muted-foreground">
-                                Menampilkan <strong>{studentGroups.length}</strong> santri dari total <strong>{invoices.total}</strong> tagihan.
+                                Menampilkan <strong>{studentGroups.data.length}</strong> dari <strong>{studentGroups.total}</strong> santri
+                                {' '}(total <strong>{totalInvoiceCount}</strong> tagihan).
                             </div>
-                            {studentGroups.map((group) => (
-                                <div key={String(group.studentId ?? group.studentNis)} className="rounded-md border">
+                            {studentGroups.data.map((group) => (
+                                <div key={String(group.student_id ?? group.student_nis)} className="rounded-md border">
                                     <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
                                         <div>
-                                            <div className="font-medium">{group.studentName}</div>
-                                            <div className="text-xs text-muted-foreground">NIS: {group.studentNis}</div>
+                                            <div className="font-medium">{group.student_name}</div>
+                                            <div className="text-xs text-muted-foreground">
+                                                NIS: {group.student_nis}
+                                                {group.class_name ? ` • ${group.class_name}` : ''}
+                                            </div>
                                         </div>
                                         <div className="text-right text-xs">
-                                            <div><strong>{group.invoiceCount}</strong> tagihan</div>
-                                            <div className="text-muted-foreground">Total {formatCurrency(group.totalAmount)} • Sisa {formatCurrency(group.totalRemaining)}</div>
+                                            <div><strong>{group.invoice_count}</strong> tagihan</div>
+                                            <div className="text-muted-foreground">
+                                                Total {formatCurrency(group.total_amount)} • Sisa {formatCurrency(group.total_remaining)}
+                                            </div>
                                         </div>
                                     </div>
                                     <CrudTableShell>
@@ -218,7 +212,7 @@ export default function InvoiceIndex({ invoices, paymentTypes, academicYears, cl
                             ))}
                         </div>
                     )}
-                    <CrudPagination links={invoices.links} />
+                    <CrudPagination links={studentGroups.links} />
                 </CrudCard>
             </div>
         </AppLayout>

@@ -27,19 +27,10 @@ class InvoiceController extends Controller
 {
     public function index(Request $request): Response
     {
-        $query = Invoice::with([
-            'student:id,nis,full_name,current_class_id',
-            'student.currentClass:id,name',
-            'paymentType:id,name,code,category',
-            'academicYear:id,name',
-        ])
-            ->withCount('payments')
-            ->withSum([
-                'payments as verified_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', \App\Models\Payment::STATUS_VERIFIED),
-            ], 'amount')
-            ->withSum([
-                'payments as pending_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', \App\Models\Payment::STATUS_PENDING),
-            ], 'amount')
+        // Base invoice query carrying all filter conditions. Reused both as a
+        // sub-query for paginating distinct students AND for hydrating each
+        // student's filtered invoices below.
+        $invoiceFilterQuery = Invoice::query()
             ->when($request->status, fn ($q, $s) => $q->where('status', $s))
             ->when($request->payment_type_id, fn ($q, $id) => $q->where('payment_type_id', $id))
             ->when($request->academic_year_id, fn ($q, $id) => $q->where('academic_year_id', $id))
@@ -52,20 +43,72 @@ class InvoiceController extends Controller
                     'student.activePositions',
                     fn ($positionQuery) => $positionQuery->where('division_code', (string) $request->string('division_code'))
                 )
+            );
+
+        $totalInvoiceCount = (clone $invoiceFilterQuery)->count();
+
+        // Paginate distinct students that own at least one matching invoice.
+        $studentPaginator = Student::query()
+            ->select('students.*')
+            ->whereIn('students.id', (clone $invoiceFilterQuery)->select('invoices.student_id'))
+            ->with(['currentClass:id,name'])
+            ->orderByDesc(
+                Invoice::query()
+                    ->select('created_at')
+                    ->whereColumn('invoices.student_id', 'students.id')
+                    ->latest('created_at')
+                    ->limit(1)
             )
-            ->orderByDesc('created_at');
+            ->orderBy('students.full_name')
+            ->paginate(20)
+            ->withQueryString();
 
-        $invoices = $query->paginate(20)->withQueryString();
-        $invoices->getCollection()->transform(function (Invoice $invoice): Invoice {
-            $invoice->total_paid = (float) ($invoice->verified_paid_amount ?? 0);
-            $invoice->pending_amount = (float) ($invoice->pending_paid_amount ?? 0);
-            $invoice->remaining = max(0, (float) $invoice->final_amount - $invoice->total_paid);
+        $studentIds = $studentPaginator->getCollection()->pluck('id')->all();
 
-            return $invoice;
+        $invoicesByStudent = (clone $invoiceFilterQuery)
+            ->whereIn('invoices.student_id', $studentIds)
+            ->with([
+                'paymentType:id,name,code,category',
+                'academicYear:id,name',
+            ])
+            ->withCount('payments')
+            ->withSum([
+                'payments as verified_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', \App\Models\Payment::STATUS_VERIFIED),
+            ], 'amount')
+            ->withSum([
+                'payments as pending_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', \App\Models\Payment::STATUS_PENDING),
+            ], 'amount')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(function (Invoice $invoice) {
+                $invoice->total_paid = (float) ($invoice->verified_paid_amount ?? 0);
+                $invoice->pending_amount = (float) ($invoice->pending_paid_amount ?? 0);
+                $invoice->remaining = max(0, (float) $invoice->final_amount - $invoice->total_paid);
+
+                return $invoice;
+            })
+            ->groupBy('student_id');
+
+        $studentPaginator->getCollection()->transform(function (Student $student) use ($invoicesByStudent) {
+            $invoices = ($invoicesByStudent->get($student->id) ?? collect())->values();
+
+            return [
+                'student_id' => $student->id,
+                'student_nis' => $student->nis,
+                'student_name' => $student->full_name,
+                'class_name' => $student->currentClass?->name,
+                'invoice_count' => $invoices->count(),
+                'total_amount' => (float) $invoices->sum(fn (Invoice $i) => (float) $i->final_amount),
+                'total_paid' => (float) $invoices->sum(fn (Invoice $i) => (float) ($i->total_paid ?? 0)),
+                'pending_amount' => (float) $invoices->sum(fn (Invoice $i) => (float) ($i->pending_amount ?? 0)),
+                'total_remaining' => (float) $invoices->sum(fn (Invoice $i) => (float) ($i->remaining ?? $i->final_amount)),
+                'invoices' => $invoices,
+            ];
         });
 
         return Inertia::render('admin/invoices/index', [
-            'invoices' => $invoices,
+            'studentGroups' => $studentPaginator,
+            'totalInvoiceCount' => $totalInvoiceCount,
             'paymentTypes' => PaymentType::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
             'academicYears' => AcademicYear::orderByDesc('start_date')->get(['id', 'name']),
             'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name']),
