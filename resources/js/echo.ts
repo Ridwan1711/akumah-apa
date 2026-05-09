@@ -69,28 +69,41 @@ export function getEcho(): EchoInstance {
         enabledTransports: ['ws', 'wss'],
         authorizer: (channel) => ({
             authorize: (socketId, callback) => {
+                const payload = new URLSearchParams({
+                    socket_id: socketId,
+                    channel_name: channel.name,
+                });
+
                 fetch('/broadcasting/auth', {
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: {
-                        'Content-Type': 'application/json',
+                        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                         Accept: 'application/json',
                         'X-CSRF-TOKEN': csrf,
                         'X-Requested-With': 'XMLHttpRequest',
                     },
-                    body: JSON.stringify({
-                        socket_id: socketId,
-                        channel_name: channel.name,
-                    }),
+                    body: payload.toString(),
                 })
                     .then(async (response) => {
+                        const raw = await response.text();
                         if (!response.ok) {
-                            const text = await response.text();
-                            throw new Error(text || `Auth failed (${response.status})`);
+                            throw new Error(raw || `Auth failed (${response.status})`);
                         }
-                        return response.json();
+
+                        // Laravel biasanya mengembalikan JSON string auth payload.
+                        // Jika body kosong / non-JSON, throw agar error terlihat jelas.
+                        if (!raw.trim()) {
+                            throw new Error('Auth failed: empty response body from /broadcasting/auth');
+                        }
+
+                        try {
+                            return JSON.parse(raw) as unknown;
+                        } catch {
+                            throw new Error(`Auth failed: non-JSON response (${raw.slice(0, 120)})`);
+                        }
                     })
-                    .then((data) => callback(null, data))
+                    .then((data) => callback(null, data as { auth: string; channel_data?: string }))
                     .catch((error) => callback(error as Error, null));
             },
         }),
