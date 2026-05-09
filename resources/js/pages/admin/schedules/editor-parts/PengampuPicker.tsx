@@ -1,8 +1,9 @@
-import { CheckCircle2, Search } from 'lucide-react';
+import { CheckCircle2, Search, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { ScheduleMatrixPengampu } from '@/types';
+import { colorForTeacherIndex } from './teacherColors';
 
 type TeacherGroupRow = {
     teacher_id: number;
@@ -15,8 +16,9 @@ type TeacherGroupRow = {
 
 type Props = {
     pengampuList: ScheduleMatrixPengampu[];
-    selectedTeacherId: number | null;
-    onSelectTeacher: (teacherId: number | null) => void;
+    selectedTeacherIds: number[];
+    onToggleTeacher: (teacherId: number) => void;
+    onClearSelection: () => void;
     /** Progress per pengampu (id → allocated/target). */
     progressByPengampuId?: Record<number, { allocated: number; target: number; isFull: boolean }>;
 };
@@ -109,8 +111,9 @@ function computeTeacherTotals(
 
 export default function PengampuPicker({
     pengampuList,
-    selectedTeacherId,
-    onSelectTeacher,
+    selectedTeacherIds,
+    onToggleTeacher,
+    onClearSelection,
     progressByPengampuId,
 }: Props) {
     const [query, setQuery] = useState('');
@@ -135,6 +138,8 @@ export default function PengampuPicker({
             return a.teacher_name.localeCompare(b.teacher_name, 'id');
         });
     }, [rows, pengampuList, query, sortMode, progressByPengampuId]);
+
+    const selectionIndex = (teacherId: number) => selectedTeacherIds.indexOf(teacherId);
 
     return (
         <div className="flex h-full flex-col gap-2">
@@ -174,10 +179,17 @@ export default function PengampuPicker({
                     Nama
                 </button>
             </div>
-            {selectedTeacherId != null && (
-                <Button type="button" variant="outline" size="sm" onClick={() => onSelectTeacher(null)}>
-                    Batalkan pilihan
-                </Button>
+            {selectedTeacherIds.length > 0 && (
+                <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/40 px-2 py-1 text-xs">
+                    <span>
+                        {selectedTeacherIds.length} guru terpilih
+                        {selectedTeacherIds.length >= 2 ? ' (compare mode)' : ''}
+                    </span>
+                    <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onClearSelection}>
+                        <X className="mr-1 h-3 w-3" />
+                        Reset
+                    </Button>
+                </div>
             )}
             <div className="flex-1 overflow-auto rounded-md border">
                 {filtered.length === 0 ? (
@@ -187,7 +199,9 @@ export default function PengampuPicker({
                 ) : (
                     <ul className="divide-y">
                         {filtered.map((row) => {
-                            const active = row.teacher_id === selectedTeacherId;
+                            const selIdx = selectionIndex(row.teacher_id);
+                            const active = selIdx >= 0;
+                            const color = active ? colorForTeacherIndex(selIdx) : null;
                             const totals = computeTeacherTotals(row, progressByPengampuId);
                             const subtitle =
                                 row.classCount <= 3
@@ -203,10 +217,18 @@ export default function PengampuPicker({
                                                 ? 'bg-amber-100 hover:bg-amber-100 dark:bg-amber-900/40'
                                                 : '')
                                         }
-                                        onClick={() => onSelectTeacher(row.teacher_id)}
+                                        onClick={() => onToggleTeacher(row.teacher_id)}
                                     >
                                         <div className="flex items-center justify-between gap-2">
-                                            <div className="font-medium">{row.teacher_name}</div>
+                                            <div className="flex items-center gap-1.5 font-medium">
+                                                {color && (
+                                                    <span
+                                                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${color.badge}`}
+                                                        aria-hidden
+                                                    />
+                                                )}
+                                                {row.teacher_name}
+                                            </div>
                                             {totals.target > 0 && totals.isFull && (
                                                 <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
                                             )}

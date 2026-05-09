@@ -1,7 +1,8 @@
-import { TriangleAlert, X } from 'lucide-react';
+import { Move, TriangleAlert, X } from 'lucide-react';
 import { forwardRef } from 'react';
 import type { ScheduleMatrixCell, ScheduleMatrixPayload } from '@/types';
 import { colorForSubject } from './subjectColors';
+import { colorForTeacherIndex, teacherInitials } from './teacherColors';
 
 const dayLabels: Record<number, string> = {
     1: 'Senin',
@@ -15,32 +16,37 @@ const dayLabels: Record<number, string> = {
 
 type Props = {
     matrix: ScheduleMatrixPayload;
-    selectedTeacherId: number | null;
+    /** Daftar guru terpilih, urut sesuai pemilihan (untuk pemetaan warna). */
+    selectedTeacherIds: number[];
     /** Kolom kelas yang di-highlight (semua kelas yang diampu guru terpilih). */
     highlightedClassIds: number[];
     visibleClassIds?: number[];
     onClickCell: (day: number, jamNo: number, classId: number) => void;
     onDeleteCell: (cell: ScheduleMatrixCell) => void;
+    onMoveStart?: (cell: ScheduleMatrixCell) => void;
+    onMoveDrop?: (sourceCellScheduleId: number, targetClassId: number, targetDay: number, targetJamNo: number) => void;
     /** Bulk delete handlers (opsional). */
     onDeleteClassColumn?: (classId: number) => void;
     onDeleteDay?: (day: number) => void;
     onDeleteDayJam?: (day: number, jamNo: number) => void;
-    /** Refs untuk auto-scroll ke kolom kelas pertama yang diampu. */
-    scrollToClassId?: number | null;
+    /** Cell yang sedang berada dalam mode pick-then-place. */
+    movingCellId?: number | null;
 };
 
 const MatrixGrid = forwardRef<HTMLDivElement, Props>(function MatrixGrid(
     {
         matrix,
-        selectedTeacherId,
+        selectedTeacherIds,
         highlightedClassIds,
         visibleClassIds,
         onClickCell,
         onDeleteCell,
+        onMoveStart,
+        onMoveDrop,
         onDeleteClassColumn,
         onDeleteDay,
         onDeleteDayJam,
-        scrollToClassId,
+        movingCellId,
     },
     ref,
 ) {
@@ -51,24 +57,35 @@ const MatrixGrid = forwardRef<HTMLDivElement, Props>(function MatrixGrid(
     const slotByJam = new Map(matrix.slots.map((s) => [s.jam_no, s]));
     const jamRange = [...slotByJam.keys()].sort((a, b) => a - b);
 
+    const teacherIndexMap = new Map<number, number>();
+    selectedTeacherIds.forEach((tid, idx) => teacherIndexMap.set(tid, idx));
+    const isMultiSelect = selectedTeacherIds.length > 1;
+    const isSingleSelect = selectedTeacherIds.length === 1;
+    const onlyTeacherId = isSingleSelect ? selectedTeacherIds[0] : null;
+
     /**
-     * Slot (day:jam) di mana guru terpilih sudah punya cell di kelas mana pun.
-     * Berguna untuk:
-     *  - menandai baris (sudah ada).
-     *  - memberi peringatan visual pada cell kosong di kelas lain (kolom yang diampu)
-     *    bahwa guru sudah terjadwal di slot tsb.
+     * Slot (day:jam) di mana satu guru terpilih sudah punya cell di kelas mana pun.
+     * Berguna untuk menandai baris dan memberi peringatan visual cell kosong.
+     * Saat multi-select kita pakai map per teacher_id agar peringatan akurat.
      */
-    const teacherBusyDayJam = new Set<string>();
-    if (selectedTeacherId != null) {
+    const teacherBusyMap = new Map<number, Set<string>>();
+    if (selectedTeacherIds.length > 0) {
+        for (const tid of selectedTeacherIds) {
+            teacherBusyMap.set(tid, new Set<string>());
+        }
         for (const cell of Object.values(matrix.cells)) {
-            if (cell.teacher_id === selectedTeacherId) {
-                teacherBusyDayJam.add(`${cell.day}:${cell.jam_no}`);
-            }
+            const set = teacherBusyMap.get(cell.teacher_id);
+            if (set) set.add(`${cell.day}:${cell.jam_no}`);
         }
     }
 
-    const rowHasTeacher = (day: number, jamNo: number): boolean =>
-        teacherBusyDayJam.has(`${day}:${jamNo}`);
+    const rowHasAnyTeacher = (day: number, jamNo: number): boolean => {
+        const k = `${day}:${jamNo}`;
+        for (const set of teacherBusyMap.values()) {
+            if (set.has(k)) return true;
+        }
+        return false;
+    };
 
     return (
         <div ref={ref} className="relative overflow-auto rounded-md border">
@@ -83,7 +100,7 @@ const MatrixGrid = forwardRef<HTMLDivElement, Props>(function MatrixGrid(
                         </th>
                         {classes.map((c) => {
                             const isSelectedColumn =
-                                selectedTeacherId != null && highlightedClassIds.includes(c.id);
+                                selectedTeacherIds.length > 0 && highlightedClassIds.includes(c.id);
                             return (
                                 <th
                                     key={c.id}
@@ -119,7 +136,7 @@ const MatrixGrid = forwardRef<HTMLDivElement, Props>(function MatrixGrid(
                     {matrix.days.map((day) => {
                         return jamRange.map((jamNo, idx) => {
                             const slot = slotByJam.get(jamNo);
-                            const rowHighlight = rowHasTeacher(day, jamNo);
+                            const rowHighlight = rowHasAnyTeacher(day, jamNo);
                             return (
                                 <tr
                                     key={`${day}-${jamNo}`}
@@ -179,16 +196,21 @@ const MatrixGrid = forwardRef<HTMLDivElement, Props>(function MatrixGrid(
                                         const key = `${day}:${jamNo}:${c.id}`;
                                         const cell = matrix.cells[key];
                                         const isHighlightedClass =
-                                            selectedTeacherId != null && highlightedClassIds.includes(c.id);
-                                        const teacherBusyHere = rowHighlight;
-                                        const isOwnCell =
-                                            cell != null &&
-                                            selectedTeacherId != null &&
-                                            cell.teacher_id === selectedTeacherId;
-                                        const showBusyWarning =
+                                            selectedTeacherIds.length > 0 && highlightedClassIds.includes(c.id);
+                                        const cellTeacherIdx =
+                                            cell != null ? teacherIndexMap.get(cell.teacher_id) ?? -1 : -1;
+                                        const isOwnCell = cellTeacherIdx >= 0;
+                                        const ownTeacherBusy =
+                                            isSingleSelect &&
                                             isHighlightedClass &&
-                                            teacherBusyHere &&
-                                            !isOwnCell;
+                                            (teacherBusyMap.get(onlyTeacherId!)?.has(`${day}:${jamNo}`) ?? false);
+                                        const showBusyWarning =
+                                            isSingleSelect &&
+                                            isHighlightedClass &&
+                                            ownTeacherBusy &&
+                                            !isOwnCell &&
+                                            cell == null;
+                                        const isMoving = movingCellId != null && cell?.schedule_id === movingCellId;
                                         return (
                                             <Cell
                                                 key={c.id}
@@ -196,10 +218,24 @@ const MatrixGrid = forwardRef<HTMLDivElement, Props>(function MatrixGrid(
                                                 day={day}
                                                 jamNo={jamNo}
                                                 classId={c.id}
-                                                selectedTeacherId={selectedTeacherId}
                                                 onClick={() => onClickCell(day, jamNo, c.id)}
                                                 onDelete={() => cell && onDeleteCell(cell)}
+                                                onMoveStart={onMoveStart && cell ? () => onMoveStart(cell) : undefined}
+                                                onDragStartCell={
+                                                    onMoveStart && cell
+                                                        ? () => onMoveStart(cell)
+                                                        : undefined
+                                                }
+                                                onDropTarget={
+                                                    onMoveDrop
+                                                        ? (sourceId) =>
+                                                              onMoveDrop(sourceId, c.id, day, jamNo)
+                                                        : undefined
+                                                }
                                                 showBusyWarning={showBusyWarning}
+                                                ownTeacherIndex={cellTeacherIdx}
+                                                isMoving={isMoving}
+                                                isMultiSelect={isMultiSelect}
                                             />
                                         );
                                     })}
@@ -220,24 +256,42 @@ type CellProps = {
     day: number;
     jamNo: number;
     classId: number;
-    selectedTeacherId: number | null;
     onClick: () => void;
     onDelete: () => void;
+    onMoveStart?: () => void;
+    onDragStartCell?: () => void;
+    onDropTarget?: (sourceCellScheduleId: number) => void;
     showBusyWarning?: boolean;
+    /** Index pada selectedTeacherIds; -1 berarti tidak terpilih. */
+    ownTeacherIndex: number;
+    isMoving: boolean;
+    isMultiSelect: boolean;
 };
 
-function Cell({ cell, selectedTeacherId, onClick, onDelete, showBusyWarning }: CellProps) {
-    const isTeacherMatch =
-        cell && selectedTeacherId != null && cell.teacher_id === selectedTeacherId;
+function Cell({
+    cell,
+    onClick,
+    onDelete,
+    onMoveStart,
+    onDragStartCell,
+    onDropTarget,
+    showBusyWarning,
+    ownTeacherIndex,
+    isMoving,
+    isMultiSelect,
+}: CellProps) {
+    const isOwnCell = ownTeacherIndex >= 0;
+    const teacherColor = isOwnCell ? colorForTeacherIndex(ownTeacherIndex) : null;
     const isCombined = !!cell?.combined_group_id;
     const subjectColor = cell ? colorForSubject(cell.subject_id) : null;
 
     const fillBg = subjectColor ? `${subjectColor.bg}` : '';
-    const ringClass = isTeacherMatch
-        ? 'ring-2 ring-amber-500 ring-inset'
+    const ringClass = teacherColor
+        ? `ring-2 ${teacherColor.ring} ring-inset`
         : showBusyWarning
           ? 'ring-2 ring-rose-400 ring-inset'
           : '';
+    const movingClass = isMoving ? 'opacity-40 outline-dashed outline-2 outline-primary' : '';
 
     return (
         <td
@@ -245,9 +299,32 @@ function Cell({ cell, selectedTeacherId, onClick, onDelete, showBusyWarning }: C
                 'group relative h-12 min-w-[90px] cursor-pointer border-b border-r px-1 py-1 text-center align-middle transition-colors hover:bg-primary/10 ' +
                 fillBg +
                 ' ' +
-                ringClass
+                ringClass +
+                ' ' +
+                movingClass
             }
             onClick={onClick}
+            draggable={!!cell && !!onDragStartCell}
+            onDragStart={(e) => {
+                if (!cell || !onDragStartCell) return;
+                e.dataTransfer.setData('text/x-schedule-cell', String(cell.schedule_id));
+                e.dataTransfer.effectAllowed = 'move';
+                onDragStartCell();
+            }}
+            onDragOver={(e) => {
+                if (!onDropTarget) return;
+                if (!e.dataTransfer.types.includes('text/x-schedule-cell')) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+            }}
+            onDrop={(e) => {
+                if (!onDropTarget) return;
+                const raw = e.dataTransfer.getData('text/x-schedule-cell');
+                const sid = Number(raw);
+                if (!sid) return;
+                e.preventDefault();
+                onDropTarget(sid);
+            }}
             title={
                 cell
                     ? `${cell.teacher_name ?? '-'} · ${cell.subject_name ?? '-'}`
@@ -262,6 +339,14 @@ function Cell({ cell, selectedTeacherId, onClick, onDelete, showBusyWarning }: C
                     <div className="truncate text-[10px] leading-tight text-muted-foreground">
                         {cell.subject_name ?? '-'}
                     </div>
+                    {teacherColor && (
+                        <span
+                            className={`absolute left-0.5 top-0.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-sm px-0.5 text-[8px] font-bold leading-none ${teacherColor.badge} ${teacherColor.badgeText}`}
+                            title={cell.teacher_name ?? ''}
+                        >
+                            {teacherInitials(cell.teacher_name ?? '?')}
+                        </span>
+                    )}
                     {isCombined && (
                         <span
                             className="absolute right-0.5 top-0.5 rounded bg-emerald-500 px-1 text-[8px] font-bold text-white"
@@ -270,17 +355,32 @@ function Cell({ cell, selectedTeacherId, onClick, onDelete, showBusyWarning }: C
                             G
                         </span>
                     )}
-                    <button
-                        type="button"
-                        className="absolute bottom-0.5 right-0.5 hidden rounded bg-destructive/80 p-0.5 text-white hover:bg-destructive group-hover:block"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onDelete();
-                        }}
-                        title="Hapus"
-                    >
-                        <X className="h-2.5 w-2.5" />
-                    </button>
+                    <div className="absolute bottom-0.5 right-0.5 hidden gap-0.5 group-hover:flex">
+                        {onMoveStart && !isMultiSelect && (
+                            <button
+                                type="button"
+                                className="rounded bg-primary/80 p-0.5 text-white hover:bg-primary"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onMoveStart();
+                                }}
+                                title="Pindahkan cell"
+                            >
+                                <Move className="h-2.5 w-2.5" />
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            className="rounded bg-destructive/80 p-0.5 text-white hover:bg-destructive"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onDelete();
+                            }}
+                            title="Hapus"
+                        >
+                            <X className="h-2.5 w-2.5" />
+                        </button>
+                    </div>
                 </>
             ) : showBusyWarning ? (
                 <span className="inline-flex items-center gap-0.5 text-[10px] text-rose-600 dark:text-rose-400">

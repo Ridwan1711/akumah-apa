@@ -277,6 +277,228 @@ class ScheduleMatrixService
         });
     }
 
+    /**
+     * Pindah/swap satu cell ke (target_class, target_day, target_jam) dalam schedule set yang sama.
+     *
+     * Aturan:
+     *  - Cell yang merupakan bagian dari combined_group dilarang dipindah (pisah grup dulu).
+     *  - Wajib ada TeacherAssignment yang cocok untuk (teacher source × target_class × subject source).
+     *  - Tidak boleh menimbulkan bentrok guru di slot baru (selain cell yang ditukar).
+     *  - Bila slot tujuan terisi:
+     *      - mode 'auto'/'swap': lakukan swap (kedua cell saling tukar posisi).
+     *      - mode 'replace': hapus cell tujuan, tempatkan source di sana.
+     *
+     * @return array{
+     *     mode: 'move'|'swap'|'replace',
+     *     source_snapshot: array<int, array<string, mixed>>,
+     *     target_snapshot: array<int, array<string, mixed>>,
+     *     new_source_id: ?int,
+     *     new_target_id: ?int
+     * }
+     */
+    public function moveCell(
+        ScheduleSet $set,
+        AcademicSchedule $source,
+        int $targetClassId,
+        int $targetDay,
+        int $targetJamNo,
+        string $mode = 'auto',
+    ): array {
+        if ((int) $source->schedule_set_id !== (int) $set->id) {
+            throw new InvalidArgumentException('Cell sumber bukan milik schedule set ini.');
+        }
+        if ($source->combined_group_id) {
+            throw new InvalidArgumentException('Cell yang merupakan kelas digabung belum bisa dipindah; lepas grup terlebih dahulu.');
+        }
+
+        $this->assertDayAndJam($set, $targetDay, $targetJamNo);
+
+        $sameSlot = (int) $source->class_id === $targetClassId
+            && (int) $source->day === $targetDay
+            && (int) $source->jam_no === $targetJamNo;
+        if ($sameSlot) {
+            return [
+                'mode' => 'move',
+                'source_snapshot' => [],
+                'target_snapshot' => [],
+                'new_source_id' => $source->id,
+                'new_target_id' => null,
+            ];
+        }
+
+        return DB::transaction(function () use ($set, $source, $targetClassId, $targetDay, $targetJamNo, $mode) {
+            $sourceData = [
+                'class_id' => (int) $source->class_id,
+                'subject_id' => (int) $source->subject_id,
+                'teacher_id' => (int) $source->teacher_id,
+                'day' => (int) $source->day,
+                'jam_no' => (int) $source->jam_no,
+            ];
+
+            $sourceSnapshot = $this->snapshotCells(collect([$source]));
+
+            $targetCell = AcademicSchedule::query()
+                ->where('schedule_set_id', $set->id)
+                ->where('class_id', $targetClassId)
+                ->where('day', $targetDay)
+                ->where('jam_no', $targetJamNo)
+                ->first();
+
+            $targetSnapshot = [];
+            if ($targetCell) {
+                if ($targetCell->combined_group_id) {
+                    throw new InvalidArgumentException('Cell tujuan merupakan bagian dari kelas digabung; lepas grup terlebih dahulu.');
+                }
+                $targetSnapshot = $this->snapshotCells(collect([$targetCell]));
+            }
+
+            $sourcePengampu = $this->resolvePengampu(
+                $set,
+                $sourceData['teacher_id'],
+                $targetClassId,
+                $sourceData['subject_id'],
+            );
+            if (! $sourcePengampu) {
+                throw new InvalidArgumentException(
+                    'Guru sumber tidak terdaftar mengajar mapel ini di kelas tujuan. Tambahkan penugasan dulu di Teacher Assignment.'
+                );
+            }
+
+            $effectiveMode = 'move';
+            if ($targetCell) {
+                $effectiveMode = $mode === 'replace' ? 'replace' : 'swap';
+            }
+
+            if ($effectiveMode === 'swap' && $targetCell) {
+                $targetPengampu = $this->resolvePengampu(
+                    $set,
+                    (int) $targetCell->teacher_id,
+                    $sourceData['class_id'],
+                    (int) $targetCell->subject_id,
+                );
+                if (! $targetPengampu) {
+                    throw new InvalidArgumentException(
+                        'Swap gagal: guru pada cell tujuan tidak terdaftar mengajar mapel ini di kelas sumber.'
+                    );
+                }
+
+                $this->assertNoTeacherClashOutside(
+                    $set,
+                    teacherId: $sourceData['teacher_id'],
+                    day: $targetDay,
+                    jamNo: $targetJamNo,
+                    excludeIds: [$source->id, $targetCell->id],
+                );
+                $this->assertNoTeacherClashOutside(
+                    $set,
+                    teacherId: (int) $targetCell->teacher_id,
+                    day: $sourceData['day'],
+                    jamNo: $sourceData['jam_no'],
+                    excludeIds: [$source->id, $targetCell->id],
+                );
+
+                $sourceId = $source->id;
+                $targetId = $targetCell->id;
+                $this->deleteScheduleWithCleanup($source);
+                $this->deleteScheduleWithCleanup($targetCell);
+
+                $newAtTarget = $this->createCell(
+                    $set,
+                    $sourcePengampu,
+                    $targetDay,
+                    $targetJamNo,
+                    $this->resolveSlotTimes($set, $targetJamNo),
+                    null,
+                );
+                $newAtSource = $this->createCell(
+                    $set,
+                    $targetPengampu,
+                    $sourceData['day'],
+                    $sourceData['jam_no'],
+                    $this->resolveSlotTimes($set, $sourceData['jam_no']),
+                    null,
+                );
+                unset($sourceId, $targetId);
+
+                return [
+                    'mode' => 'swap',
+                    'source_snapshot' => $sourceSnapshot,
+                    'target_snapshot' => $targetSnapshot,
+                    'new_source_id' => $newAtSource->id,
+                    'new_target_id' => $newAtTarget->id,
+                ];
+            }
+
+            $this->assertNoTeacherClashOutside(
+                $set,
+                teacherId: $sourceData['teacher_id'],
+                day: $targetDay,
+                jamNo: $targetJamNo,
+                excludeIds: array_filter([$source->id, $targetCell?->id]),
+            );
+
+            $this->deleteScheduleWithCleanup($source);
+            if ($targetCell) {
+                $this->deleteScheduleWithCleanup($targetCell);
+            }
+            $newAtTarget = $this->createCell(
+                $set,
+                $sourcePengampu,
+                $targetDay,
+                $targetJamNo,
+                $this->resolveSlotTimes($set, $targetJamNo),
+                null,
+            );
+
+            return [
+                'mode' => $effectiveMode,
+                'source_snapshot' => $sourceSnapshot,
+                'target_snapshot' => $targetSnapshot,
+                'new_source_id' => null,
+                'new_target_id' => $newAtTarget->id,
+            ];
+        });
+    }
+
+    private function resolvePengampu(ScheduleSet $set, int $teacherId, int $classId, int $subjectId): ?TeacherAssignment
+    {
+        return TeacherAssignment::query()
+            ->where('period_id', $set->period_id)
+            ->where('teacher_id', $teacherId)
+            ->where('class_id', $classId)
+            ->where('subject_id', $subjectId)
+            ->first();
+    }
+
+    /**
+     * Pastikan tidak ada cell lain milik teacher di (day, jam) tertentu, kecuali ID yang dikecualikan.
+     *
+     * @param  array<int, int>  $excludeIds
+     */
+    private function assertNoTeacherClashOutside(
+        ScheduleSet $set,
+        int $teacherId,
+        int $day,
+        int $jamNo,
+        array $excludeIds = [],
+    ): void {
+        $excludeIds = array_values(array_filter($excludeIds, fn ($id) => is_numeric($id)));
+
+        $exists = AcademicSchedule::query()
+            ->where('schedule_set_id', $set->id)
+            ->where('teacher_id', $teacherId)
+            ->where('day', $day)
+            ->where('jam_no', $jamNo)
+            ->when(! empty($excludeIds), fn ($q) => $q->whereNotIn('id', $excludeIds))
+            ->exists();
+
+        if ($exists) {
+            throw new InvalidArgumentException(
+                "Bentrok: guru sudah terjadwal pada hari {$day} jam {$jamNo} di kelas lain."
+            );
+        }
+    }
+
     public function deleteCell(AcademicSchedule $schedule, bool $deleteGroup = false): int
     {
         return DB::transaction(function () use ($schedule, $deleteGroup) {

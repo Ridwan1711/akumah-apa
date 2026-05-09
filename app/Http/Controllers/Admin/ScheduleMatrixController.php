@@ -124,6 +124,40 @@ class ScheduleMatrixController extends Controller
         return back()->with('success', 'Cell jadwal dihapus.');
     }
 
+    public function moveCell(Request $request, ScheduleSet $scheduleSet): JsonResponse
+    {
+        $allowedDays = AcademicSchedule::matrixCalendarDays((int) $scheduleSet->day_count);
+        $data = $request->validate([
+            'source_schedule_id' => ['required', 'integer', 'exists:schedules,id'],
+            'target_class_id' => ['required', 'integer', 'exists:classes,id'],
+            'target_day' => ['required', 'integer', Rule::in($allowedDays)],
+            'target_jam_no' => ['required', 'integer', 'min:1'],
+            'mode' => ['nullable', Rule::in(['auto', 'swap', 'replace'])],
+        ]);
+
+        /** @var AcademicSchedule|null $source */
+        $source = AcademicSchedule::query()
+            ->where('schedule_set_id', $scheduleSet->id)
+            ->whereKey($data['source_schedule_id'])
+            ->first();
+        abort_unless((bool) $source, 404, 'Cell sumber tidak ditemukan pada schedule set ini.');
+
+        try {
+            $result = $this->matrix->moveCell(
+                $scheduleSet,
+                $source,
+                (int) $data['target_class_id'],
+                (int) $data['target_day'],
+                (int) $data['target_jam_no'],
+                (string) ($data['mode'] ?? 'auto'),
+            );
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json($result);
+    }
+
     public function bulkDelete(Request $request, ScheduleSet $scheduleSet): JsonResponse
     {
         $allowedDays = AcademicSchedule::matrixCalendarDays((int) $scheduleSet->day_count);

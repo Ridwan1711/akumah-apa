@@ -1,5 +1,5 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeft, Clock, Loader2, Undo2 } from 'lucide-react';
+import { ArrowLeft, Clock, Loader2, Move, Undo2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import FlashMessage from '@/components/flash-message';
 import Heading from '@/components/heading';
@@ -23,6 +23,7 @@ import PengampuPicker from './editor-parts/PengampuPicker';
 import StatsBar from './editor-parts/StatsBar';
 import SubjectPickDialog from './editor-parts/SubjectPickDialog';
 import TimeSlotSettingsDialog from './editor-parts/TimeSlotSettingsDialog';
+import { colorForTeacherIndex, teacherInitials } from './editor-parts/teacherColors';
 
 type Props = {
     scheduleSet: ScheduleSet;
@@ -78,7 +79,7 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
         { title: scheduleSet.name, href: `/admin/schedule-sets/${scheduleSet.id}/editor` },
     ];
 
-    const [selectedTeacherId, setSelectedTeacherId] = useState<number | null>(null);
+    const [selectedTeacherIds, setSelectedTeacherIds] = useState<number[]>([]);
     const [subjectPick, setSubjectPick] = useState<SubjectPickState | null>(null);
     const [conflict, setConflict] = useState<ScheduleConflictResponse | null>(null);
     const [pendingAssign, setPendingAssign] = useState<{
@@ -89,7 +90,12 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
     const [busy, setBusy] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [lastUndo, setLastUndo] = useState<UndoState | null>(null);
+    const [movingCell, setMovingCell] = useState<ScheduleMatrixCell | null>(null);
     const gridRef = useRef<HTMLDivElement | null>(null);
+
+    const isMultiSelect = selectedTeacherIds.length > 1;
+    const isSingleSelect = selectedTeacherIds.length === 1;
+    const onlyTeacherId = isSingleSelect ? selectedTeacherIds[0] : null;
 
     useEffect(() => {
         if (matrix.slots.length === 0) {
@@ -97,22 +103,34 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
         }
     }, [matrix.slots.length]);
 
+    function toggleTeacher(teacherId: number) {
+        setSelectedTeacherIds((prev) =>
+            prev.includes(teacherId) ? prev.filter((id) => id !== teacherId) : [...prev, teacherId],
+        );
+    }
+
+    function clearTeachers() {
+        setSelectedTeacherIds([]);
+    }
+
+    /** Union dari kelas yang diampu semua guru terpilih (urut sesuai matrix.classes). */
     const teacherClassIds = useMemo(() => {
-        if (selectedTeacherId == null) return null;
+        if (selectedTeacherIds.length === 0) return null;
+        const teacherSet = new Set(selectedTeacherIds);
         const ids = new Set<number>();
         for (const p of pengampuList) {
-            if (p.teacher_id === selectedTeacherId) {
+            if (teacherSet.has(p.teacher_id)) {
                 ids.add(p.class_id);
             }
         }
-        return [...ids];
-    }, [selectedTeacherId, pengampuList]);
+        return matrix.classes.filter((c) => ids.has(c.id)).map((c) => c.id);
+    }, [selectedTeacherIds, pengampuList, matrix.classes]);
 
-    const selectedTeacherName = useMemo(() => {
-        if (selectedTeacherId == null) return null;
-        const p = pengampuList.find((x) => x.teacher_id === selectedTeacherId);
-        return p?.teacher?.name ?? `Guru #${selectedTeacherId}`;
-    }, [selectedTeacherId, pengampuList]);
+    const onlyTeacherName = useMemo(() => {
+        if (onlyTeacherId == null) return null;
+        const p = pengampuList.find((x) => x.teacher_id === onlyTeacherId);
+        return p?.teacher?.name ?? `Guru #${onlyTeacherId}`;
+    }, [onlyTeacherId, pengampuList]);
 
     const pendingPengampu = useMemo(() => {
         if (!pendingAssign) return null;
@@ -174,14 +192,15 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
         const pengampuTotal = pengampuList.length;
         const pengampuFulfilled = Object.values(progressByPengampuId).filter((p) => p.isFull).length;
 
-        return {
-            totalSlots,
-            filledCount,
-            teacherClashes,
-            pengampuTotal,
-            pengampuFulfilled,
-        };
-    }, [matrix.days.length, matrix.slots.length, matrix.classes.length, matrix.cells, pengampuList.length, progressByPengampuId]);
+        return { totalSlots, filledCount, teacherClashes, pengampuTotal, pengampuFulfilled };
+    }, [
+        matrix.days.length,
+        matrix.slots.length,
+        matrix.classes.length,
+        matrix.cells,
+        pengampuList.length,
+        progressByPengampuId,
+    ]);
 
     const subjectsInUse = useMemo(() => {
         const seen = new Map<number, string>();
@@ -195,14 +214,24 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
             .sort((a, b) => a.subject_name.localeCompare(b.subject_name, 'id'));
     }, [matrix.cells]);
 
+    const teacherNameById = useMemo(() => {
+        const map = new Map<number, string>();
+        for (const p of pengampuList) {
+            if (!map.has(p.teacher_id) && p.teacher?.name) {
+                map.set(p.teacher_id, p.teacher.name);
+            }
+        }
+        return map;
+    }, [pengampuList]);
+
     const pengampuForClass = useCallback(
         (classId: number): ScheduleMatrixPengampu[] => {
-            if (selectedTeacherId == null) return [];
+            if (onlyTeacherId == null) return [];
             return pengampuList.filter(
-                (p) => p.teacher_id === selectedTeacherId && p.class_id === classId,
+                (p) => p.teacher_id === onlyTeacherId && p.class_id === classId,
             );
         },
-        [selectedTeacherId, pengampuList],
+        [onlyTeacherId, pengampuList],
     );
 
     function postAssign(
@@ -239,17 +268,10 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                     Accept: 'application/json',
                     'X-CSRF-TOKEN': getCsrfToken(),
                 },
-                body: JSON.stringify({
-                    pengampu_id: pengampuId,
-                    day,
-                    jam_no: jamNo,
-                }),
+                body: JSON.stringify({ pengampu_id: pengampuId, day, jam_no: jamNo }),
             });
 
-            if (!res.ok) {
-                throw new Error('Preflight gagal');
-            }
-
+            if (!res.ok) throw new Error('Preflight gagal');
             const data = (await res.json()) as ScheduleConflictResponse;
 
             setBusy(false);
@@ -263,7 +285,6 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                 postAssign('assign', { pengampuId, day, jamNo });
                 return;
             }
-
             setConflict(data);
             setPendingAssign({ pengampuId, day, jamNo });
         } catch (e) {
@@ -274,11 +295,24 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
     }
 
     async function handleClickCell(day: number, jamNo: number, classId: number) {
-        if (selectedTeacherId == null) {
-            const cellKey = `${day}:${jamNo}:${classId}`;
-            const cell = matrix.cells[cellKey];
-            if (cell && confirm(`Hapus cell ${cell.teacher_name} - ${cell.subject_name}?`)) {
-                handleDeleteCell(cell);
+        if (movingCell) {
+            await performMove(movingCell, classId, day, jamNo);
+            return;
+        }
+
+        const cellKey = `${day}:${jamNo}:${classId}`;
+        const existingCell = matrix.cells[cellKey];
+
+        if (selectedTeacherIds.length === 0) {
+            if (existingCell && confirm(`Hapus cell ${existingCell.teacher_name} - ${existingCell.subject_name}?`)) {
+                handleDeleteCell(existingCell);
+            }
+            return;
+        }
+
+        if (isMultiSelect) {
+            if (existingCell && confirm(`Hapus cell ${existingCell.teacher_name} - ${existingCell.subject_name}?`)) {
+                handleDeleteCell(existingCell);
             }
             return;
         }
@@ -288,9 +322,7 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
         }
 
         const matches = pengampuForClass(classId);
-        if (matches.length === 0) {
-            return;
-        }
+        if (matches.length === 0) return;
 
         if (matches.length === 1) {
             const singleProgress = progressByPengampuId[matches[0].id];
@@ -345,10 +377,7 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                     (deleteGroup ? '?delete_group=1' : ''),
                 {
                     method: 'DELETE',
-                    headers: {
-                        Accept: 'application/json',
-                        'X-CSRF-TOKEN': getCsrfToken(),
-                    },
+                    headers: { Accept: 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
                 },
             );
             if (!res.ok) throw new Error('Gagal hapus cell');
@@ -365,6 +394,67 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
             alert('Gagal menghapus cell.');
         } finally {
             setBusy(false);
+        }
+    }
+
+    async function performMove(
+        source: ScheduleMatrixCell,
+        targetClassId: number,
+        targetDay: number,
+        targetJamNo: number,
+    ) {
+        if (
+            source.class_id === targetClassId &&
+            source.day === targetDay &&
+            source.jam_no === targetJamNo
+        ) {
+            setMovingCell(null);
+            return;
+        }
+
+        setBusy(true);
+        try {
+            const res = await fetch(`/admin/schedule-sets/${scheduleSet.id}/cells/move`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                },
+                body: JSON.stringify({
+                    source_schedule_id: source.schedule_id,
+                    target_class_id: targetClassId,
+                    target_day: targetDay,
+                    target_jam_no: targetJamNo,
+                    mode: 'auto',
+                }),
+            });
+            if (!res.ok) {
+                const errBody = (await res.json().catch(() => ({}))) as { message?: string };
+                throw new Error(errBody.message ?? 'Gagal memindahkan cell');
+            }
+            const data = (await res.json()) as {
+                mode: 'move' | 'swap' | 'replace';
+                source_snapshot: UndoSnapshotItem[];
+                target_snapshot: UndoSnapshotItem[];
+            };
+            const undoItems = [...data.source_snapshot, ...data.target_snapshot];
+            const label =
+                data.mode === 'swap'
+                    ? `swap ${source.teacher_name ?? '-'} ↔ cell tujuan`
+                    : data.mode === 'replace'
+                      ? `pindah ${source.teacher_name ?? '-'} (replace tujuan)`
+                      : `pindah ${source.teacher_name ?? '-'}`;
+            if (undoItems.length > 0) {
+                setLastUndo({ label, items: undoItems });
+            }
+            router.reload({ only: ['matrix'] });
+        } catch (e) {
+            const err = e as Error;
+            alert(`Gagal memindahkan cell: ${err.message ?? 'unknown error'}`);
+        } finally {
+            setBusy(false);
+            setMovingCell(null);
         }
     }
 
@@ -462,8 +552,9 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
         bulkDelete('day_jam', { day, jam_no: jamNo }, `${dayLabels[day] ?? day} jam ${jamNo}`);
     }
 
+    /** Auto-scroll: saat single-select pilih guru, scroll ke kelas pertama yang diampu. */
     useEffect(() => {
-        if (selectedTeacherId == null || !teacherClassIds || teacherClassIds.length === 0 || !gridRef.current) {
+        if (!isSingleSelect || !teacherClassIds || teacherClassIds.length === 0 || !gridRef.current) {
             return;
         }
         const firstClassId = teacherClassIds[0];
@@ -473,7 +564,17 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
             const left = target.offsetLeft - 100;
             container.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
         }
-    }, [selectedTeacherId, teacherClassIds]);
+    }, [isSingleSelect, teacherClassIds]);
+
+    /** Esc → batal mode pindah. */
+    useEffect(() => {
+        if (!movingCell) return;
+        function onKey(e: KeyboardEvent) {
+            if (e.key === 'Escape') setMovingCell(null);
+        }
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [movingCell]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -532,6 +633,25 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                     </div>
                 </div>
 
+                {movingCell && (
+                    <div className="flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs">
+                        <span className="inline-flex items-center gap-2">
+                            <Move className="h-4 w-4 text-primary" />
+                            <span>
+                                Mode <strong>Pindahkan</strong>: klik slot tujuan untuk menempatkan{' '}
+                                <strong>
+                                    {movingCell.teacher_name ?? '-'} · {movingCell.subject_name ?? '-'}
+                                </strong>
+                                . Slot terisi akan di-<strong>swap</strong> otomatis.
+                            </span>
+                        </span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setMovingCell(null)}>
+                            <X className="mr-1 h-3 w-3" />
+                            Batal (Esc)
+                        </Button>
+                    </div>
+                )}
+
                 <StatsBar
                     totalSlots={stats.totalSlots}
                     filledCount={stats.filledCount}
@@ -547,13 +667,15 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                         <div className="text-sm font-semibold">Guru (pengampu)</div>
                         <PengampuPicker
                             pengampuList={pengampuList}
-                            selectedTeacherId={selectedTeacherId}
-                            onSelectTeacher={setSelectedTeacherId}
+                            selectedTeacherIds={selectedTeacherIds}
+                            onToggleTeacher={toggleTeacher}
+                            onClearSelection={clearTeachers}
                             progressByPengampuId={progressByPengampuId}
                         />
                         <InstructionPanel
-                            selectedTeacherId={selectedTeacherId}
-                            teacherName={selectedTeacherName}
+                            selectedTeacherIds={selectedTeacherIds}
+                            onlyTeacherName={onlyTeacherName}
+                            teacherNameById={teacherNameById}
                             teacherClassIds={teacherClassIds}
                             matrix={matrix}
                             pengampuList={pengampuList}
@@ -570,14 +692,22 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                             <MatrixGrid
                                 ref={gridRef}
                                 matrix={matrix}
-                                selectedTeacherId={selectedTeacherId}
+                                selectedTeacherIds={selectedTeacherIds}
                                 highlightedClassIds={teacherClassIds ?? []}
                                 visibleClassIds={teacherClassIds ?? undefined}
                                 onClickCell={handleClickCell}
                                 onDeleteCell={handleDeleteCell}
+                                onMoveStart={(cell) => setMovingCell(cell)}
+                                onMoveDrop={(sid, classId, day, jamNo) => {
+                                    const source =
+                                        Object.values(matrix.cells).find((c) => c.schedule_id === sid) ?? null;
+                                    if (!source) return;
+                                    void performMove(source, classId, day, jamNo);
+                                }}
                                 onDeleteClassColumn={handleDeleteClassColumn}
                                 onDeleteDay={handleDeleteDay}
                                 onDeleteDayJam={handleDeleteDayJam}
+                                movingCellId={movingCell?.schedule_id ?? null}
                             />
                         )}
                     </main>
@@ -639,36 +769,73 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
 }
 
 function InstructionPanel({
-    selectedTeacherId,
-    teacherName,
+    selectedTeacherIds,
+    onlyTeacherName,
+    teacherNameById,
     teacherClassIds,
     matrix,
     pengampuList,
     progressByPengampuId,
 }: {
-    selectedTeacherId: number | null;
-    teacherName: string | null;
+    selectedTeacherIds: number[];
+    onlyTeacherName: string | null;
+    teacherNameById: Map<number, string>;
     teacherClassIds: number[] | null;
     matrix: ScheduleMatrixPayload;
     pengampuList: ScheduleMatrixPengampu[];
     progressByPengampuId: Record<number, PengampuProgress>;
 }) {
-    if (selectedTeacherId == null) {
+    if (selectedTeacherIds.length === 0) {
         return (
             <div className="rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground">
-                Pilih guru di daftar, lalu matrix hanya menampilkan kelas yang diampunya. Klik cell pada kolom
-                kelas yang sesuai untuk menempatkan jadwal. Klik cell yang sudah terisi (tanpa guru terpilih)
-                untuk menghapus.
+                Pilih guru di daftar untuk filter & assign. Pilih ≥2 guru untuk masuk <strong>Compare mode</strong>:
+                matrix menampilkan gabungan kelas semua guru terpilih, tiap guru dapat warna berbeda.
+                Klik cell terisi (tanpa guru aktif tunggal) untuk menghapus.
             </div>
         );
     }
+
+    const isMulti = selectedTeacherIds.length > 1;
     const names =
         teacherClassIds
             ?.map((id) => matrix.classes.find((c) => c.id === id)?.name)
             .filter(Boolean)
             .join(', ') ?? '';
+
+    if (isMulti) {
+        return (
+            <div className="rounded-md border bg-amber-50 p-2 text-xs dark:bg-amber-950/30">
+                <div className="mb-1 font-semibold">Compare mode ({selectedTeacherIds.length} guru)</div>
+                <div className="mb-2 space-y-1">
+                    {selectedTeacherIds.map((tid, idx) => {
+                        const color = colorForTeacherIndex(idx);
+                        const name = teacherNameById.get(tid) ?? `Guru #${tid}`;
+                        return (
+                            <div key={tid} className="flex items-center gap-1.5">
+                                <span
+                                    className={`inline-flex h-4 min-w-[16px] items-center justify-center rounded-sm px-0.5 text-[8px] font-bold leading-none ${color.badge} ${color.badgeText}`}
+                                >
+                                    {teacherInitials(name)}
+                                </span>
+                                <span className="truncate font-medium">{name}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+                <div className="text-muted-foreground">
+                    Kolom kelas (union): <span className="font-medium text-foreground">{names || '—'}</span>
+                </div>
+                <div className="mt-2 text-[11px] text-muted-foreground">
+                    Cell milik tiap guru ditandai outline dan badge berwarna. Klik cell terisi untuk menghapus.
+                    Untuk assign baru, pilih hanya 1 guru.
+                </div>
+            </div>
+        );
+    }
+
+    const onlyTeacherId = selectedTeacherIds[0];
     const assignmentProgress = pengampuList
-        .filter((p) => p.teacher_id === selectedTeacherId)
+        .filter((p) => p.teacher_id === onlyTeacherId)
         .map((p) => ({
             id: p.id,
             className: p.school_class?.name ?? `Kelas #${p.class_id}`,
@@ -681,15 +848,13 @@ function InstructionPanel({
             },
         }))
         .sort((a, b) => {
-            if (a.progress.isFull !== b.progress.isFull) {
-                return a.progress.isFull ? 1 : -1;
-            }
+            if (a.progress.isFull !== b.progress.isFull) return a.progress.isFull ? 1 : -1;
             return b.progress.remaining - a.progress.remaining;
         });
 
     return (
         <div className="rounded-md border bg-amber-50 p-2 text-xs dark:bg-amber-950/30">
-            <div className="mb-1 font-semibold">{teacherName}</div>
+            <div className="mb-1 font-semibold">{onlyTeacherName}</div>
             <div className="text-muted-foreground">
                 Kolom kelas: <span className="font-medium text-foreground">{names || '—'}</span>
             </div>
@@ -699,6 +864,7 @@ function InstructionPanel({
             </div>
             <div className="mt-1 text-[11px] text-muted-foreground">
                 Cell merah dengan ikon segitiga = guru sudah terjadwal di kelas lain pada slot yang sama.
+                Tombol <Move className="inline h-3 w-3" /> di pojok cell = pindahkan; bisa juga drag &amp; drop.
             </div>
             <div className="mt-2 space-y-1">
                 {assignmentProgress.map((item) => (
