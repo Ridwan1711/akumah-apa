@@ -101,13 +101,79 @@ class ScheduleMatrixController extends Controller
         return back()->with('success', 'Cell jadwal disimpan.');
     }
 
-    public function destroyCell(Request $request, ScheduleSet $scheduleSet, AcademicSchedule $schedule): RedirectResponse
+    public function destroyCell(Request $request, ScheduleSet $scheduleSet, AcademicSchedule $schedule)
     {
         abort_unless((int) $schedule->schedule_set_id === (int) $scheduleSet->id, 404);
 
         $deleteGroup = (bool) $request->boolean('delete_group', false);
+
+        $snapshotRows = $deleteGroup && $schedule->combined_group_id
+            ? AcademicSchedule::query()->where('combined_group_id', $schedule->combined_group_id)->get()
+            : collect([$schedule]);
+        $snapshot = $this->matrix->snapshotCells($snapshotRows);
+
         $this->matrix->deleteCell($schedule, $deleteGroup);
 
+        if ($request->wantsJson()) {
+            return response()->json([
+                'deleted' => count($snapshot),
+                'snapshot' => $snapshot,
+            ]);
+        }
+
         return back()->with('success', 'Cell jadwal dihapus.');
+    }
+
+    public function bulkDelete(Request $request, ScheduleSet $scheduleSet): JsonResponse
+    {
+        $allowedDays = AcademicSchedule::matrixCalendarDays((int) $scheduleSet->day_count);
+        $data = $request->validate([
+            'scope' => ['required', Rule::in(['day', 'jam', 'class', 'day_jam'])],
+            'day' => ['nullable', 'integer', Rule::in($allowedDays)],
+            'jam_no' => ['nullable', 'integer', 'min:1'],
+            'class_id' => ['nullable', 'integer', 'exists:classes,id'],
+        ]);
+
+        $filters = [];
+        $scope = (string) $data['scope'];
+        if ($scope === 'day' || $scope === 'day_jam') {
+            abort_unless(! empty($data['day']), 422, 'Parameter day wajib untuk scope ini.');
+            $filters['day'] = (int) $data['day'];
+        }
+        if ($scope === 'jam' || $scope === 'day_jam') {
+            abort_unless(! empty($data['jam_no']), 422, 'Parameter jam_no wajib untuk scope ini.');
+            $filters['jam_no'] = (int) $data['jam_no'];
+        }
+        if ($scope === 'class') {
+            abort_unless(! empty($data['class_id']), 422, 'Parameter class_id wajib untuk scope ini.');
+            $filters['class_id'] = (int) $data['class_id'];
+        }
+
+        $result = $this->matrix->bulkDeleteByScope($scheduleSet, $filters);
+
+        return response()->json($result);
+    }
+
+    public function restoreCells(Request $request, ScheduleSet $scheduleSet): JsonResponse
+    {
+        $data = $request->validate([
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.class_id' => ['required', 'integer', 'exists:classes,id'],
+            'items.*.subject_id' => ['required', 'integer', 'exists:subjects,id'],
+            'items.*.teacher_id' => ['required', 'integer', 'exists:users,id'],
+            'items.*.day' => ['required', 'integer', 'min:1', 'max:7'],
+            'items.*.jam_no' => ['required', 'integer', 'min:1'],
+            'items.*.time_start' => ['nullable', 'string'],
+            'items.*.time_end' => ['nullable', 'string'],
+            'items.*.combined_group_id' => ['nullable', 'string'],
+        ]);
+
+        try {
+            $result = $this->matrix->restoreCells($scheduleSet, $data['items']);
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json($result);
     }
 }

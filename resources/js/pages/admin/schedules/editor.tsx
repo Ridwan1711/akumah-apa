@@ -1,6 +1,6 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeft, Clock, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, Clock, Loader2, Undo2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import FlashMessage from '@/components/flash-message';
 import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
@@ -15,10 +15,12 @@ import type {
     ScheduleSet,
     ScheduleTimeSlot,
 } from '@/types';
+import ColorLegend from './editor-parts/ColorLegend';
 import ConflictDialog from './editor-parts/ConflictDialog';
-import type {ConflictAction} from './editor-parts/ConflictDialog';
+import type { ConflictAction } from './editor-parts/ConflictDialog';
 import MatrixGrid from './editor-parts/MatrixGrid';
 import PengampuPicker from './editor-parts/PengampuPicker';
+import StatsBar from './editor-parts/StatsBar';
 import SubjectPickDialog from './editor-parts/SubjectPickDialog';
 import TimeSlotSettingsDialog from './editor-parts/TimeSlotSettingsDialog';
 
@@ -41,6 +43,22 @@ type PengampuProgress = {
     target: number;
     remaining: number;
     isFull: boolean;
+};
+
+type UndoSnapshotItem = {
+    class_id: number;
+    subject_id: number;
+    teacher_id: number;
+    day: number;
+    jam_no: number;
+    time_start?: string;
+    time_end?: string;
+    combined_group_id?: string | null;
+};
+
+type UndoState = {
+    label: string;
+    items: UndoSnapshotItem[];
 };
 
 const dayLabels: Record<number, string> = {
@@ -70,6 +88,8 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
     } | null>(null);
     const [busy, setBusy] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [lastUndo, setLastUndo] = useState<UndoState | null>(null);
+    const gridRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         if (matrix.slots.length === 0) {
@@ -135,6 +155,45 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
         () => Object.values(progressByPengampuId).filter((item) => item.remaining > 0).length,
         [progressByPengampuId],
     );
+
+    const stats = useMemo(() => {
+        const totalSlots = matrix.days.length * matrix.slots.length * matrix.classes.length;
+        const filledCount = Object.keys(matrix.cells).length;
+
+        const teacherSlotMap = new Map<string, number>();
+        for (const cell of Object.values(matrix.cells)) {
+            if (cell.combined_group_id) continue;
+            const k = `${cell.teacher_id}:${cell.day}:${cell.jam_no}`;
+            teacherSlotMap.set(k, (teacherSlotMap.get(k) ?? 0) + 1);
+        }
+        let teacherClashes = 0;
+        for (const v of teacherSlotMap.values()) {
+            if (v > 1) teacherClashes++;
+        }
+
+        const pengampuTotal = pengampuList.length;
+        const pengampuFulfilled = Object.values(progressByPengampuId).filter((p) => p.isFull).length;
+
+        return {
+            totalSlots,
+            filledCount,
+            teacherClashes,
+            pengampuTotal,
+            pengampuFulfilled,
+        };
+    }, [matrix.days.length, matrix.slots.length, matrix.classes.length, matrix.cells, pengampuList.length, progressByPengampuId]);
+
+    const subjectsInUse = useMemo(() => {
+        const seen = new Map<number, string>();
+        for (const cell of Object.values(matrix.cells)) {
+            if (!seen.has(cell.subject_id)) {
+                seen.set(cell.subject_id, cell.subject_name ?? `Mapel #${cell.subject_id}`);
+            }
+        }
+        return [...seen.entries()]
+            .map(([subject_id, subject_name]) => ({ subject_id, subject_name }))
+            .sort((a, b) => a.subject_name.localeCompare(b.subject_name, 'id'));
+    }, [matrix.cells]);
 
     const pengampuForClass = useCallback(
         (classId: number): ScheduleMatrixPengampu[] => {
@@ -269,7 +328,7 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
         postAssign(action, pendingAssign);
     }
 
-    function handleDeleteCell(cell: ScheduleMatrixCell) {
+    async function handleDeleteCell(cell: ScheduleMatrixCell) {
         const isCombined = !!cell.combined_group_id;
         let deleteGroup = false;
         if (isCombined) {
@@ -279,11 +338,110 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
             deleteGroup = ans;
         }
 
-        router.delete(
-            `/admin/schedule-sets/${scheduleSet.id}/cells/${cell.schedule_id}` +
-                (deleteGroup ? '?delete_group=1' : ''),
-            { preserveScroll: true },
-        );
+        setBusy(true);
+        try {
+            const res = await fetch(
+                `/admin/schedule-sets/${scheduleSet.id}/cells/${cell.schedule_id}` +
+                    (deleteGroup ? '?delete_group=1' : ''),
+                {
+                    method: 'DELETE',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': getCsrfToken(),
+                    },
+                },
+            );
+            if (!res.ok) throw new Error('Gagal hapus cell');
+            const data = (await res.json()) as { snapshot: UndoSnapshotItem[]; deleted: number };
+            setLastUndo({
+                label: deleteGroup
+                    ? `${data.deleted} cell (grup gabungan)`
+                    : `1 cell (${cell.teacher_name ?? '-'} · ${cell.subject_name ?? '-'})`,
+                items: data.snapshot,
+            });
+            router.reload({ only: ['matrix'] });
+        } catch (e) {
+            console.error(e);
+            alert('Gagal menghapus cell.');
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    async function bulkDelete(
+        scope: 'day' | 'jam' | 'class' | 'day_jam',
+        params: { day?: number; jam_no?: number; class_id?: number },
+        label: string,
+    ) {
+        const cellsAffected = Object.values(matrix.cells).filter((c) => {
+            if (params.day != null && c.day !== params.day) return false;
+            if (params.jam_no != null && c.jam_no !== params.jam_no) return false;
+            if (params.class_id != null && c.class_id !== params.class_id) return false;
+            return true;
+        });
+        if (cellsAffected.length === 0) {
+            alert(`Tidak ada cell terisi untuk dihapus pada ${label}.`);
+            return;
+        }
+        if (!window.confirm(`Hapus ${cellsAffected.length} cell pada ${label}? Bisa di-undo setelahnya.`)) {
+            return;
+        }
+
+        setBusy(true);
+        try {
+            const res = await fetch(`/admin/schedule-sets/${scheduleSet.id}/cells/bulk-delete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                },
+                body: JSON.stringify({ scope, ...params }),
+            });
+            if (!res.ok) throw new Error('Bulk delete gagal');
+            const data = (await res.json()) as { deleted: number; snapshot: UndoSnapshotItem[] };
+            setLastUndo({
+                label: `${data.deleted} cell di ${label}`,
+                items: data.snapshot,
+            });
+            router.reload({ only: ['matrix'] });
+        } catch (e) {
+            console.error(e);
+            alert('Gagal melakukan bulk delete.');
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    async function performUndo() {
+        if (!lastUndo || lastUndo.items.length === 0) return;
+        setBusy(true);
+        try {
+            const res = await fetch(`/admin/schedule-sets/${scheduleSet.id}/cells/restore`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                },
+                body: JSON.stringify({ items: lastUndo.items }),
+            });
+            if (!res.ok) throw new Error('Restore gagal');
+            const data = (await res.json()) as { restored: number; skipped: number; errors: string[] };
+            if (data.skipped > 0) {
+                alert(
+                    `Undo dipulihkan ${data.restored}, dilewati ${data.skipped}.\n` +
+                        (data.errors.slice(0, 5).join('\n') || ''),
+                );
+            }
+            setLastUndo(null);
+            router.reload({ only: ['matrix'] });
+        } catch (e) {
+            console.error(e);
+            alert('Gagal undo.');
+        } finally {
+            setBusy(false);
+        }
     }
 
     async function onSubjectPicked(pengampu: ScheduleMatrixPengampu) {
@@ -292,6 +450,30 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
         setSubjectPick(null);
         await runPreflightAndAssign(pengampu.id, day, jamNo);
     }
+
+    function handleDeleteClassColumn(classId: number) {
+        const cls = matrix.classes.find((c) => c.id === classId);
+        bulkDelete('class', { class_id: classId }, `kelas ${cls?.name ?? `#${classId}`}`);
+    }
+    function handleDeleteDay(day: number) {
+        bulkDelete('day', { day }, `hari ${dayLabels[day] ?? day}`);
+    }
+    function handleDeleteDayJam(day: number, jamNo: number) {
+        bulkDelete('day_jam', { day, jam_no: jamNo }, `${dayLabels[day] ?? day} jam ${jamNo}`);
+    }
+
+    useEffect(() => {
+        if (selectedTeacherId == null || !teacherClassIds || teacherClassIds.length === 0 || !gridRef.current) {
+            return;
+        }
+        const firstClassId = teacherClassIds[0];
+        const target = gridRef.current.querySelector(`th[data-class-col="${firstClassId}"]`) as HTMLElement | null;
+        if (target) {
+            const container = gridRef.current;
+            const left = target.offsetLeft - 100;
+            container.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+        }
+    }, [selectedTeacherId, teacherClassIds]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -322,6 +504,19 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                         )}
                     </div>
                     <div className="flex items-center gap-2">
+                        {lastUndo && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={performUndo}
+                                disabled={busy}
+                                title={`Undo: ${lastUndo.label}`}
+                            >
+                                <Undo2 className="mr-1 h-4 w-4" />
+                                Undo ({lastUndo.items.length})
+                            </Button>
+                        )}
                         <Button
                             type="button"
                             variant="outline"
@@ -337,6 +532,16 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                     </div>
                 </div>
 
+                <StatsBar
+                    totalSlots={stats.totalSlots}
+                    filledCount={stats.filledCount}
+                    teacherClashes={stats.teacherClashes}
+                    pengampuTotal={stats.pengampuTotal}
+                    pengampuFulfilled={stats.pengampuFulfilled}
+                />
+
+                <ColorLegend subjects={subjectsInUse} />
+
                 <div className="grid flex-1 grid-cols-[260px_1fr] gap-3 overflow-hidden">
                     <aside className="flex flex-col gap-2 overflow-hidden">
                         <div className="text-sm font-semibold">Guru (pengampu)</div>
@@ -344,6 +549,7 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                             pengampuList={pengampuList}
                             selectedTeacherId={selectedTeacherId}
                             onSelectTeacher={setSelectedTeacherId}
+                            progressByPengampuId={progressByPengampuId}
                         />
                         <InstructionPanel
                             selectedTeacherId={selectedTeacherId}
@@ -362,12 +568,16 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                             </div>
                         ) : (
                             <MatrixGrid
+                                ref={gridRef}
                                 matrix={matrix}
                                 selectedTeacherId={selectedTeacherId}
                                 highlightedClassIds={teacherClassIds ?? []}
                                 visibleClassIds={teacherClassIds ?? undefined}
                                 onClickCell={handleClickCell}
                                 onDeleteCell={handleDeleteCell}
+                                onDeleteClassColumn={handleDeleteClassColumn}
+                                onDeleteDay={handleDeleteDay}
+                                onDeleteDayJam={handleDeleteDayJam}
                             />
                         )}
                     </main>
@@ -465,8 +675,8 @@ function InstructionPanel({
             subjectName: p.subject?.name ?? `Mapel #${p.subject_id}`,
             progress: progressByPengampuId[p.id] ?? {
                 allocated: 0,
-                                target: Math.max(1, p.target_jam_effective ?? p.target_jam ?? 1),
-                                remaining: Math.max(1, p.target_jam_effective ?? p.target_jam ?? 1),
+                target: Math.max(1, p.target_jam_effective ?? p.target_jam ?? 1),
+                remaining: Math.max(1, p.target_jam_effective ?? p.target_jam ?? 1),
                 isFull: false,
             },
         }))
@@ -488,7 +698,7 @@ function InstructionPanel({
                 sistem akan meminta memilih mapel terlebih dahulu.
             </div>
             <div className="mt-1 text-[11px] text-muted-foreground">
-                Target memakai prioritas: override kelas &gt; default level &gt; fallback.
+                Cell merah dengan ikon segitiga = guru sudah terjadwal di kelas lain pada slot yang sama.
             </div>
             <div className="mt-2 space-y-1">
                 {assignmentProgress.map((item) => (

@@ -294,6 +294,146 @@ class ScheduleMatrixService
         });
     }
 
+    /**
+     * Snapshot cell untuk keperluan undo (cukup field minimal untuk re-create).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function snapshotCells(\Illuminate\Support\Collection $rows): array
+    {
+        return $rows->map(fn (AcademicSchedule $r) => [
+            'class_id' => (int) $r->class_id,
+            'subject_id' => (int) $r->subject_id,
+            'teacher_id' => (int) $r->teacher_id,
+            'day' => (int) $r->day,
+            'jam_no' => (int) $r->jam_no,
+            'time_start' => (string) $r->time_start,
+            'time_end' => (string) $r->time_end,
+            'combined_group_id' => $r->combined_group_id,
+        ])->values()->all();
+    }
+
+    /**
+     * Bulk delete cells in a schedule set scoped by day, jam_no, class_id, or (day, jam_no).
+     *
+     * @param  array{day?: int, jam_no?: int, class_id?: int}  $filters
+     * @return array{deleted: int, snapshot: array<int, array<string, mixed>>}
+     */
+    public function bulkDeleteByScope(ScheduleSet $set, array $filters): array
+    {
+        return DB::transaction(function () use ($set, $filters) {
+            $query = AcademicSchedule::query()->where('schedule_set_id', $set->id);
+
+            if (! empty($filters['day'])) {
+                $query->where('day', (int) $filters['day']);
+            }
+            if (! empty($filters['jam_no'])) {
+                $query->where('jam_no', (int) $filters['jam_no']);
+            }
+            if (! empty($filters['class_id'])) {
+                $query->where('class_id', (int) $filters['class_id']);
+            }
+
+            /** @var \Illuminate\Database\Eloquent\Collection<int, AcademicSchedule> $rows */
+            $rows = $query->get();
+            $snapshot = $this->snapshotCells($rows);
+
+            $deleted = 0;
+            foreach ($rows as $row) {
+                /** @var AcademicSchedule $row */
+                $this->deleteScheduleWithCleanup($row);
+                $deleted++;
+            }
+
+            return [
+                'deleted' => $deleted,
+                'snapshot' => $snapshot,
+            ];
+        });
+    }
+
+    /**
+     * Re-create cells from snapshots. Skips items that would collide with existing cells
+     * (same class, day, jam_no in this set) and reports them as `skipped`.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array{restored: int, skipped: int, errors: array<int, string>}
+     */
+    public function restoreCells(ScheduleSet $set, array $items): array
+    {
+        return DB::transaction(function () use ($set, $items) {
+            $restored = 0;
+            $skipped = 0;
+            $errors = [];
+
+            foreach ($items as $idx => $item) {
+                $day = (int) ($item['day'] ?? 0);
+                $jamNo = (int) ($item['jam_no'] ?? 0);
+                $classId = (int) ($item['class_id'] ?? 0);
+
+                if ($day < 1 || $jamNo < 1 || $classId < 1) {
+                    $skipped++;
+                    $errors[] = "Item #{$idx}: data tidak lengkap.";
+
+                    continue;
+                }
+
+                try {
+                    $this->assertDayAndJam($set, $day, $jamNo);
+                } catch (InvalidArgumentException $e) {
+                    $skipped++;
+                    $errors[] = "Item #{$idx}: {$e->getMessage()}";
+
+                    continue;
+                }
+
+                $exists = AcademicSchedule::query()
+                    ->where('schedule_set_id', $set->id)
+                    ->where('class_id', $classId)
+                    ->where('day', $day)
+                    ->where('jam_no', $jamNo)
+                    ->exists();
+
+                if ($exists) {
+                    $skipped++;
+                    $errors[] = "Item #{$idx}: cell di kelas/hari/jam ini sudah terisi.";
+
+                    continue;
+                }
+
+                $slotTimes = [
+                    'time_start' => (string) ($item['time_start'] ?? ''),
+                    'time_end' => (string) ($item['time_end'] ?? ''),
+                ];
+                if ($slotTimes['time_start'] === '' || $slotTimes['time_end'] === '') {
+                    $resolved = $this->resolveSlotTimes($set, $jamNo);
+                    $slotTimes = $resolved;
+                }
+
+                AcademicSchedule::create([
+                    'schedule_set_id' => $set->id,
+                    'class_id' => $classId,
+                    'subject_id' => (int) ($item['subject_id'] ?? 0),
+                    'teacher_id' => (int) ($item['teacher_id'] ?? 0),
+                    'period_id' => $set->period_id,
+                    'day' => $day,
+                    'jam_no' => $jamNo,
+                    'time_start' => $slotTimes['time_start'],
+                    'time_end' => $slotTimes['time_end'],
+                    'combined_group_id' => $item['combined_group_id'] ?? null,
+                ]);
+
+                $restored++;
+            }
+
+            return [
+                'restored' => $restored,
+                'skipped' => $skipped,
+                'errors' => $errors,
+            ];
+        });
+    }
+
     public function cellKey(int $day, int $jamNo, int $classId): string
     {
         return "{$day}:{$jamNo}:{$classId}";

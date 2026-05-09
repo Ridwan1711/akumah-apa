@@ -193,6 +193,8 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::get('schedule-sets/{scheduleSet}/editor', [ScheduleMatrixController::class, 'edit'])->name('schedule-sets.editor');
         Route::post('schedule-sets/{scheduleSet}/cells/preflight', [ScheduleMatrixController::class, 'preflight'])->name('schedule-sets.cells.preflight');
         Route::post('schedule-sets/{scheduleSet}/cells', [ScheduleMatrixController::class, 'assign'])->name('schedule-sets.cells.assign');
+        Route::post('schedule-sets/{scheduleSet}/cells/bulk-delete', [ScheduleMatrixController::class, 'bulkDelete'])->name('schedule-sets.cells.bulk-delete');
+        Route::post('schedule-sets/{scheduleSet}/cells/restore', [ScheduleMatrixController::class, 'restoreCells'])->name('schedule-sets.cells.restore');
         Route::delete('schedule-sets/{scheduleSet}/cells/{schedule}', [ScheduleMatrixController::class, 'destroyCell'])->name('schedule-sets.cells.destroy');
 
         // Asrama
