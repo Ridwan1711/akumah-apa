@@ -24,6 +24,7 @@ return [
             Permissions::INVOICE_VIEW_NON_PENGURUS,
             Permissions::INVOICE_CREATE,
             Permissions::INVOICE_CANCEL,
+            Permissions::INVOICE_REMINDER_SEND,
             Permissions::PAYMENT_VIEW,
             Permissions::PAYMENT_VERIFY,
             Permissions::PAYMENT_REJECT,

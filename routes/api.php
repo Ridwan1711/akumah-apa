@@ -189,10 +189,17 @@ Route::prefix('v1')->group(function () {
             Route::post('/invoices', [AdminKeuanganController::class, 'storeInvoice']);
             Route::get('/invoices/{invoice}', [AdminKeuanganController::class, 'showInvoice']);
             Route::post('/invoices/{invoice}/cancel', [AdminKeuanganController::class, 'cancelInvoice']);
+            Route::post('/invoices/{invoice}/send-reminder', [AdminKeuanganController::class, 'sendReminderSingle'])
+                ->middleware('permission:invoice.reminder.send');
+            Route::post('/invoices/send-reminders/preview', [AdminKeuanganController::class, 'previewReminders'])
+                ->middleware('permission:invoice.reminder.send');
+            Route::post('/invoices/send-reminders', [AdminKeuanganController::class, 'sendReminders'])
+                ->middleware('permission:invoice.reminder.send');
             Route::get('/payments', [AdminKeuanganController::class, 'indexPayments']);
             Route::post('/payments/{payment}/verify', [AdminKeuanganController::class, 'verifyPayment']);
             Route::post('/payments/{payment}/reject', [AdminKeuanganController::class, 'rejectPayment']);
             Route::get('/payment-reports/summary', [AdminKeuanganController::class, 'reportSummary']);
+            Route::get('/payment-reports/trend', [AdminKeuanganController::class, 'reportTrend']);
             Route::get('/payment-reports/arrears', [AdminKeuanganController::class, 'reportArrears']);
         });
     });

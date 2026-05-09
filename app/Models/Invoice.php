@@ -26,6 +26,8 @@ class Invoice extends Model
         'due_date',
         'notes',
         'generated_by',
+        'last_reminder_sent_at',
+        'reminder_count',
     ];
 
     protected function casts(): array
@@ -36,6 +38,8 @@ class Invoice extends Model
             'final_amount' => 'decimal:2',
             'due_date' => 'date',
             'month' => 'integer',
+            'last_reminder_sent_at' => 'datetime',
+            'reminder_count' => 'integer',
         ];
     }
 

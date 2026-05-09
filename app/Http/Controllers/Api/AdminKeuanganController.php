@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\DispatchInvoiceRemindersJob;
 use App\Jobs\ProcessBulkRun;
 use App\Models\AcademicYear;
 use App\Models\Diniyyah\SchoolClass;
@@ -12,10 +13,13 @@ use App\Models\Payment;
 use App\Models\PaymentType;
 use App\Models\Student;
 use App\Models\StudentDiscount;
+use App\Models\User;
 use App\Notifications\InvoiceCreatedNotification;
+use App\Notifications\InvoiceReminderNotification;
 use App\Notifications\PaymentVerifiedNotification;
 use App\Services\Authorization\InvoiceVisibilityScope;
 use App\Support\Authorization\Permissions;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -264,12 +268,42 @@ class AdminKeuanganController extends Controller
 
     public function reportSummary(): JsonResponse
     {
-        abort_unless(request()->user()?->hasPermission(Permissions::PAYMENT_REPORT_VIEW), 403, 'Anda tidak memiliki izin untuk melihat laporan pembayaran.');
+        $user = request()->user();
+        abort_unless($user?->hasPermission(Permissions::PAYMENT_REPORT_VIEW), 403, 'Anda tidak memiliki izin untuk melihat laporan pembayaran.');
 
-        $totalInvoiced = Invoice::whereNotIn('status', [Invoice::STATUS_CANCELLED])->sum('final_amount');
-        $totalPaid = Payment::where('status', Payment::STATUS_VERIFIED)->sum('amount');
-        $totalPending = Invoice::whereIn('status', [Invoice::STATUS_PENDING, Invoice::STATUS_PARTIAL])->sum('final_amount');
-        $totalOverdue = Invoice::where('status', Invoice::STATUS_OVERDUE)->sum('final_amount');
+        $visibleInvoiceQuery = Invoice::query();
+        $visibleInvoiceQuery = $this->invoiceVisibilityScope->applyToInvoiceQuery($visibleInvoiceQuery, $user);
+        $visibleInvoiceIds = (clone $visibleInvoiceQuery)->select('invoices.id');
+        $visiblePaymentsQuery = Payment::query()->whereIn('invoice_id', $visibleInvoiceIds);
+        $today = Carbon::today();
+        $endOfWeekWindow = (clone $today)->addDays(7);
+
+        $totalInvoiced = (clone $visibleInvoiceQuery)
+            ->whereNotIn('status', [Invoice::STATUS_CANCELLED])
+            ->sum('final_amount');
+        $totalPaid = (clone $visiblePaymentsQuery)
+            ->where('status', Payment::STATUS_VERIFIED)
+            ->sum('amount');
+        $totalPending = (clone $visibleInvoiceQuery)
+            ->whereIn('status', [Invoice::STATUS_PENDING, Invoice::STATUS_PARTIAL])
+            ->sum('final_amount');
+        $totalOverdue = (clone $visibleInvoiceQuery)
+            ->where('status', Invoice::STATUS_OVERDUE)
+            ->sum('final_amount');
+        $dueThisWeekAmount = (clone $visibleInvoiceQuery)
+            ->whereIn('status', [Invoice::STATUS_PENDING, Invoice::STATUS_PARTIAL])
+            ->whereBetween('due_date', [$today->toDateString(), $endOfWeekWindow->toDateString()])
+            ->sum('final_amount');
+        $dueThisWeekCount = (clone $visibleInvoiceQuery)
+            ->whereIn('status', [Invoice::STATUS_PENDING, Invoice::STATUS_PARTIAL])
+            ->whereBetween('due_date', [$today->toDateString(), $endOfWeekWindow->toDateString()])
+            ->count();
+        $paidCount = (clone $visibleInvoiceQuery)->where('status', Invoice::STATUS_PAID)->count();
+        $pendingCount = (clone $visibleInvoiceQuery)->whereIn('status', [Invoice::STATUS_PENDING, Invoice::STATUS_PARTIAL])->count();
+        $overdueCount = (clone $visibleInvoiceQuery)->where('status', Invoice::STATUS_OVERDUE)->count();
+        $unverifiedPaymentCount = (clone $visiblePaymentsQuery)
+            ->where('status', Payment::STATUS_PENDING)
+            ->count();
 
         $byCategory = PaymentType::select('payment_types.category')
             ->selectRaw('COALESCE(SUM(invoices.final_amount), 0) as total_invoiced')
@@ -298,9 +332,56 @@ class AdminKeuanganController extends Controller
             'invoice.student:id,full_name',
         ])
             ->where('status', Payment::STATUS_VERIFIED)
+            ->whereIn('invoice_id', $visibleInvoiceIds)
             ->orderByDesc('verified_at')
             ->limit(10)
             ->get();
+
+        $topArrears = (clone $visibleInvoiceQuery)
+            ->with([
+                'student:id,full_name,current_class_id',
+                'student.currentClass:id,name',
+                'paymentType:id,name',
+            ])
+            ->withSum([
+                'payments as verified_paid_amount' => fn ($query) => $query->where('status', Payment::STATUS_VERIFIED),
+            ], 'amount')
+            ->whereIn('status', [Invoice::STATUS_PENDING, Invoice::STATUS_PARTIAL, Invoice::STATUS_OVERDUE])
+            ->whereNotIn('status', [Invoice::STATUS_CANCELLED, Invoice::STATUS_PAID])
+            ->get()
+            ->map(function (Invoice $invoice): array {
+                $paidAmount = (float) ($invoice->verified_paid_amount ?? 0);
+                $remainingAmount = max(0, (float) $invoice->final_amount - $paidAmount);
+
+                return [
+                    'invoice_id' => (int) $invoice->id,
+                    'invoice_number' => (string) $invoice->invoice_number,
+                    'student_id' => (int) $invoice->student_id,
+                    'student_name' => (string) ($invoice->student?->full_name ?? '-'),
+                    'class_name' => (string) ($invoice->student?->currentClass?->name ?? '-'),
+                    'payment_type_name' => (string) ($invoice->paymentType?->name ?? '-'),
+                    'remaining_amount' => $remainingAmount,
+                    'due_date' => $invoice->due_date?->toDateString(),
+                ];
+            })
+            ->sortByDesc('remaining_amount')
+            ->take(5)
+            ->values();
+
+        $paymentMethods = (clone $visiblePaymentsQuery)
+            ->where('status', Payment::STATUS_VERIFIED)
+            ->where('verified_at', '>=', Carbon::now()->subDays(30))
+            ->selectRaw("COALESCE(payment_method, 'unknown') as method")
+            ->selectRaw('COUNT(*) as count')
+            ->selectRaw('COALESCE(SUM(amount), 0) as amount')
+            ->groupBy('payment_method')
+            ->orderByDesc('amount')
+            ->get()
+            ->map(fn ($row): array => [
+                'method' => (string) ($row->method ?? 'unknown'),
+                'count' => (int) ($row->count ?? 0),
+                'amount' => (float) ($row->amount ?? 0),
+            ]);
 
         return response()->json([
             'stats' => [
@@ -309,10 +390,18 @@ class AdminKeuanganController extends Controller
                 'total_pending' => (float) $totalPending,
                 'total_overdue' => (float) $totalOverdue,
                 'collection_rate' => $totalInvoiced > 0 ? round((float) ($totalPaid / $totalInvoiced) * 100, 1) : 0,
+                'due_this_week_count' => (int) $dueThisWeekCount,
+                'due_this_week_amount' => (float) $dueThisWeekAmount,
+                'unverified_payment_count' => (int) $unverifiedPaymentCount,
+                'paid_count' => (int) $paidCount,
+                'pending_count' => (int) $pendingCount,
+                'overdue_count' => (int) $overdueCount,
             ],
             'by_category' => $byCategory,
             'by_class' => $byClass,
             'recent_payments' => $recentPayments,
+            'top_arrears' => $topArrears,
+            'payment_methods' => $paymentMethods,
         ]);
     }
 
@@ -343,6 +432,163 @@ class AdminKeuanganController extends Controller
             'classes' => SchoolClass::orderBy('name')->get(['id', 'name']),
             'payment_types' => PaymentType::where('is_active', true)->get(['id', 'name']),
             'filters' => $request->only(['class_id', 'payment_type_id']),
+        ]);
+    }
+
+    public function sendReminderSingle(Request $request, Invoice $invoice): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user?->hasPermission(Permissions::INVOICE_REMINDER_SEND), 403, 'Anda tidak memiliki izin mengirim reminder tagihan.');
+
+        $visibleQuery = Invoice::query()->whereKey($invoice->id);
+        $visibleQuery = $this->invoiceVisibilityScope->applyToInvoiceQuery($visibleQuery, $user);
+        abort_unless($visibleQuery->exists(), 403, 'Tagihan ini tidak termasuk dalam cakupan akses Anda.');
+
+        $validated = $request->validate([
+            'message' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $invoice->loadMissing('student.guardians.user', 'paymentType');
+        $result = $this->dispatchReminderForInvoices(collect([$invoice]), $validated['message'] ?? null, $user?->id);
+
+        return response()->json([
+            'message' => 'Reminder tagihan berhasil dikirim.',
+            'invoice_id' => (int) $invoice->id,
+            'sent_count' => $result['sent_count'],
+            'recipients_without_account' => $result['recipients_without_account'],
+            'last_reminder_sent_at' => $invoice->fresh()?->last_reminder_sent_at?->toIso8601String(),
+        ]);
+    }
+
+    public function previewReminders(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user instanceof User, 401, 'Autentikasi diperlukan.');
+        abort_unless($user?->hasPermission(Permissions::INVOICE_REMINDER_SEND), 403, 'Anda tidak memiliki izin preview reminder tagihan.');
+
+        $validated = $request->validate([
+            'invoice_ids' => ['nullable', 'array', 'min:1'],
+            'invoice_ids.*' => ['integer', 'exists:invoices,id'],
+            'all_unpaid' => ['nullable', 'boolean'],
+            'payment_type_id' => ['nullable', 'integer', 'exists:payment_types,id'],
+            'class_id' => ['nullable', 'integer', 'exists:classes,id'],
+            'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
+        ]);
+
+        $invoices = $this->resolveReminderInvoices($validated, $user)->loadMissing('student.currentClass', 'student.guardians.user');
+
+        $preview = $this->buildReminderPreview($invoices);
+
+        return response()->json($preview);
+    }
+
+    public function sendReminders(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user instanceof User, 401, 'Autentikasi diperlukan.');
+        abort_unless($user?->hasPermission(Permissions::INVOICE_REMINDER_SEND), 403, 'Anda tidak memiliki izin mengirim reminder tagihan.');
+
+        $validated = $request->validate([
+            'invoice_ids' => ['nullable', 'array', 'min:1'],
+            'invoice_ids.*' => ['integer', 'exists:invoices,id'],
+            'all_unpaid' => ['nullable', 'boolean'],
+            'payment_type_id' => ['nullable', 'integer', 'exists:payment_types,id'],
+            'class_id' => ['nullable', 'integer', 'exists:classes,id'],
+            'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
+            'message' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $invoices = $this->resolveReminderInvoices($validated, $user);
+        $invoiceIds = $invoices->pluck('id')->map(fn ($id): int => (int) $id)->values()->all();
+        $total = count($invoiceIds);
+
+        if ($total === 0) {
+            return response()->json([
+                'message' => 'Tidak ada invoice valid dalam cakupan akses Anda.',
+                'sent_count' => 0,
+                'total' => 0,
+            ], 422);
+        }
+
+        if ($total > 50) {
+            DispatchInvoiceRemindersJob::dispatch($invoiceIds, $validated['message'] ?? null, $user?->id);
+
+            return response()->json([
+                'message' => 'Reminder diproses di background.',
+                'queued' => true,
+                'total' => $total,
+            ]);
+        }
+
+        $invoices->loadMissing('student.guardians.user', 'paymentType');
+        $result = $this->dispatchReminderForInvoices($invoices, $validated['message'] ?? null, $user?->id);
+
+        return response()->json([
+            'message' => 'Reminder tagihan selesai diproses.',
+            'queued' => false,
+            'total' => $total,
+            'sent_count' => $result['sent_count'],
+            'recipients_without_account' => $result['recipients_without_account'],
+            'failed' => $result['failed'],
+        ]);
+    }
+
+    public function reportTrend(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user?->hasPermission(Permissions::PAYMENT_REPORT_VIEW), 403, 'Anda tidak memiliki izin untuk melihat tren pembayaran.');
+
+        $months = (int) $request->integer('months', 12);
+        $months = max(3, min($months, 24));
+        $startMonth = Carbon::now()->startOfMonth()->subMonths($months - 1);
+
+        $visibleInvoiceQuery = Invoice::query();
+        $visibleInvoiceQuery = $this->invoiceVisibilityScope->applyToInvoiceQuery($visibleInvoiceQuery, $user);
+        $visibleInvoiceIds = (clone $visibleInvoiceQuery)->select('invoices.id');
+
+        $invoicedByMonth = (clone $visibleInvoiceQuery)
+            ->whereNotIn('status', [Invoice::STATUS_CANCELLED])
+            ->whereDate('created_at', '>=', $startMonth->toDateString())
+            ->selectRaw("to_char(created_at, 'YYYY-MM') as month_key")
+            ->selectRaw('COALESCE(SUM(final_amount), 0) as amount')
+            ->groupByRaw("to_char(created_at, 'YYYY-MM')")
+            ->pluck('amount', 'month_key');
+
+        $overdueByMonth = (clone $visibleInvoiceQuery)
+            ->where('status', Invoice::STATUS_OVERDUE)
+            ->whereDate('created_at', '>=', $startMonth->toDateString())
+            ->selectRaw("to_char(created_at, 'YYYY-MM') as month_key")
+            ->selectRaw('COALESCE(SUM(final_amount), 0) as amount')
+            ->groupByRaw("to_char(created_at, 'YYYY-MM')")
+            ->pluck('amount', 'month_key');
+
+        $paidByMonth = Payment::query()
+            ->where('status', Payment::STATUS_VERIFIED)
+            ->whereNotNull('verified_at')
+            ->whereDate('verified_at', '>=', $startMonth->toDateString())
+            ->whereIn('invoice_id', $visibleInvoiceIds)
+            ->selectRaw("to_char(verified_at, 'YYYY-MM') as month_key")
+            ->selectRaw('COALESCE(SUM(amount), 0) as amount')
+            ->groupByRaw("to_char(verified_at, 'YYYY-MM')")
+            ->pluck('amount', 'month_key');
+
+        $rows = collect(range(0, $months - 1))
+            ->map(function (int $offset) use ($startMonth, $invoicedByMonth, $paidByMonth, $overdueByMonth): array {
+                $monthDate = (clone $startMonth)->addMonths($offset);
+                $monthKey = $monthDate->format('Y-m');
+
+                return [
+                    'key' => $monthKey,
+                    'label' => $monthDate->translatedFormat('M y'),
+                    'invoiced' => (float) ($invoicedByMonth[$monthKey] ?? 0),
+                    'paid' => (float) ($paidByMonth[$monthKey] ?? 0),
+                    'overdue' => (float) ($overdueByMonth[$monthKey] ?? 0),
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'months' => $rows,
         ]);
     }
 
@@ -384,5 +630,133 @@ class AdminKeuanganController extends Controller
         if ($student->user) {
             $student->user->notify(new InvoiceCreatedNotification($invoice));
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return \Illuminate\Database\Eloquent\Collection<int, Invoice>
+     */
+    private function resolveReminderInvoices(array $validated, User $user)
+    {
+        /** @var Builder $query */
+        $query = Invoice::query();
+        $query->whereIn('status', [Invoice::STATUS_PENDING, Invoice::STATUS_PARTIAL, Invoice::STATUS_OVERDUE]);
+        $query = $this->invoiceVisibilityScope->applyToInvoiceQuery($query, $user);
+
+        if (! empty($validated['invoice_ids'])) {
+            $query->whereIn('id', $validated['invoice_ids']);
+        } elseif (($validated['all_unpaid'] ?? false) === true) {
+            if (! empty($validated['payment_type_id'])) {
+                $query->where('payment_type_id', $validated['payment_type_id']);
+            }
+            if (! empty($validated['academic_year_id'])) {
+                $query->where('academic_year_id', $validated['academic_year_id']);
+            }
+            if (! empty($validated['class_id'])) {
+                $query->whereHas('student', fn (Builder $studentQuery) => $studentQuery->where('current_class_id', $validated['class_id']));
+            }
+        } else {
+            return collect();
+        }
+
+        return $query->get();
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Collection<int, Invoice>  $invoices
+     * @return array{
+     *   invoices_count: int,
+     *   unique_wali_count: int,
+     *   recipients_with_account: int,
+     *   recipients_without_account: int,
+     *   sample_recipients: array<int, array{name:string,student:string}>,
+     *   by_class: array<int, array{class_name:string,invoices_count:int}>
+     * }
+     */
+    private function buildReminderPreview($invoices): array
+    {
+        $recipientsWithAccount = collect();
+        $recipientsWithoutAccount = 0;
+        $sampleRecipients = collect();
+
+        foreach ($invoices as $invoice) {
+            $studentName = (string) ($invoice->student?->full_name ?? 'Santri');
+            $guardians = $invoice->student?->guardians ?? collect();
+            foreach ($guardians as $guardian) {
+                if ($guardian->user) {
+                    $recipientsWithAccount->push($guardian->user->id);
+                    if ($sampleRecipients->count() < 5) {
+                        $sampleRecipients->push([
+                            'name' => (string) ($guardian->user->name ?? 'Wali'),
+                            'student' => $studentName,
+                        ]);
+                    }
+                } else {
+                    $recipientsWithoutAccount++;
+                }
+            }
+        }
+
+        $byClass = $invoices
+            ->groupBy(fn (Invoice $invoice): string => (string) ($invoice->student?->currentClass?->name ?? 'Tanpa Kelas'))
+            ->map(fn ($group, $className): array => [
+                'class_name' => (string) $className,
+                'invoices_count' => $group->count(),
+            ])
+            ->values()
+            ->all();
+
+        return [
+            'invoices_count' => $invoices->count(),
+            'unique_wali_count' => $recipientsWithAccount->unique()->count(),
+            'recipients_with_account' => $recipientsWithAccount->unique()->count(),
+            'recipients_without_account' => $recipientsWithoutAccount,
+            'sample_recipients' => $sampleRecipients->all(),
+            'by_class' => $byClass,
+        ];
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Collection<int, Invoice>  $invoices
+     * @return array{sent_count:int, recipients_without_account:int, failed:array<int, array{invoice_id:int,error:string}>}
+     */
+    private function dispatchReminderForInvoices($invoices, ?string $customMessage, ?int $sentByUserId): array
+    {
+        $sentCount = 0;
+        $recipientsWithoutAccount = 0;
+        $failed = [];
+
+        /** @var Invoice $invoice */
+        foreach ($invoices as $invoice) {
+            try {
+                $invoice->loadMissing('student.guardians.user', 'paymentType');
+                $guardianUsers = $invoice->student?->guardians?->pluck('user')->filter()->unique('id') ?? collect();
+                $guardiansWithoutUser = $invoice->student?->guardians?->filter(fn ($guardian) => ! $guardian->user)->count() ?? 0;
+                $recipientsWithoutAccount += (int) $guardiansWithoutUser;
+
+                foreach ($guardianUsers as $guardianUser) {
+                    $guardianUser->notify(new InvoiceReminderNotification($invoice, $customMessage, $sentByUserId));
+                    $sentCount++;
+                }
+
+                if ($guardianUsers->isNotEmpty()) {
+                    $invoice->forceFill([
+                        'last_reminder_sent_at' => now(),
+                        'reminder_count' => ((int) $invoice->reminder_count) + 1,
+                    ])->saveQuietly();
+                }
+            } catch (\Throwable $exception) {
+                $failed[] = [
+                    'invoice_id' => (int) $invoice->id,
+                    'error' => $exception->getMessage(),
+                ];
+            }
+        }
+
+        return [
+            'sent_count' => $sentCount,
+            'recipients_without_account' => $recipientsWithoutAccount,
+            'failed' => $failed,
+        ];
     }
 }

@@ -26,6 +26,8 @@ final class Permissions
 
     public const INVOICE_CANCEL = 'invoice.cancel';
 
+    public const INVOICE_REMINDER_SEND = 'invoice.reminder.send';
+
     public const PAYMENT_VIEW = 'payment.view';
 
     public const PAYMENT_VERIFY = 'payment.verify';
