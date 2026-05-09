@@ -111,6 +111,10 @@ export function useScheduleRealtime(scheduleSetId: number | null | undefined) {
                 });
             });
 
+        channel.error((error: unknown) => {
+            console.error('[schedule-realtime] presence subscription error', error);
+        });
+
         return () => {
             echo.leave(channelName);
             setPresence([]);

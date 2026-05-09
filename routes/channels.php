@@ -20,10 +20,16 @@ Broadcast::channel('schedule.set.{setId}', function ($user, int $setId): ?array 
         return null;
     }
 
+    $roleName = (string) (
+        $user->role?->name
+        ?? $user->roles()->orderBy('roles.id')->value('roles.name')
+        ?? ''
+    );
+
     return [
         'id' => (int) $user->id,
         'name' => (string) ($user->name ?? "User #{$user->id}"),
-        'role' => (string) ($user->getRoleNames()->first() ?? ''),
+        'role' => $roleName,
         'color_seed' => (int) (crc32((string) $user->id) % 360),
     ];
 });
