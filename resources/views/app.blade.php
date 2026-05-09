@@ -5,10 +5,10 @@
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
         <meta name="theme-color" content="#1c1917" media="(prefers-color-scheme: dark)">
-        <meta name="reverb-app-key" content="{{ env('REVERB_APP_KEY', '') }}">
-        <meta name="reverb-host" content="{{ env('REVERB_HOST', request()->getHost()) }}">
-        <meta name="reverb-port" content="{{ env('REVERB_PORT', '8080') }}">
-        <meta name="reverb-scheme" content="{{ env('REVERB_SCHEME', 'http') }}">
+        <meta name="reverb-app-key" content="{{ env('REVERB_PUBLIC_APP_KEY', env('REVERB_APP_KEY', '')) }}">
+        <meta name="reverb-host" content="{{ env('REVERB_PUBLIC_HOST', env('REVERB_HOST', request()->getHost())) }}">
+        <meta name="reverb-port" content="{{ env('REVERB_PUBLIC_PORT', env('REVERB_PORT', '8080')) }}">
+        <meta name="reverb-scheme" content="{{ env('REVERB_PUBLIC_SCHEME', env('REVERB_SCHEME', 'http')) }}">
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">        {{-- Inline script to detect system dark mode preference and apply it immediately --}}
