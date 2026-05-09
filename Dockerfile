@@ -61,6 +61,7 @@ FROM dunglas/frankenphp:1-php8.4-bookworm AS app
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    $PHPIZE_DEPS \
     git \
     unzip \
     libpq-dev \
@@ -79,6 +80,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         pcntl \
         pdo_pgsql \
         zip \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
