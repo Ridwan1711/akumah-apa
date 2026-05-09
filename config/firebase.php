@@ -2,6 +2,35 @@
 
 declare(strict_types=1);
 
+$rawFirebaseCredentials = env('FIREBASE_CREDENTIALS')
+    ?? env('FIREBASE_CREDENSIAL') // backward-compatible typo support
+    ?? env('FIREBASE_CREDENTIAL')
+    ?? env('GOOGLE_APPLICATION_CREDENTIALS');
+
+$resolveFirebaseCredentials = static function (mixed $value): mixed {
+    if (! is_string($value) || trim($value) === '') {
+        return $value;
+    }
+
+    $path = trim($value);
+    if (is_file($path)) {
+        return $path;
+    }
+
+    $candidates = [
+        base_path($path),
+        base_path('../'.$path),
+    ];
+
+    foreach ($candidates as $candidate) {
+        if (is_file($candidate)) {
+            return $candidate;
+        }
+    }
+
+    return $path;
+};
+
 return [
     /*
      * ------------------------------------------------------------------------
@@ -50,7 +79,7 @@ return [
              *
              */
 
-            'credentials' => env('FIREBASE_CREDENTIALS', env('GOOGLE_APPLICATION_CREDENTIALS')),
+            'credentials' => $resolveFirebaseCredentials($rawFirebaseCredentials),
 
             /*
              * ------------------------------------------------------------------------

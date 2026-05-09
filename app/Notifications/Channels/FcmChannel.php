@@ -110,6 +110,16 @@ class FcmChannel
         if (! empty($invalid)) {
             DeviceToken::query()->whereIn('token', $invalid)->delete();
         }
+        $failureDetails = [];
+        foreach ($report->failures()->getItems() as $failedReport) {
+            $token = $failedReport->target()->value();
+            $error = $failedReport->error();
+            $failureDetails[] = [
+                'token_suffix' => substr($token, -10),
+                'error_class' => $error ? $error::class : null,
+                'error' => $error?->getMessage(),
+            ];
+        }
 
         Log::info('notification_dispatch_result', [
             'channel' => 'fcm',
@@ -121,6 +131,7 @@ class FcmChannel
             'failures' => $report->failures()->count(),
             'invalid_cleaned' => count($invalid),
             'collapse_key' => $collapseKey,
+            'failure_details' => $failureDetails,
         ]);
 
         if ($report->hasFailures()) {
@@ -129,6 +140,7 @@ class FcmChannel
                 'success' => $report->successes()->count(),
                 'failures' => $report->failures()->count(),
                 'invalid_cleaned' => count($invalid),
+                'failure_details' => $failureDetails,
             ]);
         }
     }
