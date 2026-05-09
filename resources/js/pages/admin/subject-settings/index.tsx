@@ -36,6 +36,21 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Subject Setting', href: '/admin/subject-settings' },
 ];
 
+function effectiveWeeklyHoursForClass(
+    subjectId: number,
+    levelId: number,
+    classId: number,
+    lookup: Map<string, LevelSettingRow>,
+): number {
+    const setting = lookup.get(`${subjectId}:${levelId}`);
+    if (setting && !setting.is_mandatory_teaching) {
+        return 0;
+    }
+    const base = setting?.target_jam_default ?? 0;
+    const override = setting?.class_overrides.find((row) => row.class_id === classId);
+    return override ? override.override_hours : base;
+}
+
 export default function SubjectSettingsIndex({
     subjects,
     gradeSubjects,
@@ -69,6 +84,31 @@ export default function SubjectSettingsIndex({
         });
         return map;
     }, [gradeSubjects, levels, subjects]);
+
+    const jamSummaryPerLevel = useMemo(() => {
+        const map = new Map<number, { total: number; classCount: number; subjectCount: number }>();
+        for (const level of levels) {
+            const levelSubjects = subjectsByLevel.get(level.id) ?? [];
+            const levelClasses = classes.filter((c) => c.grade_level_id === level.id);
+            let total = 0;
+            for (const schoolClass of levelClasses) {
+                for (const subject of levelSubjects) {
+                    total += effectiveWeeklyHoursForClass(subject.id, level.id, schoolClass.id, settingLookup);
+                }
+            }
+            map.set(level.id, {
+                total,
+                classCount: levelClasses.length,
+                subjectCount: levelSubjects.length,
+            });
+        }
+        return map;
+    }, [levels, subjectsByLevel, classes, settingLookup]);
+
+    const grandTotalJam = useMemo(
+        () => [...jamSummaryPerLevel.values()].reduce((acc, row) => acc + row.total, 0),
+        [jamSummaryPerLevel],
+    );
 
     function refreshSemester(nextSemesterId: string) {
         setIsRefreshing(true);
@@ -133,6 +173,13 @@ export default function SubjectSettingsIndex({
                     items={[
                         { key: 'subjects', label: 'Total Mapel', value: subjects.length, icon: <BookOpen size={18} />, tone: 'blue' },
                         { key: 'levels', label: 'Total Tingkat', value: levels.length, icon: <Layers3 size={18} />, tone: 'green' },
+                        {
+                            key: 'jam-total',
+                            label: 'Total Jam (semua tingkat)',
+                            value: grandTotalJam,
+                            icon: <Clock3 size={18} />,
+                            tone: 'amber',
+                        },
                         { key: 'overrides', label: 'Total Override', value: levelSettings.reduce((c, row) => c + row.class_overrides.length, 0), icon: <Clock3 size={18} />, tone: 'purple' },
                     ]}
                 />
@@ -171,8 +218,17 @@ export default function SubjectSettingsIndex({
 
                 {levels.map((level) => {
                     const levelSubjects = subjectsByLevel.get(level.id) ?? [];
+                    const jamInfo = jamSummaryPerLevel.get(level.id) ?? {
+                        total: 0,
+                        classCount: 0,
+                        subjectCount: 0,
+                    };
+                    const subtitle =
+                        jamInfo.classCount === 0
+                            ? `Total jam acuan tingkat ini: ${jamInfo.total} jam/minggu (belum ada kelas di tingkat ini).`
+                            : `Total jam acuan tingkat ini: ${jamInfo.total} jam/minggu — ${jamInfo.classCount} kelas × ${jamInfo.subjectCount} mapel (hanya mapel “Dipelajari”; override per kelas dihitung).`;
                     return (
-                        <CrudCard key={level.id} title={`Setting ${level.name}`}>
+                        <CrudCard key={level.id} title={`Setting ${level.name}`} subtitle={subtitle}>
                             <div className="mcr-table-wrap">
                                 <table className="mcr-table">
                                     <thead>
