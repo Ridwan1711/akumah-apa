@@ -7,10 +7,10 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentType;
 use App\Notifications\PaymentVerifiedNotification;
+use App\Services\Finance\FinanceWhatsappOutbound;
 use App\Services\Finance\InstallmentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -143,6 +143,8 @@ class PaymentController extends Controller
             });
         }
 
+        app(FinanceWhatsappOutbound::class)->queuePaymentVerifiedForPayment($payment);
+
         return redirect()->route('admin.payments.index')
             ->with('success', "Pembayaran {$payment->payment_number} berhasil dicatat.");
     }
@@ -177,6 +179,8 @@ class PaymentController extends Controller
                 $guardian->user?->notify(new PaymentVerifiedNotification($payment));
             });
         }
+
+        app(FinanceWhatsappOutbound::class)->queuePaymentVerifiedForPayment($payment);
 
         return redirect()->back()->with('success', 'Pembayaran berhasil diverifikasi.');
     }

@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Models\Payment;
 use App\Notifications\Channels\FcmChannel;
+use App\Services\Finance\FinanceKeuanganMessageBody;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
@@ -13,25 +14,31 @@ class PaymentVerifiedNotification extends Notification implements ShouldQueue
     use Queueable;
 
     public function __construct(
-        public Payment $payment
+        public Payment $payment,
+        public bool $sendAppNotification = true,
     ) {}
 
     public function via(object $notifiable): array
     {
+        if (! $this->sendAppNotification) {
+            return [];
+        }
+
         return ['database', FcmChannel::class];
+    }
+
+    public function paymentVerifiedMessageLine(object $notifiable): string
+    {
+        return FinanceKeuanganMessageBody::paymentVerified($this->payment);
     }
 
     public function toArray(object $notifiable): array
     {
         $this->payment->loadMissing('invoice.student', 'invoice.payments');
         $invoice = $this->payment->invoice;
-        $student = $invoice?->student;
-        $remaining = $invoice ? $invoice->remainingAmount() : 0;
-        $amountText = number_format((float) $this->payment->amount, 0, ',', '.');
-        $remainingText = number_format((float) $remaining, 0, ',', '.');
         $isPaidOff = $invoice?->status === \App\Models\Invoice::STATUS_PAID;
         $title = $isPaidOff ? 'Tagihan Lunas' : 'Pembayaran Cicilan Diterima';
-        $body = 'Pembayaran '.($this->payment->payment_number ?? '').' untuk '.($student?->full_name ?? 'santri').' sebesar Rp '.$amountText.' terverifikasi. Sisa tagihan Rp '.$remainingText.'.';
+        $body = $this->compactInAppBody($notifiable);
         $roleTarget = $this->roleTarget($notifiable);
         $url = $invoice?->id
             ? '/'.$roleTarget.'/invoices/'.(string) $invoice->id
@@ -59,17 +66,14 @@ class PaymentVerifiedNotification extends Notification implements ShouldQueue
     public function toFcm(object $notifiable): array
     {
         $invoice = $this->payment->invoice;
-        $student = $invoice?->student;
-        $remaining = $invoice ? $invoice->remainingAmount() : 0;
-        $amountText = number_format((float) $this->payment->amount, 0, ',', '.');
-        $remainingText = number_format((float) $remaining, 0, ',', '.');
+        $this->payment->loadMissing('invoice.student', 'invoice.payments');
         $isPaidOff = $invoice?->status === \App\Models\Invoice::STATUS_PAID;
         $title = $isPaidOff ? 'Tagihan Lunas' : 'Pembayaran Cicilan Diterima';
+        $body = $this->compactInAppBody($notifiable);
         $roleTarget = $this->roleTarget($notifiable);
         $url = $invoice?->id
             ? '/'.$roleTarget.'/invoices/'.(string) $invoice->id
             : '/'.$roleTarget.'/invoices';
-        $body = 'Pembayaran '.($this->payment->payment_number ?? '').' untuk '.($student?->full_name ?? 'santri').' sebesar Rp '.$amountText.' terverifikasi. Sisa tagihan Rp '.$remainingText.'.';
 
         return [
             'title' => $title,
@@ -97,5 +101,17 @@ class PaymentVerifiedNotification extends Notification implements ShouldQueue
         }
 
         return 'wali';
+    }
+
+    private function compactInAppBody(object $_notifiable): string
+    {
+        $this->payment->loadMissing('invoice.student', 'invoice.payments');
+        $invoice = $this->payment->invoice;
+        $student = $invoice?->student;
+        $remaining = $invoice ? $invoice->remainingAmount() : 0;
+        $amountText = number_format((float) $this->payment->amount, 0, ',', '.');
+        $remainingText = number_format((float) $remaining, 0, ',', '.');
+
+        return 'Pembayaran '.($this->payment->payment_number ?? '').' untuk '.($student?->full_name ?? 'santri').' sebesar Rp '.$amountText.' terverifikasi. Sisa tagihan Rp '.$remainingText.'.';
     }
 }

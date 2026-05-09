@@ -15,9 +15,12 @@ use App\Models\Student;
 use App\Models\StudentDiscount;
 use App\Models\User;
 use App\Notifications\InvoiceCreatedNotification;
-use App\Notifications\InvoiceReminderNotification;
 use App\Notifications\PaymentVerifiedNotification;
 use App\Services\Authorization\InvoiceVisibilityScope;
+use App\Services\Finance\DispatchInvoiceRemindersAction;
+use App\Services\Finance\FinanceWhatsappOutbound;
+use App\Services\Finance\FinanceWhatsappPhone;
+use App\Services\Finance\FinanceWhatsappRecipient;
 use App\Services\Finance\InstallmentService;
 use App\Support\Authorization\Permissions;
 use Carbon\Carbon;
@@ -31,6 +34,8 @@ class AdminKeuanganController extends Controller
 {
     public function __construct(
         private readonly InvoiceVisibilityScope $invoiceVisibilityScope,
+        private readonly DispatchInvoiceRemindersAction $dispatchInvoiceRemindersAction,
+        private readonly FinanceWhatsappOutbound $financeWhatsappOutbound,
     ) {}
 
     public function indexInvoices(Request $request): JsonResponse
@@ -299,7 +304,7 @@ class AdminKeuanganController extends Controller
 
         $validated = $request->validate([
             'amount' => ['required', 'numeric', 'min:1'],
-            'payment_method' => ['required', 'in:' . Payment::METHOD_CASH . ',' . Payment::METHOD_BANK_TRANSFER],
+            'payment_method' => ['required', 'in:'.Payment::METHOD_CASH.','.Payment::METHOD_BANK_TRANSFER],
             'payment_date' => ['required', 'date'],
             'proof_file' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:2048'],
             'notes' => ['nullable', 'string'],
@@ -364,6 +369,8 @@ class AdminKeuanganController extends Controller
             });
         }
 
+        $this->financeWhatsappOutbound->queuePaymentVerifiedForPayment($payment);
+
         $payment->load(['invoice', 'verifier:id,name']);
 
         return response()->json(['message' => 'Pembayaran berhasil diverifikasi.', 'payment' => $payment]);
@@ -419,8 +426,8 @@ class AdminKeuanganController extends Controller
         );
         $dueThisWeekAmount = $this->sumRemainingAmount(
             (clone $visibleInvoiceQuery)
-            ->whereIn('status', [Invoice::STATUS_PENDING, Invoice::STATUS_PARTIAL])
-            ->whereBetween('due_date', [$today->toDateString(), $endOfWeekWindow->toDateString()])
+                ->whereIn('status', [Invoice::STATUS_PENDING, Invoice::STATUS_PARTIAL])
+                ->whereBetween('due_date', [$today->toDateString(), $endOfWeekWindow->toDateString()])
         );
         $dueThisWeekCount = (clone $visibleInvoiceQuery)
             ->whereIn('status', [Invoice::STATUS_PENDING, Invoice::STATUS_PARTIAL])
@@ -574,16 +581,27 @@ class AdminKeuanganController extends Controller
 
         $validated = $request->validate([
             'message' => ['nullable', 'string', 'max:500'],
+            'send_app_notification' => ['sometimes', 'boolean'],
+            'send_whatsapp' => ['sometimes', 'boolean'],
         ]);
 
+        [$sendApp, $sendWhatsapp] = $this->validatedReminderChannels($validated);
+
         $invoice->loadMissing('student.guardians.user', 'paymentType');
-        $result = $this->dispatchReminderForInvoices(collect([$invoice]), $validated['message'] ?? null, $user?->id);
+        $result = $this->dispatchInvoiceRemindersAction->run(
+            collect([$invoice]),
+            $validated['message'] ?? null,
+            $user?->id,
+            $sendApp,
+            $sendWhatsapp,
+        );
 
         return response()->json([
             'message' => 'Reminder tagihan berhasil dikirim.',
             'invoice_id' => (int) $invoice->id,
             'sent_count' => $result['sent_count'],
             'recipients_without_account' => $result['recipients_without_account'],
+            'wa_queued' => $result['wa_queued'],
             'last_reminder_sent_at' => $invoice->fresh()?->last_reminder_sent_at?->toIso8601String(),
         ]);
     }
@@ -603,7 +621,11 @@ class AdminKeuanganController extends Controller
             'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
         ]);
 
-        $invoices = $this->resolveReminderInvoices($validated, $user)->loadMissing('student.currentClass', 'student.guardians.user');
+        $invoices = $this->resolveReminderInvoices($validated, $user)->loadMissing(
+            'student.currentClass',
+            'student.guardians.user',
+            'student.user:id,whatsapp_phone',
+        );
 
         $preview = $this->buildReminderPreview($invoices);
 
@@ -624,7 +646,11 @@ class AdminKeuanganController extends Controller
             'class_id' => ['nullable', 'integer', 'exists:classes,id'],
             'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
             'message' => ['nullable', 'string', 'max:500'],
+            'send_app_notification' => ['sometimes', 'boolean'],
+            'send_whatsapp' => ['sometimes', 'boolean'],
         ]);
+
+        [$sendApp, $sendWhatsapp] = $this->validatedReminderChannels($validated);
 
         $invoices = $this->resolveReminderInvoices($validated, $user);
         $invoiceIds = $invoices->pluck('id')->map(fn ($id): int => (int) $id)->values()->all();
@@ -639,17 +665,31 @@ class AdminKeuanganController extends Controller
         }
 
         if ($total > 50) {
-            DispatchInvoiceRemindersJob::dispatch($invoiceIds, $validated['message'] ?? null, $user?->id);
+            DispatchInvoiceRemindersJob::dispatch(
+                $invoiceIds,
+                $validated['message'] ?? null,
+                $user?->id,
+                $sendApp,
+                $sendWhatsapp,
+            );
 
             return response()->json([
                 'message' => 'Reminder diproses di background.',
                 'queued' => true,
                 'total' => $total,
+                'send_app_notification' => $sendApp,
+                'send_whatsapp' => $sendWhatsapp,
             ]);
         }
 
-        $invoices->loadMissing('student.guardians.user', 'paymentType');
-        $result = $this->dispatchReminderForInvoices($invoices, $validated['message'] ?? null, $user?->id);
+        $invoices->loadMissing('student.guardians.user', 'student.user:id,whatsapp_phone', 'paymentType');
+        $result = $this->dispatchInvoiceRemindersAction->run(
+            $invoices,
+            $validated['message'] ?? null,
+            $user?->id,
+            $sendApp,
+            $sendWhatsapp,
+        );
 
         return response()->json([
             'message' => 'Reminder tagihan selesai diproses.',
@@ -657,6 +697,7 @@ class AdminKeuanganController extends Controller
             'total' => $total,
             'sent_count' => $result['sent_count'],
             'recipients_without_account' => $result['recipients_without_account'],
+            'wa_queued' => $result['wa_queued'],
             'failed' => $result['failed'],
         ]);
     }
@@ -808,10 +849,14 @@ class AdminKeuanganController extends Controller
         $recipientsWithAccount = collect();
         $recipientsWithoutAccount = 0;
         $sampleRecipients = collect();
+        $recipient = app(FinanceWhatsappRecipient::class);
+        $waPhonesEstimate = collect();
+        $waliWithoutAppWithPhone = 0;
 
         foreach ($invoices as $invoice) {
             $studentName = (string) ($invoice->student?->full_name ?? 'Santri');
-            $guardians = $invoice->student?->guardians ?? collect();
+            $student = $invoice->student;
+            $guardians = $student?->guardians ?? collect();
             foreach ($guardians as $guardian) {
                 if ($guardian->user) {
                     $recipientsWithAccount->push($guardian->user->id);
@@ -821,8 +866,23 @@ class AdminKeuanganController extends Controller
                             'student' => $studentName,
                         ]);
                     }
+                    if ($student) {
+                        $p = $recipient->resolve($student, $guardian->user);
+                        if ($p !== null) {
+                            $waPhonesEstimate->push($p);
+                        }
+                    }
                 } else {
                     $recipientsWithoutAccount++;
+                    if (! $guardian->without_phone && FinanceWhatsappPhone::normalize($guardian->phone) !== null) {
+                        $waliWithoutAppWithPhone++;
+                    }
+                    if ($student) {
+                        $p = $recipient->resolve($student, null, $guardian);
+                        if ($p !== null) {
+                            $waPhonesEstimate->push($p);
+                        }
+                    }
                 }
             }
         }
@@ -841,53 +901,33 @@ class AdminKeuanganController extends Controller
             'unique_wali_count' => $recipientsWithAccount->unique()->count(),
             'recipients_with_account' => $recipientsWithAccount->unique()->count(),
             'recipients_without_account' => $recipientsWithoutAccount,
+            'wali_without_app_with_phone' => $waliWithoutAppWithPhone,
+            'wa_estimated_unique_recipients' => $waPhonesEstimate->unique()->count(),
             'sample_recipients' => $sampleRecipients->all(),
             'by_class' => $byClass,
         ];
     }
 
     /**
-     * @param  \Illuminate\Database\Eloquent\Collection<int, Invoice>  $invoices
-     * @return array{sent_count:int, recipients_without_account:int, failed:array<int, array{invoice_id:int,error:string}>}
+     * @param  array<string, mixed>  $validated
+     * @return array{0: bool, 1: bool}
      */
-    private function dispatchReminderForInvoices($invoices, ?string $customMessage, ?int $sentByUserId): array
+    private function validatedReminderChannels(array $validated): array
     {
-        $sentCount = 0;
-        $recipientsWithoutAccount = 0;
-        $failed = [];
+        $sendApp = array_key_exists('send_app_notification', $validated)
+            ? (bool) $validated['send_app_notification']
+            : true;
+        $sendWhatsapp = array_key_exists('send_whatsapp', $validated)
+            ? (bool) $validated['send_whatsapp']
+            : false;
 
-        /** @var Invoice $invoice */
-        foreach ($invoices as $invoice) {
-            try {
-                $invoice->loadMissing('student.guardians.user', 'paymentType');
-                $guardianUsers = $invoice->student?->guardians?->pluck('user')->filter()->unique('id') ?? collect();
-                $guardiansWithoutUser = $invoice->student?->guardians?->filter(fn ($guardian) => ! $guardian->user)->count() ?? 0;
-                $recipientsWithoutAccount += (int) $guardiansWithoutUser;
-
-                foreach ($guardianUsers as $guardianUser) {
-                    $guardianUser->notify(new InvoiceReminderNotification($invoice, $customMessage, $sentByUserId));
-                    $sentCount++;
-                }
-
-                if ($guardianUsers->isNotEmpty()) {
-                    $invoice->forceFill([
-                        'last_reminder_sent_at' => now(),
-                        'reminder_count' => ((int) $invoice->reminder_count) + 1,
-                    ])->saveQuietly();
-                }
-            } catch (\Throwable $exception) {
-                $failed[] = [
-                    'invoice_id' => (int) $invoice->id,
-                    'error' => $exception->getMessage(),
-                ];
-            }
+        if (! $sendApp && ! $sendWhatsapp) {
+            throw ValidationException::withMessages([
+                'send_app_notification' => 'Pilih minimal satu: notifikasi aplikasi atau WhatsApp.',
+            ]);
         }
 
-        return [
-            'sent_count' => $sentCount,
-            'recipients_without_account' => $recipientsWithoutAccount,
-            'failed' => $failed,
-        ];
+        return [$sendApp, $sendWhatsapp];
     }
 
     private function sumRemainingAmount(Builder $query): float
@@ -904,7 +944,6 @@ class AdminKeuanganController extends Controller
     }
 
     /**
-     * @param  mixed  $overrideBreakdown
      * @return array<int, array{label:string, amount:float}>
      */
     private function resolveInvoiceBreakdown(PaymentType $paymentType, float $amount, mixed $overrideBreakdown): array

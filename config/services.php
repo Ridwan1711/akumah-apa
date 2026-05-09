@@ -39,4 +39,15 @@ return [
         'api_key' => env('PPDB_SYNC_API_KEY'),
     ],
 
+    'wa' => [
+        'enabled' => (bool) env('WA_ENABLED', false),
+        'url' => env('WA_API_URL', 'https://api-wa.ngedeploy.online/send-message'),
+        'key' => env('WA_API_KEY'),
+        'fallback_phone' => env('WA_FALLBACK_PHONE', '6289502887544'),
+        'allow_fallback' => (bool) env('WA_ALLOW_FALLBACK_RECIPIENT', false),
+        'bulk_delay_seconds' => (int) env('WA_BULK_DELAY_SECONDS', 12),
+        'queue' => env('WA_QUEUE', 'wa'),
+        'timeout_seconds' => (int) env('WA_HTTP_TIMEOUT', 30),
+    ],
+
 ];

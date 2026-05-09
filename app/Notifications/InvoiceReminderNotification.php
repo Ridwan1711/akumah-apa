@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Models\Invoice;
 use App\Notifications\Channels\FcmChannel;
+use App\Services\Finance\FinanceKeuanganMessageBody;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
@@ -16,11 +17,21 @@ class InvoiceReminderNotification extends Notification implements ShouldQueue
         public Invoice $invoice,
         public ?string $customMessage = null,
         public ?int $sentByUserId = null,
+        public bool $sendAppNotification = true,
     ) {}
 
     public function via(object $notifiable): array
     {
+        if (! $this->sendAppNotification) {
+            return [];
+        }
+
         return ['database', FcmChannel::class];
+    }
+
+    public function reminderMessageText(): string
+    {
+        return $this->body();
     }
 
     public function toArray(object $notifiable): array
@@ -75,16 +86,6 @@ class InvoiceReminderNotification extends Notification implements ShouldQueue
 
     private function body(): string
     {
-        if ($this->customMessage !== null && trim($this->customMessage) !== '') {
-            return trim($this->customMessage);
-        }
-
-        $invoiceNumber = (string) ($this->invoice->invoice_number ?? '-');
-        $paymentTypeName = (string) ($this->invoice->paymentType?->name ?? 'Tagihan');
-        $remaining = max(0, (float) $this->invoice->remainingAmount());
-        $remainingFormatted = number_format($remaining, 0, ',', '.');
-        $dueDate = $this->invoice->due_date?->format('d-m-Y') ?? '-';
-
-        return "Tagihan {$invoiceNumber} ({$paymentTypeName}) sebesar Rp {$remainingFormatted} jatuh tempo {$dueDate}. Mohon segera diselesaikan.";
+        return FinanceKeuanganMessageBody::invoiceReminder($this->invoice, $this->customMessage);
     }
 }
