@@ -7,6 +7,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentType;
 use App\Notifications\PaymentVerifiedNotification;
+use App\Services\Finance\InstallmentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -19,19 +20,36 @@ class PaymentController extends Controller
     public function index(Request $request): Response
     {
         $query = Payment::with([
-            'invoice:id,invoice_number,student_id,payment_type_id,final_amount',
+            'invoice' => fn ($invoiceQuery) => $invoiceQuery
+                ->select(['id', 'invoice_number', 'student_id', 'payment_type_id', 'final_amount'])
+                ->withSum([
+                    'payments as verified_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', Payment::STATUS_VERIFIED),
+                ], 'amount'),
             'invoice.student:id,nis,full_name',
             'invoice.paymentType:id,name,code',
             'verifier:id,name',
         ])
             ->when($request->status, fn ($q, $s) => $q->where('status', $s))
             ->when($request->payment_method, fn ($q, $m) => $q->where('payment_method', $m))
+            ->when($request->payment_kind === 'full', fn ($q) => $q->whereHas('invoice', fn ($invoiceQuery) => $invoiceQuery->whereColumn('payments.amount', '>=', 'invoices.final_amount')))
+            ->when($request->payment_kind === 'partial', fn ($q) => $q->whereHas('invoice', fn ($invoiceQuery) => $invoiceQuery->whereColumn('payments.amount', '<', 'invoices.final_amount')))
             ->when($request->search, fn ($q, $s) => $q->whereHas('invoice.student', fn ($sq) => $sq->where('full_name', 'ilike', "%{$s}%")->orWhere('nis', 'like', "%{$s}%")))
             ->orderByDesc('created_at');
 
+        $payments = $query->paginate(20)->withQueryString();
+        $payments->getCollection()->transform(function (Payment $payment): Payment {
+            $invoice = $payment->invoice;
+            if ($invoice) {
+                $invoice->total_paid = (float) ($invoice->verified_paid_amount ?? 0);
+                $invoice->remaining = max(0, (float) $invoice->final_amount - $invoice->total_paid);
+            }
+
+            return $payment;
+        });
+
         return Inertia::render('admin/payments/index', [
-            'payments' => $query->paginate(20)->withQueryString(),
-            'filters' => $request->only(['status', 'payment_method', 'search']),
+            'payments' => $payments,
+            'filters' => $request->only(['status', 'payment_method', 'payment_kind', 'search']),
             'pendingCount' => Payment::where('status', Payment::STATUS_PENDING)->count(),
             'paymentTypes' => PaymentType::query()->orderBy('category')->orderBy('name')->get(),
         ]);
@@ -41,14 +59,39 @@ class PaymentController extends Controller
     {
         $invoiceId = $request->invoice_id;
         $invoice = $invoiceId
-            ? Invoice::with(['student:id,nis,full_name', 'paymentType:id,name,code'])->find($invoiceId)
+            ? Invoice::with(['student:id,nis,full_name', 'paymentType:id,name,code'])
+                ->withSum([
+                    'payments as verified_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', Payment::STATUS_VERIFIED),
+                ], 'amount')
+                ->withSum([
+                    'payments as pending_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', Payment::STATUS_PENDING),
+                ], 'amount')
+                ->find($invoiceId)
             : null;
+        if ($invoice) {
+            $invoice->total_paid = (float) ($invoice->verified_paid_amount ?? 0);
+            $invoice->pending_amount = (float) ($invoice->pending_paid_amount ?? 0);
+            $invoice->remaining = max(0, (float) $invoice->final_amount - $invoice->total_paid);
+        }
 
         $unpaidInvoices = Invoice::whereIn('status', [Invoice::STATUS_PENDING, Invoice::STATUS_PARTIAL, Invoice::STATUS_OVERDUE])
             ->with(['student:id,nis,full_name', 'paymentType:id,name'])
+            ->withSum([
+                'payments as verified_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', Payment::STATUS_VERIFIED),
+            ], 'amount')
+            ->with([
+                'payments' => fn ($paymentQuery) => $paymentQuery
+                    ->orderByDesc('payment_date')
+                    ->limit(8)
+                    ->with('verifier:id,name'),
+            ])
             ->orderByDesc('created_at')
             ->limit(100)
             ->get();
+        $unpaidInvoices->each(function (Invoice $invoice): void {
+            $invoice->total_paid = (float) ($invoice->verified_paid_amount ?? 0);
+            $invoice->remaining = max(0, (float) $invoice->final_amount - $invoice->total_paid);
+        });
 
         return Inertia::render('admin/payments/create', [
             'selectedInvoice' => $invoice,
@@ -71,6 +114,7 @@ class PaymentController extends Controller
         if (in_array($invoice->status, [Invoice::STATUS_PAID, Invoice::STATUS_CANCELLED])) {
             return redirect()->back()->with('error', 'Tagihan ini sudah lunas atau dibatalkan.');
         }
+        app(InstallmentService::class)->validateAmount($invoice, (float) $validated['amount']);
 
         $proofPath = null;
         if ($request->hasFile('proof_file')) {
@@ -105,11 +149,21 @@ class PaymentController extends Controller
 
     public function verify(Request $request, Payment $payment): RedirectResponse
     {
+        $validated = $request->validate([
+            'verified_amount' => ['nullable', 'numeric', 'min:1'],
+        ]);
+
         if ($payment->status !== Payment::STATUS_PENDING) {
             return redirect()->back()->with('error', 'Pembayaran ini sudah diverifikasi atau ditolak.');
         }
 
+        $verifiedAmount = isset($validated['verified_amount'])
+            ? (float) $validated['verified_amount']
+            : (float) $payment->amount;
+        app(InstallmentService::class)->validateAmount($payment->invoice, $verifiedAmount, true);
+
         $payment->update([
+            'amount' => $verifiedAmount,
             'status' => Payment::STATUS_VERIFIED,
             'verified_by' => $request->user()->id,
             'verified_at' => now(),

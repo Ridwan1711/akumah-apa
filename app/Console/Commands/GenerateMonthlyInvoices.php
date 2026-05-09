@@ -70,6 +70,7 @@ class GenerateMonthlyInvoices extends Command
                         continue;
                     }
                     $discount = $this->resolveDiscount($student->id, $type->id, $activePeriod->academic_year_id, $amount);
+                    $breakdown = $type->buildBreakdownForAmount($amount);
 
                     Invoice::create([
                         'invoice_number' => Invoice::generateNumber(),
@@ -81,6 +82,7 @@ class GenerateMonthlyInvoices extends Command
                         'amount' => $amount,
                         'discount_amount' => $discount,
                         'final_amount' => $amount - $discount,
+                        'breakdown' => $breakdown,
                         'status' => Invoice::STATUS_PENDING,
                         'due_date' => $dueDate,
                     ]);

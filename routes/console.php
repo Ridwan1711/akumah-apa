@@ -26,3 +26,7 @@ Schedule::command('teacher-presence:process-timeouts')
     ->everyTenMinutes()
     ->timezone('Asia/Jakarta')
     ->onOneServer();
+Schedule::command('payments:cancel-expired-gateway')
+    ->everyFiveMinutes()
+    ->timezone('Asia/Jakarta')
+    ->onOneServer();

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Wali;
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Services\Finance\InstallmentService;
 use App\Notifications\PaymentPendingNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,12 +23,28 @@ class WaliPaymentController extends Controller
             'paymentType:id,name,code,category',
             'academicYear:id,name',
         ])
+            ->withCount('payments')
+            ->withSum([
+                'payments as verified_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', Payment::STATUS_VERIFIED),
+            ], 'amount')
+            ->withSum([
+                'payments as pending_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', Payment::STATUS_PENDING),
+            ], 'amount')
             ->whereIn('student_id', $studentIds)
             ->when($request->status, fn ($q, $s) => $q->where('status', $s))
             ->orderByDesc('created_at');
 
+        $invoices = $query->paginate(15)->withQueryString();
+        $invoices->getCollection()->transform(function (Invoice $invoice): Invoice {
+            $invoice->total_paid = (float) ($invoice->verified_paid_amount ?? 0);
+            $invoice->pending_amount = (float) ($invoice->pending_paid_amount ?? 0);
+            $invoice->remaining = max(0, (float) $invoice->final_amount - $invoice->total_paid);
+
+            return $invoice;
+        });
+
         return Inertia::render('wali/invoices', [
-            'invoices' => $query->paginate(15)->withQueryString(),
+            'invoices' => $invoices,
             'filters' => $request->only(['status']),
             'midtransClientKey' => config('midtrans.client_key'),
         ]);
@@ -40,13 +57,15 @@ class WaliPaymentController extends Controller
 
         $invoice->load([
             'student:id,nis,full_name',
-            'paymentType:id,name,code',
+            'paymentType:id,name,code,default_breakdown',
             'academicYear:id,name',
             'payments' => fn ($q) => $q->orderByDesc('payment_date'),
         ]);
 
         $invoice->total_paid = $invoice->totalPaid();
+        $invoice->pending_amount = $invoice->pendingAmount();
         $invoice->remaining = $invoice->remainingAmount();
+        $invoice->breakdown_items = $invoice->resolvedBreakdown();
 
         return Inertia::render('wali/invoice-detail', [
             'invoice' => $invoice,
@@ -64,6 +83,7 @@ class WaliPaymentController extends Controller
             'amount' => ['required', 'numeric', 'min:1'],
             'notes' => ['nullable', 'string'],
         ]);
+        app(InstallmentService::class)->validateAmount($invoice, (float) $request->amount);
 
         $proofPath = $request->file('proof_file')->store('payment-proofs', 'public');
 
@@ -114,7 +134,7 @@ class WaliPaymentController extends Controller
     private function getChildStudentIds(Request $request): array
     {
         $guardian = $request->user()->primaryGuardian();
-        abort_unless($guardian, 404, 'Data wali tidak ditemukan.');
+        abort_unless($guardian !== null, 404, 'Data wali tidak ditemukan.');
 
         return $guardian->students()->pluck('students.id')->toArray();
     }

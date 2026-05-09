@@ -177,6 +177,11 @@ export default function PaymentIndex({ payments, filters, pendingCount, paymentT
                                 <option value="bank_transfer">Transfer Bank</option>
                                 <option value="gateway">Gateway</option>
                             </select>
+                            <select className="mcr-filter-select" value={filters.payment_kind ?? ''} onChange={(e) => handleFilter('payment_kind', e.target.value)}>
+                                <option value="">Semua jenis bayar</option>
+                                <option value="full">Pembayaran penuh</option>
+                                <option value="partial">Cicilan / sebagian</option>
+                            </select>
                         </>
                     )}
                     right={(
@@ -207,6 +212,7 @@ export default function PaymentIndex({ payments, filters, pendingCount, paymentT
                                     <th>Invoice</th>
                                     <th>Metode</th>
                                     <th style={{ textAlign: 'right' }}>Jumlah</th>
+                                    <th style={{ textAlign: 'right' }}>Sisa Tagihan</th>
                                     <th>Tanggal</th>
                                     <th>Status</th>
                                     <th style={{ textAlign: 'right' }}>Aksi</th>
@@ -224,6 +230,7 @@ export default function PaymentIndex({ payments, filters, pendingCount, paymentT
                                         </td>
                                         <td>{methodLabels[item.payment_method]}</td>
                                         <td style={{ textAlign: 'right' }}>{formatCurrency(item.amount)}</td>
+                                        <td style={{ textAlign: 'right' }}>{formatCurrency(Number(item.invoice?.remaining ?? item.invoice?.final_amount ?? 0))}</td>
                                         <td>{item.payment_date}</td>
                                         <td>
                                             <span className={`mcr-dot-badge ${

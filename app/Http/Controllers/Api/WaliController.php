@@ -10,6 +10,7 @@ use App\Models\Diniyyah\Score;
 use App\Models\EmProfile;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Services\Finance\InstallmentService;
 use App\Models\Student;
 use App\Models\StudentViolation;
 use App\Notifications\PaymentPendingNotification;
@@ -35,7 +36,7 @@ class WaliController extends Controller
     private function getChildStudentIds(Request $request): array
     {
         $guardian = $request->user()->primaryGuardian();
-        abort_unless($guardian, 404, 'Data wali tidak ditemukan.');
+        abort_unless($guardian !== null, 404, 'Data wali tidak ditemukan.');
 
         return $guardian->students()->pluck('students.id')->toArray();
     }
@@ -43,7 +44,7 @@ class WaliController extends Controller
     public function dashboard(Request $request): JsonResponse
     {
         $guardian = $request->user()->primaryGuardian();
-        abort_unless($guardian, 404, 'Data wali tidak ditemukan.');
+        abort_unless($guardian !== null, 404, 'Data wali tidak ditemukan.');
 
         $children = $guardian->students()
             ->with(['currentClass:id,name', 'violationSummary'])
@@ -57,7 +58,7 @@ class WaliController extends Controller
     public function children(Request $request): JsonResponse
     {
         $guardian = $request->user()->primaryGuardian();
-        abort_unless($guardian, 404, 'Data wali tidak ditemukan.');
+        abort_unless($guardian !== null, 404, 'Data wali tidak ditemukan.');
 
         $children = $guardian->students()
             ->with(['currentClass:id,name', 'violationSummary'])
@@ -276,11 +277,25 @@ class WaliController extends Controller
             'paymentType:id,name,code,category',
             'academicYear:id,name',
         ])
+            ->withCount('payments')
+            ->withSum([
+                'payments as verified_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', Payment::STATUS_VERIFIED),
+            ], 'amount')
+            ->withSum([
+                'payments as pending_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', Payment::STATUS_PENDING),
+            ], 'amount')
             ->whereIn('student_id', $studentIds)
             ->when($request->status, fn ($q, $s) => $q->where('status', $s))
             ->orderByDesc('created_at');
 
         $invoices = $query->paginate(15)->withQueryString();
+        $invoices->getCollection()->transform(function (Invoice $invoice): Invoice {
+            $invoice->total_paid = (float) ($invoice->verified_paid_amount ?? 0);
+            $invoice->pending_amount = (float) ($invoice->pending_paid_amount ?? 0);
+            $invoice->remaining = max(0, (float) $invoice->final_amount - $invoice->total_paid);
+
+            return $invoice;
+        });
 
         return response()->json([
             'invoices' => $invoices,
@@ -295,13 +310,15 @@ class WaliController extends Controller
 
         $invoice->load([
             'student:id,nis,full_name',
-            'paymentType:id,name,code',
+            'paymentType:id,name,code,default_breakdown',
             'academicYear:id,name',
             'payments' => fn ($q) => $q->orderByDesc('payment_date'),
         ]);
 
         $invoice->total_paid = $invoice->totalPaid();
+        $invoice->pending_amount = $invoice->pendingAmount();
         $invoice->remaining = $invoice->remainingAmount();
+        $invoice->breakdown_items = $invoice->resolvedBreakdown();
 
         return response()->json(['invoice' => $invoice]);
     }
@@ -311,7 +328,18 @@ class WaliController extends Controller
         $studentIds = $this->getChildStudentIds($request);
         abort_unless(in_array($invoice->student_id, $studentIds), 403);
 
-        $request->merge(['invoice_id' => $invoice->id]);
+        $validated = $request->validate([
+            'payment_method' => ['required', 'in:bri_va,qris'],
+            'amount' => ['nullable', 'numeric', 'min:1'],
+        ]);
+        $payload = [
+            'invoice_id' => $invoice->id,
+            'payment_method' => $validated['payment_method'],
+        ];
+        if (isset($validated['amount'])) {
+            $payload['amount'] = (float) $validated['amount'];
+        }
+        $request->merge($payload);
 
         return app(PaymentGatewayController::class)->createCharge($request);
     }
@@ -326,6 +354,7 @@ class WaliController extends Controller
             'amount' => ['required', 'numeric', 'min:1'],
             'notes' => ['nullable', 'string'],
         ]);
+        app(InstallmentService::class)->validateAmount($invoice, (float) $request->amount);
 
         $proofPath = $request->file('proof_file')->store('payment-proofs', 'public');
 

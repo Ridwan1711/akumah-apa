@@ -42,7 +42,7 @@ type BulkPreviewResponse = {
 };
 
 type Props = {
-    paymentTypes: (Pick<PaymentType, 'id' | 'name' | 'code' | 'category'> & { is_recurring: boolean })[];
+    paymentTypes: (Pick<PaymentType, 'id' | 'name' | 'code' | 'category' | 'default_breakdown'> & { is_recurring: boolean })[];
     academicYears: Pick<AcademicYear, 'id' | 'name'>[];
     students: Pick<Student, 'id' | 'full_name' | 'nis'>[];
     bulkRuns: ImportRun[];
@@ -96,6 +96,7 @@ export default function InvoiceGenerate({
         month: '' as string,
         due_date: '',
         send_notification_for_existing: true,
+        breakdown: [] as Array<{ label: string; amount: string }>,
     });
 
     const [studentSearchQuery, setStudentSearchQuery] = useState('');
@@ -180,6 +181,9 @@ export default function InvoiceGenerate({
             student_ids: form.data.target_type === 'selected' ? form.data.student_ids : [],
             due_date: form.data.due_date,
             send_notification_for_existing: form.data.send_notification_for_existing,
+            breakdown: form.data.breakdown
+                .filter((item) => item.label.trim() !== '' && item.amount !== '')
+                .map((item) => ({ label: item.label.trim(), amount: Number(item.amount) })),
         };
 
         if (selectedPT?.is_recurring && form.data.month) {
@@ -300,6 +304,18 @@ export default function InvoiceGenerate({
     const runsRefreshedLabel = lastRunsRefreshedAt
         ? lastRunsRefreshedAt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
         : '—';
+
+    function appendBreakdownRow() {
+        form.setData('breakdown', [...form.data.breakdown, { label: '', amount: '' }]);
+    }
+
+    function removeBreakdownRow(index: number) {
+        form.setData('breakdown', form.data.breakdown.filter((_, i) => i !== index));
+    }
+
+    function setBreakdownField(index: number, field: 'label' | 'amount', value: string) {
+        form.setData('breakdown', form.data.breakdown.map((item, i) => (i === index ? { ...item, [field]: value } : item)));
+    }
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -422,6 +438,10 @@ export default function InvoiceGenerate({
                                             ...form.data,
                                             payment_type_id: nextId,
                                             month: nextPt?.is_recurring ? form.data.month : '',
+                                            breakdown: (nextPt?.default_breakdown ?? []).map((item) => ({
+                                                label: item.label,
+                                                amount: String(item.amount),
+                                            })),
                                         });
                                     }}
                                     placeholder="Pilih jenis…"
@@ -568,6 +588,48 @@ export default function InvoiceGenerate({
                                 <InputError message={form.errors.student_ids} />
                             </div>
                         ) : null}
+
+                        <div className="mcr-student-picker" style={{ marginTop: 14 }}>
+                            <div className="mcr-student-picker__head">
+                                <h3 className="mcr-student-picker__title">Rincian Tagihan (opsional)</h3>
+                                <button type="button" className="mcr-btn ghost" onClick={appendBreakdownRow}>
+                                    <Plus size={14} />
+                                    Tambah Item
+                                </button>
+                            </div>
+                            <p className="mcr-student-picker__meta">
+                                Bila diisi, rincian ini akan digunakan sebagai override untuk invoice yang di-generate.
+                            </p>
+                            {form.data.breakdown.length === 0 ? (
+                                <div className="mcr-student-picker__empty">Belum ada item rincian.</div>
+                            ) : (
+                                <div style={{ display: 'grid', gap: 8 }}>
+                                    {form.data.breakdown.map((item, index) => (
+                                        <div key={`bulk-breakdown-${index}`} style={{ display: 'grid', gridTemplateColumns: '1fr 180px auto', gap: 8 }}>
+                                            <input
+                                                type="text"
+                                                className="mcr-input"
+                                                value={item.label}
+                                                onChange={(e) => setBreakdownField(index, 'label', e.target.value)}
+                                                placeholder="Nama rincian"
+                                            />
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                className="mcr-input"
+                                                value={item.amount}
+                                                onChange={(e) => setBreakdownField(index, 'amount', e.target.value)}
+                                                placeholder="Nominal"
+                                            />
+                                            <button type="button" className="mcr-btn ghost" onClick={() => removeBreakdownRow(index)}>
+                                                Hapus
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <InputError message={form.errors.breakdown as string | undefined} />
+                        </div>
 
                         <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                             <button type="submit" className="mcr-btn primary" disabled={form.processing || !canCreateInvoice}>

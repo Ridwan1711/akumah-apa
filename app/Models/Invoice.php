@@ -22,6 +22,7 @@ class Invoice extends Model
         'amount',
         'discount_amount',
         'final_amount',
+        'breakdown',
         'status',
         'due_date',
         'notes',
@@ -36,6 +37,7 @@ class Invoice extends Model
             'amount' => 'decimal:2',
             'discount_amount' => 'decimal:2',
             'final_amount' => 'decimal:2',
+            'breakdown' => 'array',
             'due_date' => 'date',
             'month' => 'integer',
             'last_reminder_sent_at' => 'datetime',
@@ -97,6 +99,37 @@ class Invoice extends Model
     public function remainingAmount(): float
     {
         return max(0, (float) $this->final_amount - $this->totalPaid());
+    }
+
+    public function pendingAmount(): float
+    {
+        return (float) $this->payments()
+            ->where('status', Payment::STATUS_PENDING)
+            ->sum('amount');
+    }
+
+    public function effectiveRemaining(): float
+    {
+        return max(0, $this->remainingAmount() - $this->pendingAmount());
+    }
+
+    /**
+     * @return array<int, array{label:string, amount:float}>
+     */
+    public function resolvedBreakdown(): array
+    {
+        $invoiceBreakdown = PaymentType::normalizeBreakdownItems($this->breakdown);
+        if ($invoiceBreakdown !== []) {
+            return $invoiceBreakdown;
+        }
+
+        if (! $this->relationLoaded('paymentType') || ! $this->paymentType) {
+            $this->loadMissing('paymentType');
+        }
+
+        return $this->paymentType
+            ? $this->paymentType->buildBreakdownForAmount((float) $this->amount)
+            : [];
     }
 
     public function recalculateStatus(): void

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Services\Finance\InstallmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Midtrans\Config;
@@ -27,29 +28,32 @@ class PaymentGatewayController extends Controller
 
     public function createCharge(Request $request): JsonResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'invoice_id' => ['required', 'exists:invoices,id'],
             'payment_method' => ['required', 'in:bri_va,qris'],
+            'amount' => ['nullable', 'numeric', 'min:1'],
         ]);
 
-        $invoice = Invoice::with(['student', 'paymentType'])->findOrFail($request->invoice_id);
+        $invoice = Invoice::with(['student', 'paymentType'])->findOrFail($validated['invoice_id']);
+        $installmentService = app(InstallmentService::class);
 
         if (in_array($invoice->status, [Invoice::STATUS_PAID, Invoice::STATUS_CANCELLED])) {
             return response()->json(['error' => 'Tagihan sudah lunas atau dibatalkan.'], 422);
         }
 
-        $remaining = $invoice->remainingAmount();
-        if ($remaining <= 0) {
-            return response()->json(['error' => 'Tagihan sudah lunas.'], 422);
-        }
+        $installmentService->cancelStalePendingGatewayPayments($invoice);
+        $installmentService->assertNoActivePendingGateway($invoice);
 
+        $remaining = $invoice->remainingAmount();
+        $amount = (float) ($validated['amount'] ?? $remaining);
+        $installmentService->validateAmount($invoice, $amount);
         $orderId = 'INV-' . $invoice->id . '-' . time();
-        $paymentMethod = $request->payment_method;
+        $paymentMethod = $validated['payment_method'];
 
         $payment = Payment::create([
             'payment_number' => Payment::generateNumber(),
             'invoice_id' => $invoice->id,
-            'amount' => $remaining,
+            'amount' => $amount,
             'payment_method' => Payment::METHOD_GATEWAY,
             'payment_date' => now()->toDateString(),
             'gateway_order_id' => $orderId,
@@ -59,7 +63,7 @@ class PaymentGatewayController extends Controller
         $baseParams = [
             'transaction_details' => [
                 'order_id' => $orderId,
-                'gross_amount' => (int) $remaining,
+                'gross_amount' => (int) $amount,
             ],
             'customer_details' => [
                 'first_name' => $invoice->student->full_name,
@@ -67,9 +71,13 @@ class PaymentGatewayController extends Controller
             ],
             'item_details' => [[
                 'id' => (string) $invoice->payment_type_id,
-                'price' => (int) $remaining,
+                'price' => (int) $amount,
                 'quantity' => 1,
-                'name' => substr($invoice->paymentType->name . ' - ' . $invoice->invoice_number, 0, 50),
+                'name' => substr(
+                    ($amount < $remaining ? 'Cicilan ' : '') . $invoice->paymentType->name . ' - ' . $invoice->invoice_number,
+                    0,
+                    50
+                ),
             ]],
         ];
 
@@ -127,7 +135,7 @@ class PaymentGatewayController extends Controller
                 'qr_string' => $qrString,
                 'qr_url' => $qrUrl,
                 'expiry_time' => $expiryTime,
-                'amount' => (int) $remaining,
+                'amount' => (int) $amount,
                 'order_id' => $orderId,
             ]);
         } catch (\Exception $e) {

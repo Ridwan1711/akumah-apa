@@ -141,6 +141,20 @@ export default function WaliInvoiceDetail({ invoice, midtransClientKey }: Props)
                             {invoice.discount_amount > 0 && <Row label="Diskon">- {formatCurrency(invoice.discount_amount)}</Row>}
                             <Row label="Terbayar"><span className="text-green-600">{formatCurrency(invoice.total_paid ?? 0)}</span></Row>
                             <Row label="Sisa"><span className="font-bold">{formatCurrency(remaining)}</span></Row>
+                            {(invoice.breakdown_items ?? invoice.breakdown ?? []).length > 0 ? (
+                                <>
+                                    <hr />
+                                    <div className="space-y-2">
+                                        <div className="text-muted-foreground">Rincian Tagihan</div>
+                                        {(invoice.breakdown_items ?? invoice.breakdown ?? []).map((item, index) => (
+                                            <div key={`invoice-breakdown-${index}`} className="flex justify-between text-sm">
+                                                <span>{item.label}</span>
+                                                <span className="font-medium">{formatCurrency(Number(item.amount))}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            ) : null}
                         </div>
                     </div>
 

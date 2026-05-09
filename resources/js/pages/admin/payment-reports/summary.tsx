@@ -162,8 +162,8 @@ export default function PaymentReportSummary({ stats, byCategory, byClass, recen
                     items={[
                         { key: 'invoiced', label: 'Total Tagihan', value: formatCurrency(stats.total_invoiced), icon: <TrendingUp size={18} />, tone: 'blue' },
                         { key: 'paid', label: 'Total Terbayar', value: formatCurrency(stats.total_paid), icon: <TrendingUp size={18} />, tone: 'green' },
-                        { key: 'pending', label: 'Menunggu Bayar', value: formatCurrency(stats.total_pending), icon: <TrendingUp size={18} />, tone: 'amber' },
-                        { key: 'overdue', label: 'Jatuh Tempo', value: formatCurrency(stats.total_overdue), icon: <TrendingUp size={18} />, tone: 'purple' },
+                        { key: 'pending', label: 'Sisa Tunggakan', value: formatCurrency(stats.total_pending), icon: <TrendingUp size={18} />, tone: 'amber' },
+                        { key: 'overdue', label: 'Sisa Jatuh Tempo', value: formatCurrency(stats.total_overdue), icon: <TrendingUp size={18} />, tone: 'purple' },
                     ]}
                 />
 

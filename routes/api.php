@@ -188,7 +188,9 @@ Route::prefix('v1')->group(function () {
             Route::post('/invoices/bulk-generate', [AdminKeuanganController::class, 'bulkGenerate']);
             Route::post('/invoices', [AdminKeuanganController::class, 'storeInvoice']);
             Route::get('/invoices/{invoice}', [AdminKeuanganController::class, 'showInvoice']);
+            Route::put('/invoices/{invoice}/breakdown', [AdminKeuanganController::class, 'updateInvoiceBreakdown']);
             Route::post('/invoices/{invoice}/cancel', [AdminKeuanganController::class, 'cancelInvoice']);
+            Route::post('/invoices/{invoice}/payments', [AdminKeuanganController::class, 'storePayment']);
             Route::post('/invoices/{invoice}/send-reminder', [AdminKeuanganController::class, 'sendReminderSingle'])
                 ->middleware('permission:invoice.reminder.send');
             Route::post('/invoices/send-reminders/preview', [AdminKeuanganController::class, 'previewReminders'])

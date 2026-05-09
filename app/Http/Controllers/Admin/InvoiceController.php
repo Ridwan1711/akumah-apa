@@ -19,6 +19,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -32,6 +33,13 @@ class InvoiceController extends Controller
             'paymentType:id,name,code,category',
             'academicYear:id,name',
         ])
+            ->withCount('payments')
+            ->withSum([
+                'payments as verified_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', \App\Models\Payment::STATUS_VERIFIED),
+            ], 'amount')
+            ->withSum([
+                'payments as pending_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', \App\Models\Payment::STATUS_PENDING),
+            ], 'amount')
             ->when($request->status, fn ($q, $s) => $q->where('status', $s))
             ->when($request->payment_type_id, fn ($q, $id) => $q->where('payment_type_id', $id))
             ->when($request->academic_year_id, fn ($q, $id) => $q->where('academic_year_id', $id))
@@ -47,8 +55,17 @@ class InvoiceController extends Controller
             )
             ->orderByDesc('created_at');
 
+        $invoices = $query->paginate(20)->withQueryString();
+        $invoices->getCollection()->transform(function (Invoice $invoice): Invoice {
+            $invoice->total_paid = (float) ($invoice->verified_paid_amount ?? 0);
+            $invoice->pending_amount = (float) ($invoice->pending_paid_amount ?? 0);
+            $invoice->remaining = max(0, (float) $invoice->final_amount - $invoice->total_paid);
+
+            return $invoice;
+        });
+
         return Inertia::render('admin/invoices/index', [
-            'invoices' => $query->paginate(20)->withQueryString(),
+            'invoices' => $invoices,
             'paymentTypes' => PaymentType::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
             'academicYears' => AcademicYear::orderByDesc('start_date')->get(['id', 'name']),
             'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name']),
@@ -85,7 +102,7 @@ class InvoiceController extends Controller
             ->pluck('requested_by');
 
         return Inertia::render('admin/invoices/generate', [
-            'paymentTypes' => PaymentType::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code', 'category', 'is_recurring']),
+            'paymentTypes' => PaymentType::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code', 'category', 'is_recurring', 'default_breakdown']),
             'academicYears' => AcademicYear::orderByDesc('start_date')->get(['id', 'name']),
             'students' => Student::query()
                 ->where('status', Student::STATUS_ACTIVE)
@@ -263,9 +280,18 @@ class InvoiceController extends Controller
             'academic_year_id' => ['required', 'exists:academic_years,id'],
             'month' => ['nullable', 'integer', 'min:1', 'max:12'],
             'amount' => ['required', 'numeric', 'min:0'],
+            'breakdown' => ['nullable', 'array'],
+            'breakdown.*.label' => ['required_with:breakdown', 'string', 'max:120'],
+            'breakdown.*.amount' => ['required_with:breakdown', 'numeric', 'min:0.01'],
             'due_date' => ['required', 'date'],
             'notes' => ['nullable', 'string'],
         ]);
+        $paymentType = PaymentType::query()->findOrFail((int) $validated['payment_type_id']);
+        $breakdown = $this->resolveInvoiceBreakdown(
+            $paymentType,
+            (float) $validated['amount'],
+            $validated['breakdown'] ?? null
+        );
 
         $discount = $this->resolveDiscount($validated['student_id'], $validated['payment_type_id'], $validated['academic_year_id'], $validated['amount']);
 
@@ -278,6 +304,7 @@ class InvoiceController extends Controller
             'amount' => $validated['amount'],
             'discount_amount' => $discount,
             'final_amount' => $validated['amount'] - $discount,
+            'breakdown' => $breakdown,
             'status' => Invoice::STATUS_PENDING,
             'due_date' => $validated['due_date'],
             'notes' => $validated['notes'] ?? null,
@@ -329,14 +356,16 @@ class InvoiceController extends Controller
         $invoice->load([
             'student:id,nis,full_name,current_class_id',
             'student.currentClass:id,name',
-            'paymentType:id,name,code,category',
+            'paymentType:id,name,code,category,default_breakdown',
             'academicYear:id,name',
             'payments' => fn ($q) => $q->orderByDesc('payment_date'),
             'payments.verifier:id,name',
         ]);
 
         $invoice->total_paid = $invoice->totalPaid();
+        $invoice->pending_amount = $invoice->pendingAmount();
         $invoice->remaining = $invoice->remainingAmount();
+        $invoice->breakdown_items = $invoice->resolvedBreakdown();
 
         return Inertia::render('admin/invoices/show', [
             'invoice' => $invoice,
@@ -352,6 +381,31 @@ class InvoiceController extends Controller
         $invoice->update(['status' => Invoice::STATUS_CANCELLED]);
 
         return redirect()->back()->with('success', 'Tagihan berhasil dibatalkan.');
+    }
+
+    public function updateBreakdown(Request $request, Invoice $invoice): RedirectResponse
+    {
+        $validated = $request->validate([
+            'breakdown' => ['nullable', 'array'],
+            'breakdown.*.label' => ['required_with:breakdown', 'string', 'max:120'],
+            'breakdown.*.amount' => ['required_with:breakdown', 'numeric', 'min:0.01'],
+        ]);
+
+        $breakdown = PaymentType::normalizeBreakdownItems($validated['breakdown'] ?? null);
+        if ($breakdown !== []) {
+            $sum = PaymentType::breakdownTotal($breakdown);
+            if (abs($sum - round((float) $invoice->amount, 2)) > 0.01) {
+                throw ValidationException::withMessages([
+                    'breakdown' => 'Total rincian harus sama dengan nominal tagihan.',
+                ]);
+            }
+        }
+
+        $invoice->update([
+            'breakdown' => $breakdown === [] ? null : $breakdown,
+        ]);
+
+        return redirect()->back()->with('success', 'Rincian tagihan berhasil diperbarui.');
     }
 
     private function resolveAmount(PaymentType $type, Student $student): ?float
@@ -390,5 +444,28 @@ class InvoiceController extends Controller
         if ($student->user) {
             $student->user->notify(new InvoiceCreatedNotification($invoice));
         }
+    }
+
+    /**
+     * @param  mixed  $overrideBreakdown
+     * @return array<int, array{label:string, amount:float}>
+     */
+    private function resolveInvoiceBreakdown(PaymentType $paymentType, float $amount, mixed $overrideBreakdown): array
+    {
+        $normalized = PaymentType::normalizeBreakdownItems($overrideBreakdown);
+        $resolved = $normalized !== [] ? $normalized : $paymentType->buildBreakdownForAmount($amount);
+
+        if ($resolved === []) {
+            return [];
+        }
+
+        $sum = PaymentType::breakdownTotal($resolved);
+        if (abs($sum - round($amount, 2)) > 0.01) {
+            throw ValidationException::withMessages([
+                'breakdown' => 'Total rincian harus sama dengan nominal tagihan.',
+            ]);
+        }
+
+        return $resolved;
     }
 }

@@ -20,6 +20,11 @@ type Props = {
     paymentTypes: PaymentType[];
 };
 
+type BreakdownItemForm = {
+    label: string;
+    amount: string;
+};
+
 type PaymentTypeForm = {
     name: string;
     code: string;
@@ -27,6 +32,7 @@ type PaymentTypeForm = {
     is_recurring: boolean;
     default_amount: string;
     kuliah_amount: string;
+    default_breakdown: BreakdownItemForm[];
     description: string;
     is_active: boolean;
 };
@@ -58,6 +64,7 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
         is_recurring: true,
         default_amount: '0',
         kuliah_amount: '',
+        default_breakdown: [],
         description: '',
         is_active: true,
     });
@@ -73,6 +80,7 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
             is_recurring: true,
             default_amount: '0',
             kuliah_amount: '',
+            default_breakdown: [],
             description: '',
             is_active: true,
         });
@@ -89,6 +97,10 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
             is_recurring: item.is_recurring,
             default_amount: String(item.default_amount),
             kuliah_amount: item.kuliah_amount === null || item.kuliah_amount === undefined ? '' : String(item.kuliah_amount),
+            default_breakdown: (item.default_breakdown ?? []).map((part) => ({
+                label: part.label,
+                amount: String(part.amount),
+            })),
             description: item.description ?? '',
             is_active: item.is_active,
         });
@@ -102,6 +114,12 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
             ...data,
             default_amount: Number(data.default_amount),
             kuliah_amount: data.kuliah_amount === '' ? null : Number(data.kuliah_amount),
+            default_breakdown: data.default_breakdown
+                .filter((item) => item.label.trim() !== '' && item.amount !== '')
+                .map((item) => ({
+                    label: item.label.trim(),
+                    amount: Number(item.amount),
+                })),
         }));
 
         if (editing) {
@@ -127,6 +145,30 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
             onFinish: () => setDeleting(null),
         });
     }
+
+    function appendBreakdownRow() {
+        form.setData('default_breakdown', [...form.data.default_breakdown, { label: '', amount: '' }]);
+    }
+
+    function removeBreakdownRow(index: number) {
+        form.setData(
+            'default_breakdown',
+            form.data.default_breakdown.filter((_, i) => i !== index),
+        );
+    }
+
+    function setBreakdownField(index: number, field: keyof BreakdownItemForm, value: string) {
+        form.setData(
+            'default_breakdown',
+            form.data.default_breakdown.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
+        );
+    }
+
+    const breakdownTotal = useMemo(
+        () => form.data.default_breakdown.reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
+        [form.data.default_breakdown],
+    );
+    const defaultAmountNumber = Number(form.data.default_amount) || 0;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -263,6 +305,46 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
                         <label htmlFor="payment-type-description">Deskripsi</label>
                         <textarea id="payment-type-description" className="mcr-textarea" value={form.data.description} onChange={(e) => form.setData('description', e.target.value)} />
                         <InputError message={form.errors.description} />
+                    </div>
+                    <div className="mcr-form-group full">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                            <label>Rincian Default (opsional)</label>
+                            <button type="button" className="mcr-btn ghost" onClick={appendBreakdownRow}>
+                                <Plus size={14} />
+                                Tambah Rincian
+                            </button>
+                        </div>
+                        {form.data.default_breakdown.length === 0 ? (
+                            <p className="mcr-table-meta">Belum ada rincian default. Invoice akan tanpa rincian sampai diisi.</p>
+                        ) : (
+                            <div style={{ display: 'grid', gap: 8 }}>
+                                {form.data.default_breakdown.map((item, index) => (
+                                    <div key={`breakdown-${index}`} style={{ display: 'grid', gridTemplateColumns: '1fr 180px auto', gap: 8 }}>
+                                        <input
+                                            className="mcr-input"
+                                            placeholder="Nama rincian, contoh: Uang makan"
+                                            value={item.label}
+                                            onChange={(e) => setBreakdownField(index, 'label', e.target.value)}
+                                        />
+                                        <input
+                                            className="mcr-input"
+                                            type="number"
+                                            min={0}
+                                            placeholder="Nominal"
+                                            value={item.amount}
+                                            onChange={(e) => setBreakdownField(index, 'amount', e.target.value)}
+                                        />
+                                        <button type="button" className="mcr-btn ghost" onClick={() => removeBreakdownRow(index)}>
+                                            Hapus
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        <p className="mcr-table-meta" style={{ marginTop: 8 }}>
+                            Total rincian: {toCurrency(breakdownTotal)} • Nominal default: {toCurrency(defaultAmountNumber)}
+                        </p>
+                        <InputError message={form.errors.default_breakdown} />
                     </div>
                     <label className="mcr-form-group">
                         <span>Berulang</span>

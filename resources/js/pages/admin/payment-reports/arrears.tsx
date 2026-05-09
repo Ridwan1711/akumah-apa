@@ -78,7 +78,7 @@ export default function ArrearsReport({ invoices, classes, paymentTypes, filters
                                         <th className="px-4 py-3 text-left font-medium">Santri</th>
                                         <th className="px-4 py-3 text-left font-medium">Kelas</th>
                                         <th className="px-4 py-3 text-left font-medium">Jenis Bayar</th>
-                                        <th className="px-4 py-3 text-right font-medium">Tagihan</th>
+                                        <th className="px-4 py-3 text-right font-medium">Sisa</th>
                                         <th className="px-4 py-3 text-left font-medium">Jatuh Tempo</th>
                                         <th className="px-4 py-3 text-center font-medium">Status</th>
                                         <th className="px-4 py-3 text-right font-medium">Aksi</th>
@@ -93,7 +93,7 @@ export default function ArrearsReport({ invoices, classes, paymentTypes, filters
                                             </td>
                                             <td className="px-4 py-3">{inv.student?.current_class?.name}</td>
                                             <td className="px-4 py-3">{inv.payment_type?.name}</td>
-                                            <td className="px-4 py-3 text-right font-medium">{formatCurrency(inv.final_amount)}</td>
+                                            <td className="px-4 py-3 text-right font-medium">{formatCurrency(Number(inv.remaining ?? inv.final_amount))}</td>
                                             <td className="px-4 py-3">{inv.due_date}</td>
                                             <td className="px-4 py-3 text-center">
                                                 <Badge variant={statusColors[inv.status]}>{statusLabels[inv.status] ?? inv.status}</Badge>

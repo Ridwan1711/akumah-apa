@@ -45,6 +45,36 @@ type Props = {
 export default function InvoiceIndex({ invoices, paymentTypes, academicYears, classes, divisionOptions, filters, statusCounts }: Props) {
     const { auth } = usePage<{ auth?: Auth }>().props;
     const canCreateInvoice = can(auth, 'invoice.create');
+    const groupedByStudent = invoices.data.reduce<Record<string, {
+        studentName: string;
+        studentNis: string;
+        studentId: number | null;
+        invoices: Invoice[];
+        invoiceCount: number;
+        totalAmount: number;
+        totalRemaining: number;
+    }>>((acc, invoice) => {
+        const key = String(invoice.student_id ?? `unknown-${invoice.id}`);
+        if (!acc[key]) {
+            acc[key] = {
+                studentName: invoice.student?.full_name ?? 'Santri tidak diketahui',
+                studentNis: invoice.student?.nis ?? '-',
+                studentId: invoice.student_id ?? null,
+                invoices: [],
+                invoiceCount: 0,
+                totalAmount: 0,
+                totalRemaining: 0,
+            };
+        }
+
+        acc[key].invoices.push(invoice);
+        acc[key].invoiceCount += 1;
+        acc[key].totalAmount += Number(invoice.final_amount ?? 0);
+        acc[key].totalRemaining += Number(invoice.remaining ?? invoice.final_amount ?? 0);
+
+        return acc;
+    }, {});
+    const studentGroups = Object.values(groupedByStudent);
 
     function handleFilter(key: string, value: string) {
         router.get(
@@ -122,52 +152,72 @@ export default function InvoiceIndex({ invoices, paymentTypes, academicYears, cl
                 />
 
                 <CrudCard>
-                    <CrudTableShell>
-                        <table className="mcr-table">
-                            <thead>
-                                <tr>
-                                    <th>No. Invoice</th>
-                                    <th>Santri</th>
-                                    <th>Jenis Bayar</th>
-                                    <th>Periode</th>
-                                    <th>Nominal</th>
-                                    <th>Status</th>
-                                    <th style={{ textAlign: 'right' }}>Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {invoices.data.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={7}>
-                                            <CrudEmptyState title="Tidak ada tagihan" description="Belum ada invoice sesuai filter saat ini." />
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    invoices.data.map((invoice) => (
-                                        <tr key={invoice.id}>
-                                            <td>{invoice.invoice_number}</td>
-                                            <td>{invoice.student?.full_name ?? '-'} ({invoice.student?.nis ?? '-'})</td>
-                                            <td>{invoice.payment_type?.name ?? '-'} ({invoice.payment_type?.code ?? '-'})</td>
-                                            <td>{invoice.academic_year?.name ?? '-'}{invoice.month ? ` • ${monthNames[invoice.month]}` : ''}</td>
-                                            <td>{formatCurrency(Number(invoice.final_amount))}</td>
-                                            <td>
-                                                <span className={`mcr-dot-badge ${invoice.status === 'paid' ? 'active' : invoice.status === 'overdue' ? 'wafat' : 'alumni'}`}>
-                                                    {statusLabels[invoice.status] ?? invoice.status}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <div className="mcr-action-group">
-                                                    <Link href={`/admin/invoices/${invoice.id}`} className="mcr-icon-action" title="Detail">
-                                                        <Eye size={13} />
-                                                    </Link>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </CrudTableShell>
+                    {invoices.data.length === 0 ? (
+                        <CrudEmptyState title="Tidak ada tagihan" description="Belum ada invoice sesuai filter saat ini." />
+                    ) : (
+                        <div className="space-y-4">
+                            <div className="text-sm text-muted-foreground">
+                                Menampilkan <strong>{studentGroups.length}</strong> santri dari total <strong>{invoices.total}</strong> tagihan.
+                            </div>
+                            {studentGroups.map((group) => (
+                                <div key={String(group.studentId ?? group.studentNis)} className="rounded-md border">
+                                    <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+                                        <div>
+                                            <div className="font-medium">{group.studentName}</div>
+                                            <div className="text-xs text-muted-foreground">NIS: {group.studentNis}</div>
+                                        </div>
+                                        <div className="text-right text-xs">
+                                            <div><strong>{group.invoiceCount}</strong> tagihan</div>
+                                            <div className="text-muted-foreground">Total {formatCurrency(group.totalAmount)} • Sisa {formatCurrency(group.totalRemaining)}</div>
+                                        </div>
+                                    </div>
+                                    <CrudTableShell>
+                                        <table className="mcr-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>No. Invoice</th>
+                                                    <th>Jenis Bayar</th>
+                                                    <th>Periode</th>
+                                                    <th>Nominal</th>
+                                                    <th>Sisa</th>
+                                                    <th>Status</th>
+                                                    <th style={{ textAlign: 'right' }}>Aksi</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {group.invoices.map((invoice) => (
+                                                    <tr key={invoice.id}>
+                                                        <td>{invoice.invoice_number}</td>
+                                                        <td>{invoice.payment_type?.name ?? '-'} ({invoice.payment_type?.code ?? '-'})</td>
+                                                        <td>{invoice.academic_year?.name ?? '-'}{invoice.month ? ` • ${monthNames[invoice.month]}` : ''}</td>
+                                                        <td>{formatCurrency(Number(invoice.final_amount))}</td>
+                                                        <td>{invoice.status === 'paid' ? '-' : formatCurrency(Number(invoice.remaining ?? invoice.final_amount))}</td>
+                                                        <td>
+                                                            <span className={`mcr-dot-badge ${invoice.status === 'paid' ? 'active' : invoice.status === 'overdue' ? 'wafat' : 'alumni'}`}>
+                                                                {statusLabels[invoice.status] ?? invoice.status}
+                                                            </span>
+                                                            {(invoice.payments_count ?? 0) > 1 ? (
+                                                                <span className="ml-2 text-xs text-muted-foreground">
+                                                                    Cicilan ke-{invoice.payments_count}
+                                                                </span>
+                                                            ) : null}
+                                                        </td>
+                                                        <td>
+                                                            <div className="mcr-action-group">
+                                                                <Link href={`/admin/invoices/${invoice.id}`} className="mcr-icon-action" title="Detail">
+                                                                    <Eye size={13} />
+                                                                </Link>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </CrudTableShell>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                     <CrudPagination links={invoices.links} />
                 </CrudCard>
             </div>

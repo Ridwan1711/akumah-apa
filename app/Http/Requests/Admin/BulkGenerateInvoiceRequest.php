@@ -26,6 +26,9 @@ class BulkGenerateInvoiceRequest extends FormRequest
             'month' => ['nullable', 'integer', 'min:1', 'max:12'],
             'due_date' => ['required', 'date'],
             'send_notification_for_existing' => ['sometimes', 'boolean'],
+            'breakdown' => ['nullable', 'array'],
+            'breakdown.*.label' => ['required_with:breakdown', 'string', 'max:120'],
+            'breakdown.*.amount' => ['required_with:breakdown', 'numeric', 'min:0.01'],
         ];
     }
 

@@ -100,6 +100,7 @@ class ProcessBulkRun implements ShouldQueue, ShouldBeUnique
         $month = $meta['month'] ?? null;
         $dueDate = $meta['due_date'] ?? null;
         $generatedBy = (int) ($run->requested_by ?? 0);
+        $overrideBreakdown = $meta['breakdown'] ?? null;
         $resendNotificationOnExisting = filter_var(
             $meta['resend_notification_on_existing'] ?? $meta['send_notification_for_existing'] ?? false,
             FILTER_VALIDATE_BOOLEAN
@@ -136,6 +137,7 @@ class ProcessBulkRun implements ShouldQueue, ShouldBeUnique
                 continue;
             }
             $discount = $this->resolveDiscount($student->id, $paymentTypeId, $academicYearId, $amount);
+            $breakdown = $this->resolveInvoiceBreakdown($paymentType, $amount, $overrideBreakdown);
 
             try {
                 $invoice = Invoice::create([
@@ -147,6 +149,7 @@ class ProcessBulkRun implements ShouldQueue, ShouldBeUnique
                     'amount' => $amount,
                     'discount_amount' => $discount,
                     'final_amount' => $amount - $discount,
+                    'breakdown' => $breakdown,
                     'status' => Invoice::STATUS_PENDING,
                     'due_date' => $dueDate,
                     'generated_by' => $generatedBy > 0 ? $generatedBy : null,
@@ -480,5 +483,38 @@ class ProcessBulkRun implements ShouldQueue, ShouldBeUnique
         return $sqlState === '23505' // PostgreSQL unique_violation
             || $sqlState === '23000' // ANSI/MySQL integrity violation
             || $driverCode === '1062'; // MySQL duplicate entry
+    }
+
+    /**
+     * @param  mixed  $overrideBreakdown
+     * @return array<int, array{label:string, amount:float}>
+     */
+    protected function resolveInvoiceBreakdown(PaymentType $paymentType, float $amount, mixed $overrideBreakdown): array
+    {
+        $normalizedOverride = PaymentType::normalizeBreakdownItems($overrideBreakdown);
+        if ($normalizedOverride !== []) {
+            $sum = PaymentType::breakdownTotal($normalizedOverride);
+            if ($sum > 0) {
+                $ratio = $amount / $sum;
+                $allocated = 0.0;
+                $scaled = [];
+                foreach ($normalizedOverride as $index => $item) {
+                    $isLast = $index === count($normalizedOverride) - 1;
+                    $itemAmount = $isLast
+                        ? round($amount - $allocated, 2)
+                        : round($item['amount'] * $ratio, 2);
+                    $itemAmount = max(0, $itemAmount);
+                    $allocated += $itemAmount;
+                    $scaled[] = [
+                        'label' => $item['label'],
+                        'amount' => $itemAmount,
+                    ];
+                }
+
+                return PaymentType::normalizeBreakdownItems($scaled);
+            }
+        }
+
+        return $paymentType->buildBreakdownForAmount($amount);
     }
 }

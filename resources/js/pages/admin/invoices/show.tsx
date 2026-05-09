@@ -1,5 +1,5 @@
-import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeft, Ban } from 'lucide-react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { ArrowLeft, Ban, Plus, Save, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import FlashMessage from '@/components/flash-message';
@@ -49,6 +49,12 @@ type Props = { invoice: Invoice };
 
 export default function InvoiceShow({ invoice }: Props) {
     const [cancelOpen, setCancelOpen] = useState(false);
+    const breakdownForm = useForm<{ breakdown: Array<{ label: string; amount: string }> }>({
+        breakdown: (invoice.breakdown_items ?? invoice.breakdown ?? []).map((item) => ({
+            label: item.label,
+            amount: String(item.amount),
+        })),
+    });
 
     function handleCancel() {
         router.post(`/admin/invoices/${invoice.id}/cancel`, undefined, {
@@ -57,6 +63,40 @@ export default function InvoiceShow({ invoice }: Props) {
                 toast.success('Tagihan dibatalkan');
             },
             onError: () => toast.error('Gagal membatalkan tagihan'),
+        });
+    }
+
+    function appendBreakdownRow() {
+        breakdownForm.setData('breakdown', [...breakdownForm.data.breakdown, { label: '', amount: '' }]);
+    }
+
+    function removeBreakdownRow(index: number) {
+        breakdownForm.setData(
+            'breakdown',
+            breakdownForm.data.breakdown.filter((_, i) => i !== index),
+        );
+    }
+
+    function setBreakdownField(index: number, field: 'label' | 'amount', value: string) {
+        breakdownForm.setData(
+            'breakdown',
+            breakdownForm.data.breakdown.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
+        );
+    }
+
+    function saveBreakdown() {
+        breakdownForm.transform((data) => ({
+            breakdown: data.breakdown
+                .filter((item) => item.label.trim() !== '' && item.amount !== '')
+                .map((item) => ({
+                    label: item.label.trim(),
+                    amount: Number(item.amount),
+                })),
+        }));
+
+        breakdownForm.put(`/admin/invoices/${invoice.id}/breakdown`, {
+            preserveScroll: true,
+            onFinish: () => breakdownForm.transform((data) => data),
         });
     }
 
@@ -73,8 +113,8 @@ export default function InvoiceShow({ invoice }: Props) {
                     items={[
                         { key: 'amount', label: 'Total Tagihan', value: formatCurrency(Number(invoice.final_amount)), icon: <Ban size={18} />, tone: 'blue' },
                         { key: 'paid', label: 'Sudah Dibayar', value: formatCurrency(Number(invoice.total_paid ?? 0)), icon: <Ban size={18} />, tone: 'green' },
-                        { key: 'remain', label: 'Sisa', value: formatCurrency(Number(invoice.remaining ?? 0)), icon: <Ban size={18} />, tone: 'amber' },
-                        { key: 'status', label: 'Status', value: statusLabels[invoice.status] ?? invoice.status, icon: <Ban size={18} />, tone: 'purple' },
+                        { key: 'pending', label: 'Pending Verifikasi', value: formatCurrency(Number(invoice.pending_amount ?? 0)), icon: <Ban size={18} />, tone: 'amber' },
+                        { key: 'remain', label: 'Sisa', value: formatCurrency(Number(invoice.remaining ?? 0)), icon: <Ban size={18} />, tone: 'purple' },
                     ]}
                 />
 
@@ -87,12 +127,19 @@ export default function InvoiceShow({ invoice }: Props) {
                         </Link>
                     }
                     right={
-                        invoice.status !== 'paid' && invoice.status !== 'cancelled' ? (
-                            <button type="button" className="mcr-btn danger" onClick={() => setCancelOpen(true)}>
-                                <Ban size={14} />
-                                Batalkan Tagihan
-                            </button>
-                        ) : undefined
+                        <div className="mcr-action-group">
+                            {invoice.status !== 'paid' && invoice.status !== 'cancelled' ? (
+                                <Link href={`/admin/payments/create?invoice_id=${invoice.id}`} className="mcr-btn secondary">
+                                    Catat Pembayaran Manual
+                                </Link>
+                            ) : null}
+                            {invoice.status !== 'paid' && invoice.status !== 'cancelled' ? (
+                                <button type="button" className="mcr-btn danger" onClick={() => setCancelOpen(true)}>
+                                    <Ban size={14} />
+                                    Batalkan Tagihan
+                                </button>
+                            ) : null}
+                        </div>
                     }
                 />
 
@@ -109,7 +156,58 @@ export default function InvoiceShow({ invoice }: Props) {
                     </div>
                 </CrudCard>
 
-                <CrudCard title="Riwayat Pembayaran">
+                <CrudCard
+                    title="Rincian Tagihan"
+                    subtitle="Komponen biaya per jenis tagihan. Total rincian wajib sama dengan nominal tagihan."
+                    right={(
+                        <button type="button" className="mcr-btn ghost" onClick={appendBreakdownRow}>
+                            <Plus size={14} />
+                            Tambah Item
+                        </button>
+                    )}
+                >
+                    {breakdownForm.data.breakdown.length === 0 ? (
+                        <p className="mcr-table-meta">Belum ada rincian. Klik "Tambah Item" untuk mengisi rincian tagihan.</p>
+                    ) : (
+                        <div style={{ display: 'grid', gap: 8 }}>
+                            {breakdownForm.data.breakdown.map((item, index) => (
+                                <div key={`invoice-breakdown-${index}`} style={{ display: 'grid', gridTemplateColumns: '1fr 180px auto', gap: 8 }}>
+                                    <input
+                                        className="mcr-input"
+                                        value={item.label}
+                                        onChange={(e) => setBreakdownField(index, 'label', e.target.value)}
+                                        placeholder="Nama rincian"
+                                    />
+                                    <input
+                                        className="mcr-input"
+                                        type="number"
+                                        min={0}
+                                        value={item.amount}
+                                        onChange={(e) => setBreakdownField(index, 'amount', e.target.value)}
+                                        placeholder="Nominal"
+                                    />
+                                    <button type="button" className="mcr-btn ghost" onClick={() => removeBreakdownRow(index)}>
+                                        <Trash2 size={14} />
+                                        Hapus
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    <p className="mcr-table-meta" style={{ marginTop: 10 }}>
+                        Total rincian: {formatCurrency(breakdownForm.data.breakdown.reduce((sum, item) => sum + (Number(item.amount) || 0), 0))} •
+                        Nominal tagihan: {formatCurrency(Number(invoice.amount))}
+                    </p>
+                    {breakdownForm.errors.breakdown ? <p className="mcr-table-meta" style={{ color: '#dc2626' }}>{breakdownForm.errors.breakdown}</p> : null}
+                    <div style={{ marginTop: 10 }}>
+                        <button type="button" className="mcr-btn primary" onClick={saveBreakdown} disabled={breakdownForm.processing}>
+                            <Save size={14} />
+                            {breakdownForm.processing ? 'Menyimpan...' : 'Simpan Rincian'}
+                        </button>
+                    </div>
+                </CrudCard>
+
+                <CrudCard title="Timeline Pembayaran">
                     {!invoice.payments || invoice.payments.length === 0 ? (
                         <p className="mcr-table-meta">Belum ada pembayaran untuk invoice ini.</p>
                     ) : (

@@ -23,8 +23,15 @@ class PaymentVerifiedNotification extends Notification implements ShouldQueue
 
     public function toArray(object $notifiable): array
     {
+        $this->payment->loadMissing('invoice.student', 'invoice.payments');
         $invoice = $this->payment->invoice;
         $student = $invoice?->student;
+        $remaining = $invoice ? $invoice->remainingAmount() : 0;
+        $amountText = number_format((float) $this->payment->amount, 0, ',', '.');
+        $remainingText = number_format((float) $remaining, 0, ',', '.');
+        $isPaidOff = $invoice?->status === \App\Models\Invoice::STATUS_PAID;
+        $title = $isPaidOff ? 'Tagihan Lunas' : 'Pembayaran Cicilan Diterima';
+        $body = 'Pembayaran '.($this->payment->payment_number ?? '').' untuk '.($student?->full_name ?? 'santri').' sebesar Rp '.$amountText.' terverifikasi. Sisa tagihan Rp '.$remainingText.'.';
         $roleTarget = $this->roleTarget($notifiable);
         $url = $invoice?->id
             ? '/'.$roleTarget.'/invoices/'.(string) $invoice->id
@@ -32,9 +39,9 @@ class PaymentVerifiedNotification extends Notification implements ShouldQueue
 
         return [
             'type' => 'payment_verified',
-            'title' => 'Pembayaran Terverifikasi',
-            'body' => 'Pembayaran '.($this->payment->payment_number ?? '').' untuk '.($student?->full_name ?? 'santri').' telah diverifikasi.',
-            'message' => 'Pembayaran '.($this->payment->payment_number ?? '').' untuk '.($student?->full_name ?? 'santri').' telah diverifikasi.',
+            'title' => $title,
+            'body' => $body,
+            'message' => $body,
             'url' => $url,
             'entity_type' => 'invoice',
             'entity_id' => (string) ($invoice?->id ?? ''),
@@ -53,18 +60,23 @@ class PaymentVerifiedNotification extends Notification implements ShouldQueue
     {
         $invoice = $this->payment->invoice;
         $student = $invoice?->student;
+        $remaining = $invoice ? $invoice->remainingAmount() : 0;
+        $amountText = number_format((float) $this->payment->amount, 0, ',', '.');
+        $remainingText = number_format((float) $remaining, 0, ',', '.');
+        $isPaidOff = $invoice?->status === \App\Models\Invoice::STATUS_PAID;
+        $title = $isPaidOff ? 'Tagihan Lunas' : 'Pembayaran Cicilan Diterima';
         $roleTarget = $this->roleTarget($notifiable);
         $url = $invoice?->id
             ? '/'.$roleTarget.'/invoices/'.(string) $invoice->id
             : '/'.$roleTarget.'/invoices';
-        $body = 'Pembayaran '.($this->payment->payment_number ?? '').' untuk '.($student?->full_name ?? 'santri').' telah diverifikasi.';
+        $body = 'Pembayaran '.($this->payment->payment_number ?? '').' untuk '.($student?->full_name ?? 'santri').' sebesar Rp '.$amountText.' terverifikasi. Sisa tagihan Rp '.$remainingText.'.';
 
         return [
-            'title' => 'Pembayaran Terverifikasi',
+            'title' => $title,
             'body' => $body,
             'data' => [
                 'type' => 'payment_verified',
-                'title' => 'Pembayaran Terverifikasi',
+                'title' => $title,
                 'body' => $body,
                 'url' => $url,
                 'entity_type' => 'invoice',

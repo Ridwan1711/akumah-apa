@@ -33,7 +33,7 @@ export default function PaymentCreate({ selectedInvoice, unpaidInvoices }: Props
 
     const form = useForm({
         invoice_id: selectedInvoice ? String(selectedInvoice.id) : '',
-        amount: 0,
+        amount: Number(selectedInvoice?.remaining ?? 0),
         payment_method: 'cash' as string,
         payment_date: new Date().toISOString().split('T')[0],
         proof_file: null as File | null,
@@ -46,7 +46,7 @@ export default function PaymentCreate({ selectedInvoice, unpaidInvoices }: Props
         form.setData('invoice_id', id);
         const inv = unpaidInvoices.find((i) => String(i.id) === id);
         if (inv) {
-            form.setData('amount', inv.final_amount);
+            form.setData('amount', Number(inv.remaining ?? inv.final_amount));
         }
     }
 
@@ -72,7 +72,7 @@ export default function PaymentCreate({ selectedInvoice, unpaidInvoices }: Props
                             <SelectContent>
                                 {unpaidInvoices.map((inv) => (
                                     <SelectItem key={inv.id} value={String(inv.id)}>
-                                        {inv.invoice_number} — {inv.student?.full_name} — {inv.payment_type?.name} — {formatCurrency(inv.final_amount)}
+                                        {inv.invoice_number} — {inv.student?.full_name} — {inv.payment_type?.name} — Sisa {formatCurrency(Number(inv.remaining ?? inv.final_amount))}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -80,7 +80,7 @@ export default function PaymentCreate({ selectedInvoice, unpaidInvoices }: Props
                         <InputError message={form.errors.invoice_id} />
                         {currentInvoice && (
                             <p className="text-xs text-muted-foreground">
-                                Total tagihan: {formatCurrency(currentInvoice.final_amount)}
+                                Total {formatCurrency(currentInvoice.final_amount)} • Sudah dibayar {formatCurrency(Number(currentInvoice.total_paid ?? 0))} • Sisa {formatCurrency(Number(currentInvoice.remaining ?? currentInvoice.final_amount))}
                             </p>
                         )}
                     </div>
@@ -124,6 +124,19 @@ export default function PaymentCreate({ selectedInvoice, unpaidInvoices }: Props
                         <Label>Catatan</Label>
                         <Input value={form.data.notes} onChange={(e) => form.setData('notes', e.target.value)} placeholder="Opsional" />
                     </div>
+
+                    {currentInvoice?.status === 'partial' && currentInvoice.payments && currentInvoice.payments.length > 0 ? (
+                        <div className="rounded-md border p-3 text-sm">
+                            <p className="mb-2 font-medium">Riwayat pembayaran sebelumnya</p>
+                            <div className="space-y-1 text-muted-foreground">
+                                {currentInvoice.payments.slice(0, 5).map((payment) => (
+                                    <p key={payment.id}>
+                                        {payment.payment_date} • {formatCurrency(payment.amount)} • {payment.payment_method}
+                                    </p>
+                                ))}
+                            </div>
+                        </div>
+                    ) : null}
 
                     <Button type="submit" disabled={form.processing}>
                         {form.processing && <Spinner />}

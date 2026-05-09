@@ -14,6 +14,7 @@ use App\Models\LessonAttendance;
 use App\Models\Payment;
 use App\Models\Semester;
 use App\Models\Student;
+use App\Services\Finance\InstallmentService;
 use App\Notifications\PaymentPendingNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -312,12 +313,28 @@ class SantriController extends Controller
             'paymentType:id,name,code,category',
             'academicYear:id,name',
         ])
+            ->withCount('payments')
+            ->withSum([
+                'payments as verified_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', Payment::STATUS_VERIFIED),
+            ], 'amount')
+            ->withSum([
+                'payments as pending_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', Payment::STATUS_PENDING),
+            ], 'amount')
             ->where('student_id', $student->id)
             ->when($request->status, fn ($q, $s) => $q->where('status', $s))
             ->orderByDesc('created_at');
 
+        $invoices = $query->paginate(15)->withQueryString();
+        $invoices->getCollection()->transform(function (Invoice $invoice): Invoice {
+            $invoice->total_paid = (float) ($invoice->verified_paid_amount ?? 0);
+            $invoice->pending_amount = (float) ($invoice->pending_paid_amount ?? 0);
+            $invoice->remaining = max(0, (float) $invoice->final_amount - $invoice->total_paid);
+
+            return $invoice;
+        });
+
         return response()->json([
-            'invoices' => $query->paginate(15)->withQueryString(),
+            'invoices' => $invoices,
             'filters' => $request->only(['status']),
         ]);
     }
@@ -329,13 +346,15 @@ class SantriController extends Controller
 
         $invoice->load([
             'student:id,nis,full_name',
-            'paymentType:id,name,code',
+            'paymentType:id,name,code,default_breakdown',
             'academicYear:id,name',
             'payments' => fn ($q) => $q->orderByDesc('payment_date'),
         ]);
 
         $invoice->total_paid = $invoice->totalPaid();
+        $invoice->pending_amount = $invoice->pendingAmount();
         $invoice->remaining = $invoice->remainingAmount();
+        $invoice->breakdown_items = $invoice->resolvedBreakdown();
 
         return response()->json(['invoice' => $invoice]);
     }
@@ -345,7 +364,18 @@ class SantriController extends Controller
         $student = $this->getStudent($request);
         abort_unless($invoice->student_id === $student->id, 403, 'Anda tidak memiliki akses ke tagihan ini.');
 
-        $request->merge(['invoice_id' => $invoice->id]);
+        $validated = $request->validate([
+            'payment_method' => ['required', 'in:bri_va,qris'],
+            'amount' => ['nullable', 'numeric', 'min:1'],
+        ]);
+        $payload = [
+            'invoice_id' => $invoice->id,
+            'payment_method' => $validated['payment_method'],
+        ];
+        if (isset($validated['amount'])) {
+            $payload['amount'] = (float) $validated['amount'];
+        }
+        $request->merge($payload);
 
         return app(PaymentGatewayController::class)->createCharge($request);
     }
@@ -360,6 +390,7 @@ class SantriController extends Controller
             'amount' => ['required', 'numeric', 'min:1'],
             'notes' => ['nullable', 'string'],
         ]);
+        app(InstallmentService::class)->validateAmount($invoice, (float) $request->amount);
 
         $proofPath = $request->file('proof_file')->store('payment-proofs', 'public');
 

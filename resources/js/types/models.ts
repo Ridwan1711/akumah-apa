@@ -491,6 +491,7 @@ export type PaymentType = {
     is_recurring: boolean;
     default_amount: number;
     kuliah_amount?: number | null;
+    default_breakdown?: Array<{ label: string; amount: number }> | null;
     description: string | null;
     is_active: boolean;
     created_at: string;
@@ -525,12 +526,16 @@ export type Invoice = {
     amount: number;
     discount_amount: number;
     final_amount: number;
+    breakdown?: Array<{ label: string; amount: number }> | null;
+    breakdown_items?: Array<{ label: string; amount: number }> | null;
     status: 'pending' | 'paid' | 'partial' | 'overdue' | 'cancelled';
     due_date: string;
     notes: string | null;
     generated_by: number | null;
     total_paid?: number;
+    pending_amount?: number;
     remaining?: number;
+    payments_count?: number;
     student?: Student;
     payment_type?: PaymentType;
     academic_year?: AcademicYear;
@@ -551,6 +556,9 @@ export type Payment = {
     gateway_order_id: string | null;
     gateway_transaction_id: string | null;
     gateway_payment_type: string | null;
+    gateway_va_number?: string | null;
+    gateway_qr_url?: string | null;
+    gateway_expiry_time?: string | null;
     status: 'pending' | 'verified' | 'rejected';
     verified_by: number | null;
     verified_at: string | null;

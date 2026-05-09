@@ -299,6 +299,7 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::post('invoices/bulk-runs/{importRun}/retry', [InvoiceController::class, 'retryBulkRun'])->name('invoices.bulk-runs.retry');
         Route::post('invoices', [InvoiceController::class, 'store'])->name('invoices.store');
         Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
+        Route::put('invoices/{invoice}/breakdown', [InvoiceController::class, 'updateBreakdown'])->name('invoices.breakdown.update');
         Route::post('invoices/{invoice}/cancel', [InvoiceController::class, 'cancel'])->name('invoices.cancel');
 
         Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
