@@ -150,6 +150,8 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::resource('assessment-components', AssessmentComponentController::class)->except(['create', 'show', 'edit']);
         Route::get('subject-level-mappings', [SubjectSettingController::class, 'mappingIndex'])->name('subject-level-mappings.index');
         Route::post('subject-level-mappings/sync', [SubjectSettingController::class, 'syncMappings'])->name('subject-level-mappings.sync');
+        Route::delete('subject-level-mappings/pair', [SubjectSettingController::class, 'destroyMappingPair'])->name('subject-level-mappings.destroy-pair');
+        Route::post('subject-level-mappings/bulk-detach', [SubjectSettingController::class, 'bulkDestroyMappings'])->name('subject-level-mappings.bulk-detach');
         Route::get('subject-settings', [SubjectSettingController::class, 'index'])->name('subject-settings.index');
         Route::post('subject-settings/assign-level', [SubjectSettingController::class, 'assignSubjectToLevel'])->name('subject-settings.assign-level');
         Route::delete('subject-settings/assign-level', [SubjectSettingController::class, 'removeSubjectFromLevel'])->name('subject-settings.remove-level');

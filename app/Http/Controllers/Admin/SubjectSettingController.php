@@ -62,6 +62,167 @@ class SubjectSettingController extends Controller
             ->with('success', 'Pemasangan mapel-ke-tingkat berhasil ditambahkan.');
     }
 
+    /**
+     * Hapus satu pasangan (level, mapel) sekaligus membersihkan default per-level
+     * dan override per-kelas yang menempel pada pasangan tsb.
+     */
+    public function destroyMappingPair(Request $request): RedirectResponse
+    {
+        $payload = $request->validate([
+            'level_id' => ['required', 'integer', 'exists:grade_levels,id'],
+            'subject_id' => ['required', 'integer', 'exists:subjects,id'],
+        ]);
+
+        $report = DB::transaction(fn () => $this->detachMappingPairs([
+            ['level_id' => (int) $payload['level_id'], 'subject_id' => (int) $payload['subject_id']],
+        ]));
+
+        return redirect()
+            ->route('admin.subject-level-mappings.index')
+            ->with('success', $this->buildDetachMessage($report));
+    }
+
+    /**
+     * Hapus banyak pasangan sekaligus.
+     *
+     * Dua mode dukungan:
+     *  - "matrix": kirim level_ids[] & subject_ids[] → cross-product semua pasangan.
+     *  - "explicit": kirim pairs[] = [{level_id, subject_id}, ...].
+     */
+    public function bulkDestroyMappings(Request $request): RedirectResponse
+    {
+        $payload = $request->validate([
+            'level_ids' => ['array'],
+            'level_ids.*' => ['integer', 'exists:grade_levels,id'],
+            'subject_ids' => ['array'],
+            'subject_ids.*' => ['integer', 'exists:subjects,id'],
+            'pairs' => ['array'],
+            'pairs.*.level_id' => ['required_with:pairs', 'integer', 'exists:grade_levels,id'],
+            'pairs.*.subject_id' => ['required_with:pairs', 'integer', 'exists:subjects,id'],
+        ]);
+
+        $pairs = [];
+
+        if (! empty($payload['pairs'])) {
+            foreach ($payload['pairs'] as $row) {
+                $pairs[] = [
+                    'level_id' => (int) $row['level_id'],
+                    'subject_id' => (int) $row['subject_id'],
+                ];
+            }
+        }
+
+        $levelIds = collect($payload['level_ids'] ?? [])->map(fn ($id) => (int) $id)->unique();
+        $subjectIds = collect($payload['subject_ids'] ?? [])->map(fn ($id) => (int) $id)->unique();
+        if ($levelIds->isNotEmpty() && $subjectIds->isNotEmpty()) {
+            foreach ($levelIds as $levelId) {
+                foreach ($subjectIds as $subjectId) {
+                    $pairs[] = ['level_id' => $levelId, 'subject_id' => $subjectId];
+                }
+            }
+        }
+
+        $pairs = collect($pairs)
+            ->unique(fn ($pair) => $pair['level_id'].':'.$pair['subject_id'])
+            ->values()
+            ->all();
+
+        if (empty($pairs)) {
+            return redirect()
+                ->route('admin.subject-level-mappings.index')
+                ->with('error', 'Tidak ada pasangan yang dipilih untuk dihapus.');
+        }
+
+        $report = DB::transaction(fn () => $this->detachMappingPairs($pairs));
+
+        return redirect()
+            ->route('admin.subject-level-mappings.index')
+            ->with('success', $this->buildDetachMessage($report));
+    }
+
+    /**
+     * Lakukan pelepasan pasangan beserta cascade default & override.
+     *
+     * @param  array<int, array{level_id: int, subject_id: int}>  $pairs
+     * @return array{detached: int, level_settings_deleted: int, overrides_deleted: int, teacher_assignments_orphaned: int}
+     */
+    private function detachMappingPairs(array $pairs): array
+    {
+        $detached = 0;
+        $levelSettingsDeleted = 0;
+        $overridesDeleted = 0;
+        $teacherAssignmentsOrphaned = 0;
+
+        foreach ($pairs as $pair) {
+            $levelId = (int) $pair['level_id'];
+            $subjectId = (int) $pair['subject_id'];
+
+            $deletedRow = GradeSubject::query()
+                ->where('grade_level_id', $levelId)
+                ->where('subject_id', $subjectId)
+                ->delete();
+
+            if ($deletedRow === 0) {
+                continue;
+            }
+
+            $detached += $deletedRow;
+
+            $levelSettingIds = SubjectLevelSetting::query()
+                ->where('level_id', $levelId)
+                ->where('subject_id', $subjectId)
+                ->pluck('id');
+
+            if ($levelSettingIds->isNotEmpty()) {
+                $overridesDeleted += SubjectClassOverride::query()
+                    ->whereIn('level_subject_default_id', $levelSettingIds)
+                    ->delete();
+
+                $levelSettingsDeleted += SubjectLevelSetting::query()
+                    ->whereIn('id', $levelSettingIds)
+                    ->delete();
+            }
+
+            $teacherAssignmentsOrphaned += TeacherAssignment::query()
+                ->where('subject_id', $subjectId)
+                ->whereIn(
+                    'class_id',
+                    SchoolClass::query()->where('grade_level_id', $levelId)->pluck('id')
+                )
+                ->count();
+        }
+
+        return [
+            'detached' => $detached,
+            'level_settings_deleted' => $levelSettingsDeleted,
+            'overrides_deleted' => $overridesDeleted,
+            'teacher_assignments_orphaned' => $teacherAssignmentsOrphaned,
+        ];
+    }
+
+    /**
+     * @param  array{detached: int, level_settings_deleted: int, overrides_deleted: int, teacher_assignments_orphaned: int}  $report
+     */
+    private function buildDetachMessage(array $report): string
+    {
+        if ($report['detached'] === 0) {
+            return 'Tidak ada pasangan yang terhapus (mungkin sudah tidak terpasang).';
+        }
+
+        $msg = "{$report['detached']} pasangan mapel-tingkat dilepas.";
+        if ($report['level_settings_deleted'] > 0) {
+            $msg .= " {$report['level_settings_deleted']} default per-level ikut terhapus.";
+        }
+        if ($report['overrides_deleted'] > 0) {
+            $msg .= " {$report['overrides_deleted']} override per-kelas ikut terhapus.";
+        }
+        if ($report['teacher_assignments_orphaned'] > 0) {
+            $msg .= " Perhatian: {$report['teacher_assignments_orphaned']} penugasan guru masih merujuk pasangan ini — periksa di menu Teaching Assignments.";
+        }
+
+        return $msg;
+    }
+
     public function index(Request $request): Response
     {
         $selectedSemesterId = $request->integer('semester_id');
