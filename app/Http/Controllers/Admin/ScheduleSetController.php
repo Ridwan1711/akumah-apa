@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Events\Schedule\TimeSlotsUpdated;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\SaveTimeSlotsRequest;
 use App\Http\Requests\Admin\StoreScheduleSetRequest;
@@ -191,6 +192,23 @@ class ScheduleSetController extends Controller
                     ]);
             }
         });
+
+        TimeSlotsUpdated::dispatch(
+            scheduleSetId: (int) $scheduleSet->id,
+            slots: collect($payload['slots'])
+                ->map(fn (array $slot) => [
+                    'jam_no' => (int) $slot['jam_no'],
+                    'time_start' => (string) $slot['time_start'],
+                    'time_end' => (string) $slot['time_end'],
+                ])
+                ->values()
+                ->all(),
+            dayCount: (int) $payload['day_count'],
+            by: [
+                'id' => (int) $request->user()->id,
+                'name' => (string) ($request->user()->name ?? "User #{$request->user()->id}"),
+            ],
+        );
 
         return back()->with('success', 'Pengaturan jam berhasil disimpan.');
     }

@@ -193,6 +193,10 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::get('schedule-sets/{scheduleSet}/editor', [ScheduleMatrixController::class, 'edit'])->name('schedule-sets.editor');
         Route::post('schedule-sets/{scheduleSet}/cells/preflight', [ScheduleMatrixController::class, 'preflight'])->name('schedule-sets.cells.preflight');
         Route::post('schedule-sets/{scheduleSet}/cells', [ScheduleMatrixController::class, 'assign'])->name('schedule-sets.cells.assign');
+        Route::post('schedule-sets/{scheduleSet}/cells/lock', [ScheduleMatrixController::class, 'acquireLock'])->name('schedule-sets.cells.lock');
+        Route::post('schedule-sets/{scheduleSet}/cells/lock/heartbeat', [ScheduleMatrixController::class, 'heartbeatLock'])->name('schedule-sets.cells.lock.heartbeat');
+        Route::delete('schedule-sets/{scheduleSet}/cells/lock', [ScheduleMatrixController::class, 'releaseLock'])->name('schedule-sets.cells.lock.release');
+        Route::post('schedule-sets/{scheduleSet}/cells/lock/release-all', [ScheduleMatrixController::class, 'releaseAllLocks'])->name('schedule-sets.cells.lock.release-all');
         Route::post('schedule-sets/{scheduleSet}/cells/bulk-delete', [ScheduleMatrixController::class, 'bulkDelete'])->name('schedule-sets.cells.bulk-delete');
         Route::post('schedule-sets/{scheduleSet}/cells/restore', [ScheduleMatrixController::class, 'restoreCells'])->name('schedule-sets.cells.restore');
         Route::post('schedule-sets/{scheduleSet}/cells/move', [ScheduleMatrixController::class, 'moveCell'])->name('schedule-sets.cells.move');

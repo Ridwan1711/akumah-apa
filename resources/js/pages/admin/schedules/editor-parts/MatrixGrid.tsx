@@ -1,4 +1,4 @@
-import { Move, TriangleAlert, X } from 'lucide-react';
+import { Lock, Move, TriangleAlert, X } from 'lucide-react';
 import { forwardRef } from 'react';
 import type { ScheduleMatrixCell, ScheduleMatrixPayload } from '@/types';
 import { colorForSubject } from './subjectColors';
@@ -31,6 +31,8 @@ type Props = {
     onDeleteDayJam?: (day: number, jamNo: number) => void;
     /** Cell yang sedang berada dalam mode pick-then-place. */
     movingCellId?: number | null;
+    lockMap?: Map<string, { user_id: number; user_name: string; expires_at?: string }>;
+    currentUserId?: number;
 };
 
 const MatrixGrid = forwardRef<HTMLDivElement, Props>(function MatrixGrid(
@@ -47,6 +49,8 @@ const MatrixGrid = forwardRef<HTMLDivElement, Props>(function MatrixGrid(
         onDeleteDay,
         onDeleteDayJam,
         movingCellId,
+        lockMap,
+        currentUserId = 0,
     },
     ref,
 ) {
@@ -210,6 +214,10 @@ const MatrixGrid = forwardRef<HTMLDivElement, Props>(function MatrixGrid(
                                             ownTeacherBusy &&
                                             !isOwnCell &&
                                             cell == null;
+                                        const slotKey = `${c.id}:${day}:${jamNo}`;
+                                        const lock = lockMap?.get(slotKey);
+                                        const lockedByOther =
+                                            !!lock && Number(lock.user_id) !== Number(currentUserId);
                                         const isMoving = movingCellId != null && cell?.schedule_id === movingCellId;
                                         return (
                                             <Cell
@@ -236,6 +244,8 @@ const MatrixGrid = forwardRef<HTMLDivElement, Props>(function MatrixGrid(
                                                 ownTeacherIndex={cellTeacherIdx}
                                                 isMoving={isMoving}
                                                 isMultiSelect={isMultiSelect}
+                                                lockHolder={lock}
+                                                lockedByOther={lockedByOther}
                                             />
                                         );
                                     })}
@@ -266,6 +276,8 @@ type CellProps = {
     ownTeacherIndex: number;
     isMoving: boolean;
     isMultiSelect: boolean;
+    lockHolder?: { user_id: number; user_name: string; expires_at?: string };
+    lockedByOther: boolean;
 };
 
 function Cell({
@@ -279,6 +291,8 @@ function Cell({
     ownTeacherIndex,
     isMoving,
     isMultiSelect,
+    lockHolder,
+    lockedByOther,
 }: CellProps) {
     const isOwnCell = ownTeacherIndex >= 0;
     const teacherColor = isOwnCell ? colorForTeacherIndex(ownTeacherIndex) : null;
@@ -288,6 +302,8 @@ function Cell({
     const fillBg = subjectColor ? `${subjectColor.bg}` : '';
     const ringClass = teacherColor
         ? `ring-2 ${teacherColor.ring} ring-inset`
+        : lockedByOther
+          ? 'ring-2 ring-yellow-500 ring-inset'
         : showBusyWarning
           ? 'ring-2 ring-rose-400 ring-inset'
           : '';
@@ -301,10 +317,14 @@ function Cell({
                 ' ' +
                 ringClass +
                 ' ' +
-                movingClass
+                movingClass +
+                (lockedByOther ? ' cursor-not-allowed opacity-90' : '')
             }
-            onClick={onClick}
-            draggable={!!cell && !!onDragStartCell}
+            onClick={() => {
+                if (lockedByOther) return;
+                onClick();
+            }}
+            draggable={!!cell && !!onDragStartCell && !lockedByOther}
             onDragStart={(e) => {
                 if (!cell || !onDragStartCell) return;
                 e.dataTransfer.setData('text/x-schedule-cell', String(cell.schedule_id));
@@ -318,6 +338,7 @@ function Cell({
                 e.dataTransfer.dropEffect = 'move';
             }}
             onDrop={(e) => {
+                if (lockedByOther) return;
                 if (!onDropTarget) return;
                 const raw = e.dataTransfer.getData('text/x-schedule-cell');
                 const sid = Number(raw);
@@ -328,6 +349,8 @@ function Cell({
             title={
                 cell
                     ? `${cell.teacher_name ?? '-'} · ${cell.subject_name ?? '-'}`
+                    : lockedByOther
+                      ? `Slot dipegang ${lockHolder?.user_name ?? 'admin lain'}`
                     : showBusyWarning
                       ? 'Guru sudah terjadwal di kelas lain pada slot ini'
                       : 'Kosong — klik untuk menempatkan'
@@ -355,6 +378,14 @@ function Cell({
                             G
                         </span>
                     )}
+                    {lockedByOther && (
+                        <span
+                            className="absolute right-0.5 bottom-0.5 rounded bg-yellow-500/90 px-1 text-[8px] font-semibold text-black"
+                            title={`Sedang dipegang ${lockHolder?.user_name ?? 'admin lain'}`}
+                        >
+                            <Lock className="h-2.5 w-2.5" />
+                        </span>
+                    )}
                     <div className="absolute bottom-0.5 right-0.5 hidden gap-0.5 group-hover:flex">
                         {onMoveStart && !isMultiSelect && (
                             <button
@@ -369,23 +400,30 @@ function Cell({
                                 <Move className="h-2.5 w-2.5" />
                             </button>
                         )}
-                        <button
-                            type="button"
-                            className="rounded bg-destructive/80 p-0.5 text-white hover:bg-destructive"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onDelete();
-                            }}
-                            title="Hapus"
-                        >
-                            <X className="h-2.5 w-2.5" />
-                        </button>
+                        {!lockedByOther && (
+                            <button
+                                type="button"
+                                className="rounded bg-destructive/80 p-0.5 text-white hover:bg-destructive"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDelete();
+                                }}
+                                title="Hapus"
+                            >
+                                <X className="h-2.5 w-2.5" />
+                            </button>
+                        )}
                     </div>
                 </>
             ) : showBusyWarning ? (
                 <span className="inline-flex items-center gap-0.5 text-[10px] text-rose-600 dark:text-rose-400">
                     <TriangleAlert className="h-3 w-3" />
                     bentrok
+                </span>
+            ) : lockedByOther ? (
+                <span className="inline-flex items-center gap-0.5 text-[10px] text-yellow-700 dark:text-yellow-400">
+                    <Lock className="h-3 w-3" />
+                    dikunci
                 </span>
             ) : (
                 <span className="text-muted-foreground/40">—</span>

@@ -1,6 +1,7 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { ArrowLeft, Clock, Loader2, Move, Undo2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import FlashMessage from '@/components/flash-message';
 import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
@@ -20,10 +21,13 @@ import ConflictDialog from './editor-parts/ConflictDialog';
 import type { ConflictAction } from './editor-parts/ConflictDialog';
 import MatrixGrid from './editor-parts/MatrixGrid';
 import PengampuPicker from './editor-parts/PengampuPicker';
+import ActivityFeed from './editor-parts/ActivityFeed';
+import PresenceBar from './editor-parts/PresenceBar';
 import StatsBar from './editor-parts/StatsBar';
 import SubjectPickDialog from './editor-parts/SubjectPickDialog';
 import TimeSlotSettingsDialog from './editor-parts/TimeSlotSettingsDialog';
 import { colorForTeacherIndex, teacherInitials } from './editor-parts/teacherColors';
+import { useScheduleRealtime } from './editor-parts/useScheduleRealtime';
 
 type Props = {
     scheduleSet: ScheduleSet;
@@ -72,13 +76,16 @@ const dayLabels: Record<number, string> = {
     7: 'Ahad',
 };
 
-export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList }: Props) {
+export default function ScheduleMatrixEditor({ scheduleSet, matrix: initialMatrix, pengampuList }: Props) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Dashboard', href: '/dashboard' },
         { title: 'Jadwal (Matrix)', href: '/admin/schedule-sets' },
         { title: scheduleSet.name, href: `/admin/schedule-sets/${scheduleSet.id}/editor` },
     ];
 
+    const page = usePage<{ auth?: { user?: { id?: number } } }>();
+    const currentUserId = Number(page.props.auth?.user?.id ?? 0);
+    const [matrix, setMatrix] = useState<ScheduleMatrixPayload>(initialMatrix);
     const [selectedTeacherIds, setSelectedTeacherIds] = useState<number[]>([]);
     const [subjectPick, setSubjectPick] = useState<SubjectPickState | null>(null);
     const [conflict, setConflict] = useState<ScheduleConflictResponse | null>(null);
@@ -91,7 +98,13 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [lastUndo, setLastUndo] = useState<UndoState | null>(null);
     const [movingCell, setMovingCell] = useState<ScheduleMatrixCell | null>(null);
+    const [activityItems, setActivityItems] = useState<Array<{ id: string; at: string; text: string }>>([]);
     const gridRef = useRef<HTMLDivElement | null>(null);
+    const { presence, lockMap, onEvent } = useScheduleRealtime(scheduleSet.id);
+
+    useEffect(() => {
+        setMatrix(initialMatrix);
+    }, [initialMatrix]);
 
     const isMultiSelect = selectedTeacherIds.length > 1;
     const isSingleSelect = selectedTeacherIds.length === 1;
@@ -112,6 +125,89 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
     function clearTeachers() {
         setSelectedTeacherIds([]);
     }
+
+    useEffect(() => {
+        return onEvent(({ type, payload }) => {
+            const byId = Number((payload.by as { id?: number } | undefined)?.id ?? 0);
+            const byName = (payload.by as { name?: string } | undefined)?.name ?? 'Admin';
+
+            const pushActivity = (text: string) => {
+                setActivityItems((prev) => [
+                    {
+                        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                        at: new Date().toLocaleTimeString('id-ID'),
+                        text,
+                    },
+                    ...prev,
+                ].slice(0, 30));
+            };
+
+            if (type === 'cell.assigned') {
+                const cell = payload.cell as ScheduleMatrixCell | undefined;
+                if (!cell) return;
+                setMatrix((prev) => ({
+                    ...prev,
+                    cells: { ...prev.cells, [`${cell.day}:${cell.jam_no}:${cell.class_id}`]: cell },
+                }));
+                if (byId !== currentUserId) {
+                    toast.info(`${byName} menambah jadwal ${cell.subject_name ?? '-'} (${cell.teacher_name ?? '-'})`);
+                }
+                pushActivity(`${byName} menambah ${cell.subject_name ?? '-'} pada ${dayLabels[cell.day] ?? `Hari ${cell.day}`} jam ${cell.jam_no}`);
+
+                return;
+            }
+
+            if (type === 'cell.deleted') {
+                const cell = payload.cell as { class_id: number; day: number; jam_no: number } | undefined;
+                if (!cell) return;
+                const key = `${cell.day}:${cell.jam_no}:${cell.class_id}`;
+                setMatrix((prev) => {
+                    if (!prev.cells[key]) return prev;
+                    const next = { ...prev.cells };
+                    delete next[key];
+
+                    return { ...prev, cells: next };
+                });
+                if (byId !== currentUserId) {
+                    toast.info(`${byName} menghapus satu cell jadwal`);
+                }
+                pushActivity(`${byName} menghapus cell pada ${dayLabels[cell.day] ?? `Hari ${cell.day}`} jam ${cell.jam_no}`);
+
+                return;
+            }
+
+            if (type === 'cell.moved') {
+                const sourceOld = payload.source_old as { class_id: number; day: number; jam_no: number } | undefined;
+                const sourceNew = payload.source_new as ScheduleMatrixCell | undefined;
+                const targetOld = payload.target_old as { class_id: number; day: number; jam_no: number } | undefined;
+                const targetNew = payload.target_new as ScheduleMatrixCell | undefined;
+
+                setMatrix((prev) => {
+                    const next = { ...prev.cells };
+                    if (sourceOld) delete next[`${sourceOld.day}:${sourceOld.jam_no}:${sourceOld.class_id}`];
+                    if (targetOld) delete next[`${targetOld.day}:${targetOld.jam_no}:${targetOld.class_id}`];
+                    if (sourceNew) next[`${sourceNew.day}:${sourceNew.jam_no}:${sourceNew.class_id}`] = sourceNew;
+                    if (targetNew) next[`${targetNew.day}:${targetNew.jam_no}:${targetNew.class_id}`] = targetNew;
+
+                    return { ...prev, cells: next };
+                });
+                if (byId !== currentUserId) {
+                    toast.info(`${byName} memindahkan cell jadwal`);
+                }
+                pushActivity(`${byName} memindahkan cell jadwal`);
+
+                return;
+            }
+
+            if (type === 'cells.bulk_deleted' || type === 'cells.restored' || type === 'time_slots.updated') {
+                router.reload({ only: ['matrix'] });
+                if (byId !== currentUserId) {
+                    toast.info(`${byName} memperbarui data jadwal`);
+                }
+                pushActivity(`${byName} memperbarui data jadwal (${type})`);
+            }
+        });
+    }, [currentUserId, onEvent]);
 
     /** Union dari kelas yang diampu semua guru terpilih (urut sesuai matrix.classes). */
     const teacherClassIds = useMemo(() => {
@@ -234,31 +330,113 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
         [onlyTeacherId, pengampuList],
     );
 
+    async function withCellLock<T>(
+        slot: { classId: number; day: number; jamNo: number },
+        run: (lockToken: string) => Promise<T>,
+    ): Promise<T> {
+        const csrf = getCsrfToken();
+        const acquire = await fetch(`/admin/schedule-sets/${scheduleSet.id}/cells/lock`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': csrf,
+            },
+            body: JSON.stringify({
+                class_id: slot.classId,
+                day: slot.day,
+                jam_no: slot.jamNo,
+            }),
+        });
+
+        if (!acquire.ok) {
+            const payload = (await acquire.json().catch(() => ({}))) as {
+                message?: string;
+                holder?: { user_name?: string };
+            };
+            if (acquire.status === 423) {
+                throw new Error(payload.message ?? `Slot sedang dipakai ${payload.holder?.user_name ?? 'admin lain'}.`);
+            }
+            throw new Error(payload.message ?? 'Gagal acquire lock.');
+        }
+
+        const lockData = (await acquire.json()) as { token: string };
+        const lockToken = lockData.token;
+        const heartbeat = window.setInterval(() => {
+            void fetch(`/admin/schedule-sets/${scheduleSet.id}/cells/lock/heartbeat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': csrf,
+                },
+                body: JSON.stringify({
+                    class_id: slot.classId,
+                    day: slot.day,
+                    jam_no: slot.jamNo,
+                    token: lockToken,
+                }),
+            });
+        }, 4000);
+
+        try {
+            return await run(lockToken);
+        } finally {
+            window.clearInterval(heartbeat);
+            await fetch(`/admin/schedule-sets/${scheduleSet.id}/cells/lock`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': csrf,
+                },
+                body: JSON.stringify({
+                    class_id: slot.classId,
+                    day: slot.day,
+                    jam_no: slot.jamNo,
+                    token: lockToken,
+                }),
+            }).catch(() => undefined);
+        }
+    }
+
     function postAssign(
         action: ConflictAction,
         target: { pengampuId: number; day: number; jamNo: number },
-    ) {
+        lockToken?: string,
+    ): Promise<void> {
         setBusy(true);
-        router.post(
-            `/admin/schedule-sets/${scheduleSet.id}/cells`,
-            {
-                pengampu_id: target.pengampuId,
-                day: target.day,
-                jam_no: target.jamNo,
-                action,
-            },
-            {
-                preserveScroll: true,
-                onFinish: () => {
-                    setBusy(false);
-                    setConflict(null);
-                    setPendingAssign(null);
+
+        return new Promise((resolve) => {
+            router.post(
+                `/admin/schedule-sets/${scheduleSet.id}/cells`,
+                {
+                    pengampu_id: target.pengampuId,
+                    day: target.day,
+                    jam_no: target.jamNo,
+                    action,
                 },
-            },
-        );
+                {
+                    headers: lockToken ? { 'X-Schedule-Lock-Token': lockToken } : undefined,
+                    preserveScroll: true,
+                    onFinish: () => {
+                        setBusy(false);
+                        setConflict(null);
+                        setPendingAssign(null);
+                        resolve();
+                    },
+                },
+            );
+        });
     }
 
     async function runPreflightAndAssign(pengampuId: number, day: number, jamNo: number) {
+        const targetPengampu = pengampuList.find((item) => item.id === pengampuId);
+        if (!targetPengampu) {
+            alert('Data pengampu tidak ditemukan.');
+            return;
+        }
+
         setBusy(true);
         try {
             const res = await fetch(`/admin/schedule-sets/${scheduleSet.id}/cells/preflight`, {
@@ -282,7 +460,10 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                 return;
             }
             if (data.type === 'none') {
-                postAssign('assign', { pengampuId, day, jamNo });
+                await withCellLock(
+                    { classId: targetPengampu.class_id, day, jamNo },
+                    async (token) => postAssign('assign', { pengampuId, day, jamNo }, token),
+                );
                 return;
             }
             setConflict(data);
@@ -355,9 +536,21 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
         setPendingAssign(null);
     }
 
-    function confirmConflict(action: ConflictAction) {
+    async function confirmConflict(action: ConflictAction) {
         if (!pendingAssign) return;
-        postAssign(action, pendingAssign);
+        const targetPengampu = pengampuList.find((item) => item.id === pendingAssign.pengampuId);
+        if (!targetPengampu) {
+            alert('Data pengampu tidak ditemukan.');
+            return;
+        }
+        try {
+            await withCellLock(
+                { classId: targetPengampu.class_id, day: pendingAssign.day, jamNo: pendingAssign.jamNo },
+                async (token) => postAssign(action, pendingAssign, token),
+            );
+        } catch (error) {
+            alert((error as Error).message || 'Gagal assign dengan lock.');
+        }
     }
 
     async function handleDeleteCell(cell: ScheduleMatrixCell) {
@@ -372,13 +565,21 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
 
         setBusy(true);
         try {
-            const res = await fetch(
-                `/admin/schedule-sets/${scheduleSet.id}/cells/${cell.schedule_id}` +
-                    (deleteGroup ? '?delete_group=1' : ''),
-                {
-                    method: 'DELETE',
-                    headers: { Accept: 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
-                },
+            const res = await withCellLock(
+                { classId: cell.class_id, day: cell.day, jamNo: cell.jam_no },
+                async (token) =>
+                    fetch(
+                        `/admin/schedule-sets/${scheduleSet.id}/cells/${cell.schedule_id}` +
+                            (deleteGroup ? '?delete_group=1' : ''),
+                        {
+                            method: 'DELETE',
+                            headers: {
+                                Accept: 'application/json',
+                                'X-CSRF-TOKEN': getCsrfToken(),
+                                'X-Schedule-Lock-Token': token,
+                            },
+                        },
+                    ),
             );
             if (!res.ok) throw new Error('Gagal hapus cell');
             const data = (await res.json()) as { snapshot: UndoSnapshotItem[]; deleted: number };
@@ -388,10 +589,9 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                     : `1 cell (${cell.teacher_name ?? '-'} · ${cell.subject_name ?? '-'})`,
                 items: data.snapshot,
             });
-            router.reload({ only: ['matrix'] });
         } catch (e) {
             console.error(e);
-            alert('Gagal menghapus cell.');
+            alert((e as Error).message || 'Gagal menghapus cell.');
         } finally {
             setBusy(false);
         }
@@ -414,21 +614,26 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
 
         setBusy(true);
         try {
-            const res = await fetch(`/admin/schedule-sets/${scheduleSet.id}/cells/move`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                },
-                body: JSON.stringify({
-                    source_schedule_id: source.schedule_id,
-                    target_class_id: targetClassId,
-                    target_day: targetDay,
-                    target_jam_no: targetJamNo,
-                    mode: 'auto',
-                }),
-            });
+            const res = await withCellLock(
+                { classId: source.class_id, day: source.day, jamNo: source.jam_no },
+                async (token) =>
+                    fetch(`/admin/schedule-sets/${scheduleSet.id}/cells/move`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Accept: 'application/json',
+                            'X-CSRF-TOKEN': getCsrfToken(),
+                            'X-Schedule-Lock-Token': token,
+                        },
+                        body: JSON.stringify({
+                            source_schedule_id: source.schedule_id,
+                            target_class_id: targetClassId,
+                            target_day: targetDay,
+                            target_jam_no: targetJamNo,
+                            mode: 'auto',
+                        }),
+                    }),
+            );
             if (!res.ok) {
                 const errBody = (await res.json().catch(() => ({}))) as { message?: string };
                 throw new Error(errBody.message ?? 'Gagal memindahkan cell');
@@ -448,7 +653,6 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
             if (undoItems.length > 0) {
                 setLastUndo({ label, items: undoItems });
             }
-            router.reload({ only: ['matrix'] });
         } catch (e) {
             const err = e as Error;
             alert(`Gagal memindahkan cell: ${err.message ?? 'unknown error'}`);
@@ -576,6 +780,20 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
         return () => window.removeEventListener('keydown', onKey);
     }, [movingCell]);
 
+    useEffect(() => {
+        function onBeforeUnload() {
+            const csrf = getCsrfToken();
+            const body = JSON.stringify({ _token: csrf });
+            navigator.sendBeacon(
+                `/admin/schedule-sets/${scheduleSet.id}/cells/lock/release-all`,
+                new Blob([body], { type: 'application/json' }),
+            );
+        }
+        window.addEventListener('beforeunload', onBeforeUnload);
+
+        return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    }, [scheduleSet.id]);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Editor — ${scheduleSet.name}`} />
@@ -633,6 +851,8 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                     </div>
                 </div>
 
+                <PresenceBar members={presence} currentUserId={currentUserId} />
+
                 {movingCell && (
                     <div className="flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs">
                         <span className="inline-flex items-center gap-2">
@@ -681,6 +901,7 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                             pengampuList={pengampuList}
                             progressByPengampuId={progressByPengampuId}
                         />
+                        <ActivityFeed items={activityItems} />
                     </aside>
                     <main className="flex-1 overflow-hidden">
                         {matrix.slots.length === 0 ? (
@@ -708,6 +929,8 @@ export default function ScheduleMatrixEditor({ scheduleSet, matrix, pengampuList
                                 onDeleteDay={handleDeleteDay}
                                 onDeleteDayJam={handleDeleteDayJam}
                                 movingCellId={movingCell?.schedule_id ?? null}
+                                lockMap={lockMap}
+                                currentUserId={currentUserId}
                             />
                         )}
                     </main>
