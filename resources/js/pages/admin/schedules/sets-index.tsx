@@ -32,6 +32,9 @@ import {
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem, ScheduleSet, Semester } from '@/types';
 
+/** Sen–Kam & Sab–Ahad; Jumat tidak dihitung (selaras backend `AcademicSchedule::TEACHING_DAYS`). */
+const MAX_SCHEDULE_MATRIX_DAYS = 6;
+
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/dashboard' },
     { title: 'Jadwal (Matrix)', href: '/admin/schedule-sets' },
@@ -337,14 +340,17 @@ export default function ScheduleSetsIndex({ sets, semesters, selectedPeriodId, s
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="grid gap-1">
-                                    <Label>Jumlah Hari</Label>
+                                    <Label>Jumlah Hari KBM</Label>
                                     <Input
                                         type="number"
                                         min={1}
-                                        max={7}
+                                        max={MAX_SCHEDULE_MATRIX_DAYS}
                                         value={form.day_count}
                                         onChange={(e) => setForm({ ...form, day_count: e.target.value })}
                                     />
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Jumat libur; maks. {MAX_SCHEDULE_MATRIX_DAYS} hari (Sen–Kam &amp; Sab–Ahad).
+                                    </p>
                                 </div>
                                 <div className="grid gap-1">
                                     <Label>Jumlah Jam</Label>

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\Diniyyah\AcademicSchedule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -28,7 +29,7 @@ class StoreScheduleSetRequest extends FormRequest
                 Rule::unique('schedule_sets', 'name')->where(fn ($q) => $q->where('period_id', $periodId)),
             ],
             'jam_count' => ['nullable', 'integer', 'between:1,20'],
-            'day_count' => ['nullable', 'integer', 'between:1,7'],
+            'day_count' => ['nullable', 'integer', 'between:1,'.AcademicSchedule::maxMatrixDayCount()],
             'is_active' => ['nullable', 'boolean'],
             'copy_from_id' => ['nullable', 'exists:schedule_sets,id'],
         ];

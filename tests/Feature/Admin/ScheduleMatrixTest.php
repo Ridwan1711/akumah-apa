@@ -123,6 +123,20 @@ beforeEach(function () {
     ]);
 });
 
+test('matrix editor lists calendar teaching days without friday', function () {
+    /** @var ScheduleMatrixService $svc */
+    $svc = app(ScheduleMatrixService::class);
+    $matrix = $svc->getMatrix($this->set);
+    expect($matrix['days'])->toBe([1, 2, 3, 4, 6, 7]);
+});
+
+test('assign cell rejects friday calendar day', function () {
+    /** @var ScheduleMatrixService $svc */
+    $svc = app(ScheduleMatrixService::class);
+    expect(fn () => $svc->assignCell($this->set, $this->pengampuA, 5, 1, ScheduleMatrixService::ACTION_ASSIGN))
+        ->toThrow(\InvalidArgumentException::class);
+});
+
 test('admin can view schedule sets index', function () {
     $this->actingAs($this->admin);
     $this->get(route('admin.schedule-sets.index', ['period_id' => $this->period->id]))

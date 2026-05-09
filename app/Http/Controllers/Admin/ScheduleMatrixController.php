@@ -12,6 +12,7 @@ use App\Services\Schedule\ScheduleMatrixService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use InvalidArgumentException;
@@ -67,9 +68,10 @@ class ScheduleMatrixController extends Controller
 
     public function preflight(Request $request, ScheduleSet $scheduleSet): JsonResponse
     {
+        $allowedDays = AcademicSchedule::matrixCalendarDays((int) $scheduleSet->day_count);
         $data = $request->validate([
             'pengampu_id' => ['required', 'exists:teacher_assignments,id'],
-            'day' => ['required', 'integer', 'between:1,7'],
+            'day' => ['required', 'integer', Rule::in($allowedDays)],
             'jam_no' => ['required', 'integer', 'min:1'],
         ]);
 

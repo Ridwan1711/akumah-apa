@@ -24,7 +24,7 @@ class AcademicSchedule extends Model
     public const DAY_SUNDAY = 7;
 
     /**
-     * Hari KBM aktif: malam Sabtu hingga Kamis.
+     * Hari KBM aktif (ISO 1=Senin … 7=Ahad). Jumat libur umum; Sabtu–Ahad termasuk KBM.
      *
      * @var array<int, int>
      */
@@ -36,6 +36,24 @@ class AcademicSchedule extends Model
         self::DAY_SATURDAY,
         self::DAY_SUNDAY,
     ];
+
+    /** Jumlah maksimum kolom hari di editor matrix (= panjang TEACHING_DAYS). */
+    public static function maxMatrixDayCount(): int
+    {
+        return count(self::TEACHING_DAYS);
+    }
+
+    /**
+     * Nomor hari kalender ISO untuk kolom matrix (potongan pertama TEACHING_DAYS).
+     *
+     * @return array<int, int>
+     */
+    public static function matrixCalendarDays(int $dayCount): array
+    {
+        $n = max(0, min($dayCount, self::maxMatrixDayCount()));
+
+        return array_slice(self::TEACHING_DAYS, 0, $n);
+    }
 
     protected $table = 'schedules';
 

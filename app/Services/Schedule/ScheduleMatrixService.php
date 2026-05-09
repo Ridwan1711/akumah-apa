@@ -85,7 +85,7 @@ class ScheduleMatrixService
             ->values()
             ->all();
 
-        $days = range(1, (int) $set->day_count);
+        $days = AcademicSchedule::matrixCalendarDays((int) $set->day_count);
 
         $cellsRaw = AcademicSchedule::query()
             ->where('schedule_set_id', $set->id)
@@ -480,8 +480,11 @@ class ScheduleMatrixService
 
     private function assertDayAndJam(ScheduleSet $set, int $day, int $jamNo): void
     {
-        if ($day < 1 || $day > (int) $set->day_count) {
-            throw new InvalidArgumentException("Hari {$day} di luar rentang schedule set (1-{$set->day_count}).");
+        $allowedDays = AcademicSchedule::matrixCalendarDays((int) $set->day_count);
+        if (! in_array($day, $allowedDays, true)) {
+            throw new InvalidArgumentException(
+                "Hari {$day} bukan hari KBM untuk schedule set ini (Jumat libur; gunakan Sen–Kam & Sab–Ahad)."
+            );
         }
         if ($jamNo < 1 || $jamNo > (int) $set->jam_count) {
             throw new InvalidArgumentException("Jam {$jamNo} di luar rentang schedule set (1-{$set->jam_count}).");

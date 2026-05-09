@@ -13,6 +13,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ScheduleTimeSlot } from '@/types';
 
+/** Sen–Kam & Sab–Ahad; Jumat tidak dipakai kolom matrix (selaras `AcademicSchedule::TEACHING_DAYS`). */
+const MAX_SCHEDULE_MATRIX_DAYS = 6;
+
 type Props = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -83,14 +86,24 @@ export default function TimeSlotSettingsDialog({
                 <div className="grid gap-3 py-2">
                     <div className="grid grid-cols-2 gap-3">
                         <div className="grid gap-1">
-                            <Label>Jumlah Hari</Label>
+                            <Label>Jumlah Hari KBM</Label>
                             <Input
                                 type="number"
                                 min={1}
-                                max={7}
+                                max={MAX_SCHEDULE_MATRIX_DAYS}
                                 value={dayCount}
-                                onChange={(e) => setDayCount(Math.max(1, Math.min(7, Number(e.target.value) || 1)))}
+                                onChange={(e) =>
+                                    setDayCount(
+                                        Math.max(
+                                            1,
+                                            Math.min(MAX_SCHEDULE_MATRIX_DAYS, Number(e.target.value) || 1),
+                                        ),
+                                    )
+                                }
                             />
+                            <p className="text-[11px] text-muted-foreground">
+                                Jumat libur. Kolom mengikuti Senin–Kamis lalu Sabtu–Ahad (bukan Minggu sebagai libur).
+                            </p>
                         </div>
                         <div className="grid gap-1">
                             <Label>Jumlah Jam</Label>

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\Diniyyah\TeacherAssignment;
 use App\Services\Schedule\ScheduleMatrixService;
 use Illuminate\Contracts\Validation\Validator;
@@ -57,8 +58,9 @@ class AssignCellRequest extends FormRequest
             }
 
             $day = (int) $this->input('day');
-            if ($day > (int) $set->day_count) {
-                $v->errors()->add('day', 'day melebihi day_count schedule set.');
+            $allowed = AcademicSchedule::matrixCalendarDays((int) $set->day_count);
+            if (! in_array($day, $allowed, true)) {
+                $v->errors()->add('day', 'Hari tidak valid untuk matrix (Jumat libur; kolom mengikuti hari KBM aktif).');
             }
         });
     }

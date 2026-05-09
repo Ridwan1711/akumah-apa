@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\Diniyyah\AcademicSchedule;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -16,7 +17,7 @@ class SaveTimeSlotsRequest extends FormRequest
     {
         return [
             'jam_count' => ['required', 'integer', 'between:1,20'],
-            'day_count' => ['required', 'integer', 'between:1,7'],
+            'day_count' => ['required', 'integer', 'between:1,'.AcademicSchedule::maxMatrixDayCount()],
             'slots' => ['required', 'array', 'min:1'],
             'slots.*.jam_no' => ['required', 'integer', 'min:1'],
             'slots.*.time_start' => ['required', 'date_format:H:i'],
