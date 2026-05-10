@@ -37,7 +37,7 @@ class InvoiceReminderNotification extends Notification implements ShouldQueue
     public function toArray(object $notifiable): array
     {
         $body = $this->body();
-        $url = '/wali/invoices/'.(string) $this->invoice->id;
+        [$url, $roleTarget] = $this->resolveUrlAndRole($notifiable);
 
         return [
             'type' => 'invoice_reminder',
@@ -47,7 +47,7 @@ class InvoiceReminderNotification extends Notification implements ShouldQueue
             'url' => $url,
             'entity_type' => 'invoice',
             'entity_id' => (string) $this->invoice->id,
-            'role_target' => 'wali',
+            'role_target' => $roleTarget,
             'priority' => 'p0',
             'collapse_key' => 'invoice_reminder_'.(string) $this->invoice->id,
             'sent_at' => now()->toIso8601String(),
@@ -62,7 +62,7 @@ class InvoiceReminderNotification extends Notification implements ShouldQueue
     public function toFcm(object $notifiable): array
     {
         $body = $this->body();
-        $url = '/wali/invoices/'.(string) $this->invoice->id;
+        [$url, $roleTarget] = $this->resolveUrlAndRole($notifiable);
 
         return [
             'title' => 'Pengingat Tagihan',
@@ -74,7 +74,7 @@ class InvoiceReminderNotification extends Notification implements ShouldQueue
                 'url' => $url,
                 'entity_type' => 'invoice',
                 'entity_id' => (string) $this->invoice->id,
-                'role_target' => 'wali',
+                'role_target' => $roleTarget,
                 'priority' => 'p0',
                 'collapse_key' => 'invoice_reminder_'.(string) $this->invoice->id,
                 'sent_at' => now()->toIso8601String(),
@@ -87,5 +87,17 @@ class InvoiceReminderNotification extends Notification implements ShouldQueue
     private function body(): string
     {
         return FinanceKeuanganMessageBody::invoiceReminder($this->invoice, $this->customMessage);
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    private function resolveUrlAndRole(object $notifiable): array
+    {
+        if (method_exists($notifiable, 'hasRole') && $notifiable->hasRole('santri')) {
+            return ['/santri/invoices/'.(string) $this->invoice->id, 'santri'];
+        }
+
+        return ['/wali/invoices/'.(string) $this->invoice->id, 'wali'];
     }
 }

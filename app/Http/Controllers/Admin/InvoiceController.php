@@ -481,16 +481,27 @@ class InvoiceController extends Controller
 
             if ($result['sent_count'] === 0 && $result['wa_queued'] === 0) {
                 $hint = [];
+                $emNoHp = is_array($student?->em_profile)
+                    ? (string) ($student->em_profile['no_hp'] ?? '')
+                    : '';
+                $hasEmNoHp = trim($emNoHp) !== '';
+
                 if ($sendApp && $waliWithAccount === 0) {
-                    $hint[] = 'tidak ada wali dengan akun aplikasi terhubung ke santri ini';
+                    if ($student?->user_id === null) {
+                        $hint[] = 'tidak ada wali ber-akun dan santri belum dihubungkan ke akun login (user_id kosong)';
+                    } else {
+                        $hint[] = 'tidak ada wali ber-akun; pastikan role santri aktif untuk notifikasi ke akun santri';
+                    }
                 }
                 if ($sendWhatsapp) {
                     if (! $waEnabled) {
                         $hint[] = 'WhatsApp nonaktif (WA_ENABLED=false di server)';
                     } elseif ($waliWithAccount === 0 && $waliWithoutAccount === 0) {
-                        $hint[] = 'tidak ada data wali / nomor untuk WA';
+                        $hint[] = $hasEmNoHp
+                            ? 'nomor di profil (No HP Santri) tidak valid untuk WA atau tidak ter-normalisasi'
+                            : 'tidak ada wali dan No HP Santri (Profil EM) / WhatsApp di akun kosong';
                     } else {
-                        $hint[] = 'nomor WA tidak ter-resolve (cek whatsapp santri, telepon wali, atau WA_ALLOW_FALLBACK_RECIPIENT)';
+                        $hint[] = 'nomor WA tidak ter-resolve (cek WhatsApp di akun, telepon wali, atau WA_ALLOW_FALLBACK_RECIPIENT)';
                     }
                 }
 
@@ -498,6 +509,8 @@ class InvoiceController extends Controller
                 Log::warning('invoice_send_reminder_no_recipients', [
                     'invoice_id' => $invoice->id,
                     'student_id' => $student?->id,
+                    'student_user_id' => $student?->user_id,
+                    'em_profile_has_no_hp' => $hasEmNoHp,
                     'send_app' => $sendApp,
                     'send_whatsapp' => $sendWhatsapp,
                     'wa_enabled' => $waEnabled,

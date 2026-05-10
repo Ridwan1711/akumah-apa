@@ -110,6 +110,41 @@ final class DispatchInvoiceRemindersAction
                     }
                 }
 
+                $santriUser = $student?->user;
+                if (
+                    $santriUser instanceof User
+                    && ! $guardianUsers->contains(fn (User $u): bool => (int) $u->id === (int) $santriUser->id)
+                ) {
+                    $notification = new InvoiceReminderNotification(
+                        $invoice,
+                        $customMessage,
+                        $sentByUserId,
+                        $sendAppNotification,
+                    );
+
+                    if ($sendAppNotification) {
+                        $santriUser->notify($notification);
+                        $sentCount++;
+                        $invoiceTouched = true;
+                    }
+
+                    if ($sendWhatsapp && $student instanceof Student) {
+                        if ($this->queueWaForInvoiceReminder(
+                            $invoice,
+                            $student,
+                            $notification,
+                            $santriUser,
+                            null,
+                            $waDedupePhones,
+                            $waStagger,
+                        )) {
+                            $waQueued++;
+                            $waStagger++;
+                            $invoiceTouched = true;
+                        }
+                    }
+                }
+
                 if ($invoiceTouched) {
                     $invoice->forceFill([
                         'last_reminder_sent_at' => now(),
