@@ -581,13 +581,11 @@ class AdminKeuanganController extends Controller
 
         $validated = $request->validate([
             'message' => ['nullable', 'string', 'max:500'],
-            'send_app_notification' => ['sometimes', 'boolean'],
-            'send_whatsapp' => ['sometimes', 'boolean'],
         ]);
 
-        [$sendApp, $sendWhatsapp] = $this->validatedReminderChannels($validated);
+        [$sendApp, $sendWhatsapp] = $this->resolveReminderChannelFlags($request);
 
-        $invoice->loadMissing('student.guardians.user', 'paymentType');
+        $invoice->loadMissing('student.guardians.user', 'student.user:id,whatsapp_phone', 'paymentType');
         $result = $this->dispatchInvoiceRemindersAction->run(
             collect([$invoice]),
             $validated['message'] ?? null,
@@ -595,6 +593,16 @@ class AdminKeuanganController extends Controller
             $sendApp,
             $sendWhatsapp,
         );
+
+        if ($result['sent_count'] === 0 && $result['wa_queued'] === 0) {
+            return response()->json([
+                'message' => 'Tidak ada penerima (wali ber-akun / antrean WA). Periksa data wali, WA_ENABLED, atau nomor WhatsApp.',
+                'invoice_id' => (int) $invoice->id,
+                'sent_count' => 0,
+                'recipients_without_account' => $result['recipients_without_account'],
+                'wa_queued' => 0,
+            ], 422);
+        }
 
         return response()->json([
             'message' => 'Reminder tagihan berhasil dikirim.',
@@ -646,11 +654,9 @@ class AdminKeuanganController extends Controller
             'class_id' => ['nullable', 'integer', 'exists:classes,id'],
             'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
             'message' => ['nullable', 'string', 'max:500'],
-            'send_app_notification' => ['sometimes', 'boolean'],
-            'send_whatsapp' => ['sometimes', 'boolean'],
         ]);
 
-        [$sendApp, $sendWhatsapp] = $this->validatedReminderChannels($validated);
+        [$sendApp, $sendWhatsapp] = $this->resolveReminderChannelFlags($request);
 
         $invoices = $this->resolveReminderInvoices($validated, $user);
         $invoiceIds = $invoices->pluck('id')->map(fn ($id): int => (int) $id)->values()->all();
@@ -690,6 +696,18 @@ class AdminKeuanganController extends Controller
             $sendApp,
             $sendWhatsapp,
         );
+
+        if ($result['sent_count'] === 0 && $result['wa_queued'] === 0) {
+            return response()->json([
+                'message' => 'Tidak ada notifikasi aplikasi maupun antrean WA yang dibuat untuk invoice dalam filter ini.',
+                'queued' => false,
+                'total' => $total,
+                'sent_count' => 0,
+                'recipients_without_account' => $result['recipients_without_account'],
+                'wa_queued' => 0,
+                'failed' => $result['failed'],
+            ], 422);
+        }
 
         return response()->json([
             'message' => 'Reminder tagihan selesai diproses.',
@@ -909,17 +927,16 @@ class AdminKeuanganController extends Controller
     }
 
     /**
-     * @param  array<string, mixed>  $validated
+     * Baca saluran dari body JSON (termasuk `false` eksplisit), jangan mengandalkan array `validated` saja.
+     *
      * @return array{0: bool, 1: bool}
      */
-    private function validatedReminderChannels(array $validated): array
+    private function resolveReminderChannelFlags(Request $request): array
     {
-        $sendApp = array_key_exists('send_app_notification', $validated)
-            ? (bool) $validated['send_app_notification']
+        $sendApp = $request->has('send_app_notification')
+            ? $request->boolean('send_app_notification')
             : true;
-        $sendWhatsapp = array_key_exists('send_whatsapp', $validated)
-            ? (bool) $validated['send_whatsapp']
-            : false;
+        $sendWhatsapp = $request->boolean('send_whatsapp');
 
         if (! $sendApp && ! $sendWhatsapp) {
             throw ValidationException::withMessages([

@@ -21,6 +21,7 @@ use App\Support\Authorization\Permissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -446,47 +447,101 @@ class InvoiceController extends Controller
             return redirect()->back()->with('error', 'Tagihan lunas atau dibatalkan tidak dapat dikirim pengingat.');
         }
 
-        $validated = $request->validate([
-            'message' => ['nullable', 'string', 'max:500'],
-            'send_app_notification' => ['sometimes', 'boolean'],
-            'send_whatsapp' => ['sometimes', 'boolean'],
-        ]);
-
-        $sendApp = array_key_exists('send_app_notification', $validated)
-            ? (bool) $validated['send_app_notification']
-            : true;
-        $sendWhatsapp = array_key_exists('send_whatsapp', $validated)
-            ? (bool) $validated['send_whatsapp']
-            : false;
-
-        if (! $sendApp && ! $sendWhatsapp) {
-            throw ValidationException::withMessages([
-                'send_app_notification' => 'Pilih minimal satu: notifikasi aplikasi atau WhatsApp.',
+        try {
+            $validated = $request->validate([
+                'message' => ['nullable', 'string', 'max:500'],
             ]);
-        }
 
-        $invoice->loadMissing('student.guardians.user', 'student.user:id,whatsapp_phone', 'paymentType');
-        $result = $dispatchInvoiceRemindersAction->run(
-            collect([$invoice]),
-            $validated['message'] ?? null,
-            $user->id,
-            $sendApp,
-            $sendWhatsapp,
-        );
+            // JSON/Inertia: boolean false harus tetap terbaca (hindari "sometimes" + validated yang kosong).
+            $sendApp = $request->has('send_app_notification')
+                ? $request->boolean('send_app_notification')
+                : true;
+            $sendWhatsapp = $request->boolean('send_whatsapp');
 
-        if ($result['sent_count'] === 0 && $result['wa_queued'] === 0) {
-            return redirect()->back()->with('warning', 'Tidak ada penerima (wali ber-akun / nomor WA) untuk tagihan ini.');
-        }
+            if (! $sendApp && ! $sendWhatsapp) {
+                throw ValidationException::withMessages([
+                    'send_app_notification' => 'Pilih minimal satu: notifikasi aplikasi atau WhatsApp.',
+                ]);
+            }
 
-        $parts = [];
-        if ($sendApp) {
-            $parts[] = 'notifikasi aplikasi: '.$result['sent_count'];
-        }
-        if ($sendWhatsapp) {
-            $parts[] = 'antrian WA: '.$result['wa_queued'];
-        }
+            $invoice->loadMissing('student.guardians.user', 'student.user:id,whatsapp_phone', 'paymentType');
+            $student = $invoice->student;
+            $guardians = $student?->guardians ?? collect();
+            $waliWithAccount = (int) $guardians->filter(fn ($g) => $g->user !== null)->count();
+            $waliWithoutAccount = (int) $guardians->filter(fn ($g) => $g->user === null)->count();
+            $waEnabled = (bool) config('services.wa.enabled');
 
-        return redirect()->back()->with('success', 'Pengingat tagihan terkirim ('.implode(', ', $parts).').');
+            $result = $dispatchInvoiceRemindersAction->run(
+                collect([$invoice]),
+                $validated['message'] ?? null,
+                $user->id,
+                $sendApp,
+                $sendWhatsapp,
+            );
+
+            if ($result['sent_count'] === 0 && $result['wa_queued'] === 0) {
+                $hint = [];
+                if ($sendApp && $waliWithAccount === 0) {
+                    $hint[] = 'tidak ada wali dengan akun aplikasi terhubung ke santri ini';
+                }
+                if ($sendWhatsapp) {
+                    if (! $waEnabled) {
+                        $hint[] = 'WhatsApp nonaktif (WA_ENABLED=false di server)';
+                    } elseif ($waliWithAccount === 0 && $waliWithoutAccount === 0) {
+                        $hint[] = 'tidak ada data wali / nomor untuk WA';
+                    } else {
+                        $hint[] = 'nomor WA tidak ter-resolve (cek whatsapp santri, telepon wali, atau WA_ALLOW_FALLBACK_RECIPIENT)';
+                    }
+                }
+
+                $detail = $hint !== [] ? ' Penyebab: '.implode('; ', $hint).'.' : '';
+                Log::warning('invoice_send_reminder_no_recipients', [
+                    'invoice_id' => $invoice->id,
+                    'student_id' => $student?->id,
+                    'send_app' => $sendApp,
+                    'send_whatsapp' => $sendWhatsapp,
+                    'wa_enabled' => $waEnabled,
+                    'wali_with_account' => $waliWithAccount,
+                    'wali_without_account' => $waliWithoutAccount,
+                ]);
+
+                return redirect()->back()->with(
+                    'warning',
+                    'Tidak ada penerima: tidak ada notifikasi aplikasi maupun antrean WA yang dibuat.'.$detail,
+                );
+            }
+
+            $parts = [];
+            if ($sendApp) {
+                $parts[] = 'notifikasi aplikasi: '.$result['sent_count'];
+            }
+            if ($sendWhatsapp) {
+                $parts[] = 'antrian WA: '.$result['wa_queued'];
+            }
+
+            Log::info('invoice_send_reminder_ok', [
+                'invoice_id' => $invoice->id,
+                'send_app' => $sendApp,
+                'send_whatsapp' => $sendWhatsapp,
+                'sent_count' => $result['sent_count'],
+                'wa_queued' => $result['wa_queued'],
+            ]);
+
+            return redirect()->back()->with('success', 'Pengingat tagihan terkirim ('.implode(', ', $parts).').');
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('invoice_send_reminder_failed', [
+                'invoice_id' => $invoice->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect()->back()->with(
+                'error',
+                'Gagal mengirim pengingat: '.$e->getMessage(),
+            );
+        }
     }
 
     public function updateBreakdown(Request $request, Invoice $invoice): RedirectResponse

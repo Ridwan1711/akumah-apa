@@ -1,5 +1,6 @@
 import { useForm } from '@inertiajs/react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { CrudModal } from '@/components/manhood';
 
 type Props = {
@@ -29,6 +30,10 @@ export function InvoiceSendReminderModal({ open, onClose, invoiceId, invoiceNumb
             onSuccess: () => {
                 form.reset();
                 onClose();
+            },
+            onError: (errors) => {
+                const msg = Object.values(errors).flat().filter(Boolean).join(' ');
+                toast.error(msg || 'Permintaan ditolak. Periksa saluran atau isian.');
             },
         });
     }
