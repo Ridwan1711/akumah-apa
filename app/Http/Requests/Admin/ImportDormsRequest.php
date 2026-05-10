@@ -17,6 +17,7 @@ class ImportDormsRequest extends FormRequest
         return [
             'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:5120'],
             'strategy' => ['required', Rule::in(['skip', 'update'])],
+            'placement_strategy' => ['nullable', Rule::in(['skip', 'replace'])],
         ];
     }
 }

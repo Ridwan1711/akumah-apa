@@ -19,6 +19,7 @@ class DormPenempatanSheetImport implements ToCollection, WithHeadingRow
 {
     public function __construct(
         private readonly DormImportResult $result,
+        private readonly string $placementStrategy = 'skip',
     ) {}
 
     public function collection(Collection $rows): void
@@ -97,10 +98,17 @@ class DormPenempatanSheetImport implements ToCollection, WithHeadingRow
                         ->activeInAcademicYear($yearId)
                         ->exists();
 
-                    if ($existingActive) {
+                    if ($existingActive && $this->placementStrategy !== 'replace') {
                         $this->result->skipped++;
 
                         return;
+                    }
+
+                    if ($existingActive && $this->placementStrategy === 'replace') {
+                        DormAssignment::query()
+                            ->where('student_id', $student->id)
+                            ->activeInAcademicYear($yearId)
+                            ->update(['checkout_date' => now()->toDateString()]);
                     }
 
                     $occupied = DormAssignment::query()

@@ -3,10 +3,23 @@ import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function FlashMessage() {
-    const { props } = usePage<{ flash?: { success?: string; error?: string; warning?: string } }>();
+    const { props } = usePage<{
+        flash?: {
+            success?: string;
+            error?: string;
+            warning?: string;
+            dorm_import_error_token?: string | null;
+        };
+    }>();
     const flash = props.flash;
 
-    if (!flash?.success && !flash?.error && !flash?.warning) return null;
+    const hasBanner = flash?.success || flash?.error || flash?.warning || flash?.dorm_import_error_token;
+    if (!hasBanner) return null;
+
+    const errorCsvHref =
+        flash?.dorm_import_error_token != null && flash.dorm_import_error_token !== ''
+            ? `/admin/asrama/import-errors?token=${encodeURIComponent(flash.dorm_import_error_token)}`
+            : null;
 
     return (
         <div className="mb-4">
@@ -21,7 +34,31 @@ export default function FlashMessage() {
                 <Alert className="border-amber-400 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
                     <AlertTriangle className="text-amber-600 dark:text-amber-400" />
                     <AlertTitle>Perhatian</AlertTitle>
-                    <AlertDescription>{flash.warning}</AlertDescription>
+                    <AlertDescription>
+                        <span className="block whitespace-pre-wrap">{flash.warning}</span>
+                        {errorCsvHref ? (
+                            <a
+                                href={errorCsvHref}
+                                className="mt-3 inline-flex font-semibold underline underline-offset-4 text-amber-900 hover:text-amber-950 dark:text-amber-200 dark:hover:text-amber-50"
+                            >
+                                Unduh CSV detail error impor kobong
+                            </a>
+                        ) : null}
+                    </AlertDescription>
+                </Alert>
+            )}
+            {!flash.warning && flash.dorm_import_error_token && (
+                <Alert className="border-amber-400 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
+                    <AlertTriangle className="text-amber-600 dark:text-amber-400" />
+                    <AlertTitle>Detail error impor</AlertTitle>
+                    <AlertDescription>
+                        <a
+                            href={`/admin/asrama/import-errors?token=${encodeURIComponent(flash.dorm_import_error_token)}`}
+                            className="inline-flex font-semibold underline underline-offset-4 text-amber-900 hover:text-amber-950 dark:text-amber-200 dark:hover:text-amber-50"
+                        >
+                            Unduh CSV detail error impor kobong
+                        </a>
+                    </AlertDescription>
                 </Alert>
             )}
             {flash.error && (

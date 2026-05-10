@@ -34,7 +34,7 @@ type Props = {
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/dashboard' },
     { title: 'Asrama', href: '/admin/asrama' },
-    { title: 'Assign Kamar', href: '/admin/asrama/assign' },
+    { title: 'Penempatan Kobong', href: '/admin/asrama/assign' },
 ];
 
 export default function AsramaAssign({
@@ -59,9 +59,11 @@ export default function AsramaAssign({
     const importForm = useForm<{
         file: File | null;
         strategy: 'skip' | 'update';
+        placement_strategy: 'skip' | 'replace';
     }>({
         file: null,
         strategy: 'skip',
+        placement_strategy: 'skip',
     });
 
     const availableSlots = useMemo(
@@ -100,7 +102,7 @@ export default function AsramaAssign({
                 assignForm.setData('student_ids', []);
                 toast.success('Santri berhasil ditempatkan');
             },
-            onError: () => toast.error('Gagal melakukan penempatan kamar'),
+            onError: () => toast.error('Gagal melakukan penempatan'),
         });
     }
 
@@ -108,10 +110,10 @@ export default function AsramaAssign({
         e.preventDefault();
         importForm.post('/admin/asrama/import', {
             forceFormData: true,
+            preserveScroll: true,
             onSuccess: () => {
                 setImportOpen(false);
                 importForm.reset('file');
-                toast.success('Impor asrama selesai');
             },
             onError: () => toast.error('Gagal mengimpor file'),
         });
@@ -137,13 +139,16 @@ export default function AsramaAssign({
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Assign Kamar Asrama" />
+            <Head title="Penempatan Kobong" />
             <div>
-                <CrudPageHeader title="Assign Kamar Asrama" description="Tempatkan santri aktif yang belum memiliki kamar asrama." />
+                <CrudPageHeader
+                    title="Penempatan Kobong (Asrama)"
+                    description="Tempatkan santri aktif yang belum memiliki kobong pada tahun ajaran terpilih, atau kelola secara massal lewat Excel."
+                />
                 <CrudStatStrip
                     items={[
-                        { key: 'unassigned', label: 'Santri Belum Kamar', value: unassignedStudents.total, icon: <Users size={18} />, tone: 'blue' },
-                        { key: 'rooms', label: 'Kamar Tersedia', value: availableRooms.length, icon: <BedDouble size={18} />, tone: 'green' },
+                        { key: 'unassigned', label: 'Belum Kobong', value: unassignedStudents.total, icon: <Users size={18} />, tone: 'blue' },
+                        { key: 'rooms', label: 'Kobong Ada Slot', value: availableRooms.length, icon: <BedDouble size={18} />, tone: 'green' },
                         { key: 'slots', label: 'Slot Kosong', value: availableSlots, icon: <Home size={18} />, tone: 'amber' },
                         { key: 'selected', label: 'Terpilih', value: selectedStudents.length, icon: <CheckCircle2 size={18} />, tone: 'purple' },
                     ]}
@@ -164,14 +169,23 @@ export default function AsramaAssign({
                                     <option key={year.id} value={String(year.id)}>{year.name}</option>
                                 ))}
                             </select>
-                            <span className="mcr-table-meta">Pilih santri, lalu tentukan kamar dan tanggal check-in.</span>
+                            <span className="mcr-table-meta">Pilih santri, lalu tentukan kobong (kamar) dan tanggal check-in.</span>
                         </>
                     }
                     right={
                         <>
-                            <button type="button" className="mcr-btn ghost" onClick={() => openDownload('/admin/asrama/template?format=xlsx')}>
+                            <button type="button" className="mcr-btn ghost" onClick={() => openDownload('/admin/asrama/template?format=xlsx')} title=".xlsx: sheet Gedung_Kamar dan Penempatan">
                                 <FileText size={14} />
-                                Template
+                                Template kobong
+                            </button>
+                            <button
+                                type="button"
+                                className="mcr-btn ghost"
+                                onClick={() => openDownload(`/admin/asrama/export/master?format=xlsx`)}
+                                title="Unduh struktur gedung dan kamar saat ini"
+                            >
+                                <Download size={14} />
+                                Export master gedung/kobong
                             </button>
                             <button
                                 type="button"
@@ -179,7 +193,7 @@ export default function AsramaAssign({
                                 onClick={() => openDownload(`/admin/asrama/export/assignments?academic_year_id=${currentAcademicYearId}&format=xlsx`)}
                             >
                                 <Download size={14} />
-                                Export penempatan
+                                Export penempatan TA
                             </button>
                             <button type="button" className="mcr-btn secondary" onClick={() => setImportOpen(true)}>
                                 <FileUp size={14} />
@@ -189,7 +203,7 @@ export default function AsramaAssign({
                     }
                 />
 
-                <CrudCard title="Daftar Santri Belum Kamar">
+                <CrudCard title="Daftar Santri Belum Kobong">
                     <CrudTableShell>
                         <table className="mcr-table">
                             <thead>
@@ -203,7 +217,7 @@ export default function AsramaAssign({
                             </thead>
                             <tbody>
                                 {unassignedStudents.data.length === 0 ? (
-                                    <tr><td colSpan={3}><CrudEmptyState title="Tidak ada data" description="Semua santri aktif sudah memiliki kamar." /></td></tr>
+                                    <tr><td colSpan={3}><CrudEmptyState title="Tidak ada data" description="Semua santri aktif sudah memiliki penempatan kobong untuk tahun ajaran ini." /></td></tr>
                                 ) : (
                                     unassignedStudents.data.map((student) => (
                                         <tr key={student.id}>
@@ -219,17 +233,17 @@ export default function AsramaAssign({
                     <CrudPagination links={unassignedStudents.links} />
                 </CrudCard>
 
-                <CrudCard title="Form Penempatan" subtitle="Pilih kamar tujuan dan tanggal mulai menempati kamar.">
+                <CrudCard title="Form Penempatan" subtitle="Pilih kobong tujuan dan tanggal mulai menempati.">
                     <div className="mcr-form-grid">
                         <div className="mcr-form-group">
-                            <label htmlFor="assign-room">Kamar Tujuan</label>
+                            <label htmlFor="assign-room">Kobong tujuan</label>
                             <select id="assign-room" className="mcr-form-select" value={assignForm.data.room_id} onChange={(e) => assignForm.setData('room_id', e.target.value)}>
-                                <option value="">Pilih kamar</option>
+                                <option value="">Pilih kobong</option>
                                 {availableRooms.map((room) => {
                                     const freeSlot = Math.max(0, room.capacity - (room.occupants_count ?? 0));
                                     return (
                                         <option key={room.id} value={String(room.id)}>
-                                            {room.building?.name ?? 'Gedung'} - {room.room_number} (sisa {freeSlot})
+                                            {room.building?.name ?? 'Gedung'} — {room.room_number} (sisa {freeSlot})
                                         </option>
                                     );
                                 })}
@@ -252,7 +266,7 @@ export default function AsramaAssign({
                     <CrudBulkActionBar visible={selectedStudents.length > 0} selectedCount={selectedStudents.length} onClear={() => setSelectedStudents([])}>
                         <button type="button" className="mcr-btn primary" onClick={submitAssign} disabled={assignForm.processing}>
                             <Plus size={14} />
-                            {assignForm.processing ? 'Memproses...' : 'Tempatkan Santri'}
+                            {assignForm.processing ? 'Memproses...' : 'Tempatkan santri'}
                         </button>
                     </CrudBulkActionBar>
                 </CrudCard>
@@ -261,13 +275,39 @@ export default function AsramaAssign({
             <CrudModal
                 open={importOpen}
                 onClose={() => setImportOpen(false)}
-                title="Impor Asrama (Excel)"
-                subtitle="Sheet Gedung_Kamar dan Penempatan. Santri yang sudah punya kobong aktif di tahun ajaran baris akan dilewati."
+                title="Impor Excel — Kobong"
+                subtitle="Workbook minimal berisi dua sheet dengan nama persis seperti di template."
             >
                 <form onSubmit={submitImport}>
+                    <div
+                        style={{
+                            marginBottom: 16,
+                            padding: '10px 12px',
+                            background: 'var(--mcr-muted-bg, #f8fafc)',
+                            borderRadius: 8,
+                            fontSize: 13,
+                            lineHeight: 1.5,
+                            color: 'var(--mcr-text-muted, #64748b)',
+                        }}
+                    >
+                        <strong style={{ color: 'var(--mcr-text, #0f172a)' }}>Sheet wajib</strong>
+                        <ul style={{ margin: '8px 0 0 18px', padding: 0 }}>
+                            <li>
+                                <code>Gedung_Kamar</code> — kolom: <code>building_name</code>, <code>building_description</code>, <code>room_number</code>, <code>capacity</code>, <code>floor</code>
+                            </li>
+                            <li>
+                                <code>Penempatan</code> — wajib: <code>nis</code>, <code>building_name</code>, <code>room_number</code>, <code>checkin_date</code>, plus salah satu{' '}
+                                <code>academic_year_name</code> atau <code>academic_year_id</code>. Opsional: <code>checkout_date</code>. Kolom lain (mis. dari export) diabaikan.
+                            </li>
+                        </ul>
+                        <p style={{ margin: '8px 0 0' }}>
+                            <strong>Strategi kamar duplikat</strong> hanya memengaruhi sheet <code>Gedung_Kamar</code> (lewati vs perbarui kapasitas/lantai).{' '}
+                            <strong>Strategi penempatan</strong> di bawah memengaruhi baris sheet <code>Penempatan</code> bila santri sudah punya kobong aktif di tahun ajaran baris tersebut.
+                        </p>
+                    </div>
                     <div className="mcr-form-grid">
                         <div className="mcr-form-group full">
-                            <label htmlFor="assign-asrama-import-file">File</label>
+                            <label htmlFor="assign-asrama-import-file">File (.xlsx / .xls)</label>
                             <input
                                 id="assign-asrama-import-file"
                                 className="mcr-input"
@@ -278,17 +318,30 @@ export default function AsramaAssign({
                             <InputError message={importForm.errors.file} />
                         </div>
                         <div className="mcr-form-group full">
-                            <label htmlFor="assign-asrama-import-strategy">Strategi kamar duplikat</label>
+                            <label htmlFor="assign-asrama-import-strategy">Strategi kamar duplikat (sheet Gedung_Kamar)</label>
                             <select
                                 id="assign-asrama-import-strategy"
                                 className="mcr-form-select"
                                 value={importForm.data.strategy}
                                 onChange={(e) => importForm.setData('strategy', e.target.value as 'skip' | 'update')}
                             >
-                                <option value="skip">Lewati kamar yang nomornya sudah ada</option>
-                                <option value="update">Perbarui kapasitas/lantai kamar yang sudah ada</option>
+                                <option value="skip">Lewati kobong yang nomornya sudah ada</option>
+                                <option value="update">Perbarui kapasitas/lantai kobong yang sudah ada</option>
                             </select>
                             <InputError message={importForm.errors.strategy} />
+                        </div>
+                        <div className="mcr-form-group full">
+                            <label htmlFor="assign-asrama-import-placement">Strategi penempatan (sheet Penempatan)</label>
+                            <select
+                                id="assign-asrama-import-placement"
+                                className="mcr-form-select"
+                                value={importForm.data.placement_strategy}
+                                onChange={(e) => importForm.setData('placement_strategy', e.target.value as 'skip' | 'replace')}
+                            >
+                                <option value="skip">Lewati jika santri sudah punya kobong aktif di tahun ajaran baris</option>
+                                <option value="replace">Pindah: tutup penempatan aktif TA itu, lalu tempatkan ke kobong baru (cek kapasitas)</option>
+                            </select>
+                            <InputError message={importForm.errors.placement_strategy} />
                         </div>
                     </div>
                     <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

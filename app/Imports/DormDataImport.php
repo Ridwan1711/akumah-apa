@@ -10,6 +10,7 @@ class DormDataImport implements WithMultipleSheets
 
     public function __construct(
         private readonly string $strategy,
+        private readonly string $placementStrategy = 'skip',
     ) {
         $this->aggregate = new DormImportResult;
     }
@@ -18,7 +19,7 @@ class DormDataImport implements WithMultipleSheets
     {
         return [
             'Gedung_Kamar' => new DormGedungKamarSheetImport($this->strategy, $this->aggregate),
-            'Penempatan' => new DormPenempatanSheetImport($this->aggregate),
+            'Penempatan' => new DormPenempatanSheetImport($this->aggregate, $this->placementStrategy),
         ];
     }
 

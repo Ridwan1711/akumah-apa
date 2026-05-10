@@ -218,6 +218,7 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::get('asrama/export/master', [DormDataTransferController::class, 'exportMaster'])->name('asrama.export.master');
         Route::get('asrama/export/assignments', [DormDataTransferController::class, 'exportAssignments'])->name('asrama.export.assignments');
         Route::post('asrama/import', [DormDataTransferController::class, 'import'])->name('asrama.import');
+        Route::get('asrama/import-errors', [DormDataTransferController::class, 'downloadImportErrors'])->name('asrama.import-errors');
 
         // Violations
         Route::get('violations', [ViolationController::class, 'index'])->name('violations.index');

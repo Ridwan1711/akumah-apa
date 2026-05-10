@@ -66,6 +66,7 @@ class HandleInertiaRequests extends Middleware
                 'error' => $request->session()->get('error'),
                 'warning' => $request->session()->get('warning'),
                 'generated' => $request->session()->get('generated'),
+                'dorm_import_error_token' => $request->session()->get('dorm_import_error_token'),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
