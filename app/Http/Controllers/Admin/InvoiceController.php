@@ -15,6 +15,9 @@ use App\Models\StudentDiscount;
 use App\Models\StudentPosition;
 use App\Models\User;
 use App\Notifications\InvoiceCreatedNotification;
+use App\Services\Authorization\InvoiceVisibilityScope;
+use App\Services\Finance\DispatchInvoiceRemindersAction;
+use App\Support\Authorization\Permissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -426,6 +429,66 @@ class InvoiceController extends Controller
         return redirect()->back()->with('success', 'Tagihan berhasil dibatalkan.');
     }
 
+    public function sendReminder(
+        Request $request,
+        Invoice $invoice,
+        InvoiceVisibilityScope $invoiceVisibilityScope,
+        DispatchInvoiceRemindersAction $dispatchInvoiceRemindersAction,
+    ): RedirectResponse {
+        $user = $request->user();
+        abort_unless($user !== null && $user->hasPermission(Permissions::INVOICE_REMINDER_SEND), 403);
+
+        $visible = Invoice::query()->whereKey($invoice->id);
+        $invoiceVisibilityScope->applyToInvoiceQuery($visible, $user);
+        abort_unless($visible->exists(), 403, 'Tagihan ini di luar cakupan akses Anda.');
+
+        if (in_array($invoice->status, [Invoice::STATUS_PAID, Invoice::STATUS_CANCELLED], true)) {
+            return redirect()->back()->with('error', 'Tagihan lunas atau dibatalkan tidak dapat dikirim pengingat.');
+        }
+
+        $validated = $request->validate([
+            'message' => ['nullable', 'string', 'max:500'],
+            'send_app_notification' => ['sometimes', 'boolean'],
+            'send_whatsapp' => ['sometimes', 'boolean'],
+        ]);
+
+        $sendApp = array_key_exists('send_app_notification', $validated)
+            ? (bool) $validated['send_app_notification']
+            : true;
+        $sendWhatsapp = array_key_exists('send_whatsapp', $validated)
+            ? (bool) $validated['send_whatsapp']
+            : false;
+
+        if (! $sendApp && ! $sendWhatsapp) {
+            throw ValidationException::withMessages([
+                'send_app_notification' => 'Pilih minimal satu: notifikasi aplikasi atau WhatsApp.',
+            ]);
+        }
+
+        $invoice->loadMissing('student.guardians.user', 'student.user:id,whatsapp_phone', 'paymentType');
+        $result = $dispatchInvoiceRemindersAction->run(
+            collect([$invoice]),
+            $validated['message'] ?? null,
+            $user->id,
+            $sendApp,
+            $sendWhatsapp,
+        );
+
+        if ($result['sent_count'] === 0 && $result['wa_queued'] === 0) {
+            return redirect()->back()->with('warning', 'Tidak ada penerima (wali ber-akun / nomor WA) untuk tagihan ini.');
+        }
+
+        $parts = [];
+        if ($sendApp) {
+            $parts[] = 'notifikasi aplikasi: '.$result['sent_count'];
+        }
+        if ($sendWhatsapp) {
+            $parts[] = 'antrian WA: '.$result['wa_queued'];
+        }
+
+        return redirect()->back()->with('success', 'Pengingat tagihan terkirim ('.implode(', ', $parts).').');
+    }
+
     public function updateBreakdown(Request $request, Invoice $invoice): RedirectResponse
     {
         $validated = $request->validate([
@@ -490,7 +553,6 @@ class InvoiceController extends Controller
     }
 
     /**
-     * @param  mixed  $overrideBreakdown
      * @return array<int, array{label:string, amount:float}>
      */
     private function resolveInvoiceBreakdown(PaymentType $paymentType, float $amount, mixed $overrideBreakdown): array

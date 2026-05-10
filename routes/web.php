@@ -301,6 +301,9 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
         Route::put('invoices/{invoice}/breakdown', [InvoiceController::class, 'updateBreakdown'])->name('invoices.breakdown.update');
         Route::post('invoices/{invoice}/cancel', [InvoiceController::class, 'cancel'])->name('invoices.cancel');
+        Route::post('invoices/{invoice}/send-reminder', [InvoiceController::class, 'sendReminder'])
+            ->middleware('permission:'.Permissions::INVOICE_REMINDER_SEND)
+            ->name('invoices.send-reminder');
 
         Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
         Route::get('payments/create', [PaymentController::class, 'create'])->name('payments.create');

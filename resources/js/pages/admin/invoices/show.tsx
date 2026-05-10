@@ -1,5 +1,5 @@
-import { Head, Link, router, useForm } from '@inertiajs/react';
-import { ArrowLeft, Ban, Plus, Save, Trash2 } from 'lucide-react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { ArrowLeft, Ban, Bell, Plus, Save, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import FlashMessage from '@/components/flash-message';
@@ -11,7 +11,9 @@ import {
     CrudToolbar,
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
-import type { BreadcrumbItem, Invoice } from '@/types';
+import { can } from '@/lib/authz';
+import type { Auth, BreadcrumbItem, Invoice } from '@/types';
+import { InvoiceSendReminderModal } from '@/pages/admin/invoices/invoice-send-reminder-modal';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/dashboard' },
@@ -48,7 +50,10 @@ function formatCurrency(amount: number) {
 type Props = { invoice: Invoice };
 
 export default function InvoiceShow({ invoice }: Props) {
+    const { auth } = usePage<{ auth?: Auth }>().props;
+    const canSendReminder = can(auth, 'invoice.reminder.send');
     const [cancelOpen, setCancelOpen] = useState(false);
+    const [reminderOpen, setReminderOpen] = useState(false);
     const breakdownForm = useForm<{ breakdown: Array<{ label: string; amount: string }> }>({
         breakdown: (invoice.breakdown_items ?? invoice.breakdown ?? []).map((item) => ({
             label: item.label,
@@ -132,6 +137,12 @@ export default function InvoiceShow({ invoice }: Props) {
                                 <Link href={`/admin/payments/create?invoice_id=${invoice.id}`} className="mcr-btn secondary">
                                     Catat Pembayaran Manual
                                 </Link>
+                            ) : null}
+                            {canSendReminder && invoice.status !== 'paid' && invoice.status !== 'cancelled' ? (
+                                <button type="button" className="mcr-btn secondary" onClick={() => setReminderOpen(true)}>
+                                    <Bell size={14} />
+                                    Kirim Pengingat
+                                </button>
                             ) : null}
                             {invoice.status !== 'paid' && invoice.status !== 'cancelled' ? (
                                 <button type="button" className="mcr-btn danger" onClick={() => setCancelOpen(true)}>
@@ -250,6 +261,13 @@ export default function InvoiceShow({ invoice }: Props) {
                 title="Konfirmasi Pembatalan"
                 description={`Batalkan invoice ${invoice.invoice_number}?`}
                 confirmLabel="Batalkan Invoice"
+            />
+
+            <InvoiceSendReminderModal
+                open={reminderOpen}
+                onClose={() => setReminderOpen(false)}
+                invoiceId={invoice.id}
+                invoiceNumber={invoice.invoice_number}
             />
         </AppLayout>
     );

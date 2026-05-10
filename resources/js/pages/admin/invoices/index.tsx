@@ -1,5 +1,6 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Eye, FilePlus2, Search, Wallet } from 'lucide-react';
+import { Bell, Eye, FilePlus2, Search, Wallet } from 'lucide-react';
+import { useState } from 'react';
 import {
     CrudCard,
     CrudEmptyState,
@@ -11,6 +12,7 @@ import {
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
 import { can } from '@/lib/authz';
+import { InvoiceSendReminderModal } from '@/pages/admin/invoices/invoice-send-reminder-modal';
 import type {
     AcademicYear,
     Auth,
@@ -63,6 +65,8 @@ export default function InvoiceIndex({
 }: Props) {
     const { auth } = usePage<{ auth?: Auth }>().props;
     const canCreateInvoice = can(auth, 'invoice.create');
+    const canSendReminder = can(auth, 'invoice.reminder.send');
+    const [reminderInvoice, setReminderInvoice] = useState<{ id: number; number: string } | null>(null);
 
     function handleFilter(key: string, value: string) {
         router.get(
@@ -201,6 +205,16 @@ export default function InvoiceIndex({
                                                                 <Link href={`/admin/invoices/${invoice.id}`} className="mcr-icon-action" title="Detail">
                                                                     <Eye size={13} />
                                                                 </Link>
+                                                                {canSendReminder && invoice.status !== 'paid' && invoice.status !== 'cancelled' ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="mcr-icon-action"
+                                                                        title="Kirim pengingat"
+                                                                        onClick={() => setReminderInvoice({ id: invoice.id, number: invoice.invoice_number })}
+                                                                    >
+                                                                        <Bell size={13} />
+                                                                    </button>
+                                                                ) : null}
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -214,6 +228,15 @@ export default function InvoiceIndex({
                     )}
                     <CrudPagination links={studentGroups.links} />
                 </CrudCard>
+
+                {reminderInvoice ? (
+                    <InvoiceSendReminderModal
+                        open
+                        onClose={() => setReminderInvoice(null)}
+                        invoiceId={reminderInvoice.id}
+                        invoiceNumber={reminderInvoice.number}
+                    />
+                ) : null}
             </div>
         </AppLayout>
     );
