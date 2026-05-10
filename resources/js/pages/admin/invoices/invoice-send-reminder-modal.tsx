@@ -7,10 +7,12 @@ type Props = {
     open: boolean;
     onClose: () => void;
     invoiceId: number;
+    /** Nama santri (daftar tagihan terbuka diisi otomatis di template). */
+    studentName?: string;
     invoiceNumber?: string;
 };
 
-export function InvoiceSendReminderModal({ open, onClose, invoiceId, invoiceNumber }: Props) {
+export function InvoiceSendReminderModal({ open, onClose, invoiceId, studentName, invoiceNumber }: Props) {
     const [channelError, setChannelError] = useState('');
     const form = useForm({
         message: '',
@@ -47,7 +49,13 @@ export function InvoiceSendReminderModal({ open, onClose, invoiceId, invoiceNumb
                 }
             }}
             title="Kirim pengingat tagihan"
-            subtitle={invoiceNumber ? `Invoice ${invoiceNumber}` : undefined}
+            subtitle={
+                studentName
+                    ? `${studentName} — pesan otomatis memuat daftar tagihan terbuka & total sisa`
+                    : invoiceNumber
+                        ? `Invoice ${invoiceNumber} — pesan otomatis memuat daftar tagihan terbuka santri`
+                        : 'Pesan otomatis memuat daftar tagihan terbuka santri & total sisa'
+            }
             footer={(
                 <div className="mcr-action-group" style={{ justifyContent: 'flex-end', width: '100%' }}>
                     <button type="button" className="mcr-btn ghost" onClick={onClose} disabled={form.processing}>
@@ -61,7 +69,7 @@ export function InvoiceSendReminderModal({ open, onClose, invoiceId, invoiceNumb
         >
             <form id="invoice-send-reminder-form" onSubmit={submit}>
                 <p className="mcr-table-meta" style={{ marginBottom: 10 }}>
-                    Pesan opsional menggantikan template otomatis bila diisi. Kosongkan untuk memakai template resmi (termasuk rincian tagihan).
+                    Pesan opsional menggantikan seluruh template bila diisi. Kosongkan untuk template resmi: daftar tagihan terbuka per santri (bukan rincian komponen biaya per invoice).
                 </p>
                 <label style={{ fontWeight: 600, fontSize: 12, marginBottom: 4, display: 'block' }} htmlFor="reminder-message">
                     Pesan tambahan (opsional)

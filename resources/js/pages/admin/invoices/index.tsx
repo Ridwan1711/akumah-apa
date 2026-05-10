@@ -42,6 +42,11 @@ function formatCurrency(amount: number) {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
 }
 
+function firstRemindableInvoiceId(group: StudentInvoiceGroup): number | null {
+    const row = group.invoices.find((i) => i.status !== 'paid' && i.status !== 'cancelled');
+    return row ? row.id : null;
+}
+
 type Props = {
     studentGroups: PaginatedData<StudentInvoiceGroup>;
     totalInvoiceCount: number;
@@ -66,7 +71,7 @@ export default function InvoiceIndex({
     const { auth } = usePage<{ auth?: Auth }>().props;
     const canCreateInvoice = can(auth, 'invoice.create');
     const canSendReminder = can(auth, 'invoice.reminder.send');
-    const [reminderInvoice, setReminderInvoice] = useState<{ id: number; number: string } | null>(null);
+    const [reminderTarget, setReminderTarget] = useState<{ invoiceId: number; studentName: string } | null>(null);
 
     function handleFilter(key: string, value: string) {
         router.get(
@@ -155,12 +160,30 @@ export default function InvoiceIndex({
                             {studentGroups.data.map((group) => (
                                 <div key={String(group.student_id ?? group.student_nis)} className="rounded-md border">
                                     <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
-                                        <div>
-                                            <div className="font-medium">{group.student_name}</div>
-                                            <div className="text-xs text-muted-foreground">
-                                                NIS: {group.student_nis}
-                                                {group.class_name ? ` • ${group.class_name}` : ''}
+                                        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                                            <div className="min-w-0">
+                                                <div className="font-medium">{group.student_name}</div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    NIS: {group.student_nis}
+                                                    {group.class_name ? ` • ${group.class_name}` : ''}
+                                                </div>
                                             </div>
+                                            {canSendReminder && firstRemindableInvoiceId(group) !== null ? (
+                                                <button
+                                                    type="button"
+                                                    className="mcr-btn secondary shrink-0"
+                                                    title="Kirim pengingat (semua tagihan terbuka santri)"
+                                                    onClick={() => {
+                                                        const id = firstRemindableInvoiceId(group);
+                                                        if (id !== null) {
+                                                            setReminderTarget({ invoiceId: id, studentName: group.student_name });
+                                                        }
+                                                    }}
+                                                >
+                                                    <Bell size={14} />
+                                                    Kirim pengingat
+                                                </button>
+                                            ) : null}
                                         </div>
                                         <div className="text-right text-xs">
                                             <div><strong>{group.invoice_count}</strong> tagihan</div>
@@ -205,16 +228,6 @@ export default function InvoiceIndex({
                                                                 <Link href={`/admin/invoices/${invoice.id}`} className="mcr-icon-action" title="Detail">
                                                                     <Eye size={13} />
                                                                 </Link>
-                                                                {canSendReminder && invoice.status !== 'paid' && invoice.status !== 'cancelled' ? (
-                                                                    <button
-                                                                        type="button"
-                                                                        className="mcr-icon-action"
-                                                                        title="Kirim pengingat"
-                                                                        onClick={() => setReminderInvoice({ id: invoice.id, number: invoice.invoice_number })}
-                                                                    >
-                                                                        <Bell size={13} />
-                                                                    </button>
-                                                                ) : null}
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -229,12 +242,12 @@ export default function InvoiceIndex({
                     <CrudPagination links={studentGroups.links} />
                 </CrudCard>
 
-                {reminderInvoice ? (
+                {reminderTarget ? (
                     <InvoiceSendReminderModal
                         open
-                        onClose={() => setReminderInvoice(null)}
-                        invoiceId={reminderInvoice.id}
-                        invoiceNumber={reminderInvoice.number}
+                        onClose={() => setReminderTarget(null)}
+                        invoiceId={reminderTarget.invoiceId}
+                        studentName={reminderTarget.studentName}
                     />
                 ) : null}
             </div>

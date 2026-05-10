@@ -31,6 +31,7 @@ class GuruAcademicController extends Controller
         $activeSemester = AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester;
 
         $schedules = AcademicSchedule::query()
+            ->forActivePublishedSet()
             ->where('teacher_id', $user->id)
             ->whereIn('day', AcademicSchedule::TEACHING_DAYS)
             ->with([

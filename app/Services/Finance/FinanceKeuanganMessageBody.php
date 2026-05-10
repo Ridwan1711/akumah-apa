@@ -22,37 +22,69 @@ final class FinanceKeuanganMessageBody
             return trim($customMessage);
         }
 
-        $invoice->loadMissing('paymentType:id,name', 'student:id,full_name', 'academicYear:id,name');
-
+        $invoice->loadMissing('student:id,full_name');
         $student = $invoice->student?->full_name ?? 'Santri';
-        $remaining = max(0, (float) $invoice->remainingAmount());
-        $remainingFmt = self::rp($remaining);
+        $studentId = $invoice->student_id;
+        if ($studentId === null) {
+            return 'Pengingat tagihan: data santri tidak tersedia.';
+        }
+
+        $openInvoices = Invoice::query()
+            ->where('student_id', $studentId)
+            ->whereNotIn('status', [Invoice::STATUS_PAID, Invoice::STATUS_CANCELLED])
+            ->with(['paymentType:id,name', 'academicYear:id,name'])
+            ->withSum([
+                'payments as verified_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', Payment::STATUS_VERIFIED),
+            ], 'amount')
+            ->orderBy('due_date')
+            ->orderByDesc('id')
+            ->get()
+            ->filter(function (Invoice $inv): bool {
+                $paid = (float) ($inv->verified_paid_amount ?? 0);
+
+                return max(0.0, (float) $inv->final_amount - $paid) > 0.009;
+            })
+            ->values();
+
+        if ($openInvoices->isEmpty()) {
+            $invoice->loadMissing('paymentType:id,name', 'academicYear:id,name');
+            if (in_array($invoice->status, [Invoice::STATUS_PAID, Invoice::STATUS_CANCELLED], true)) {
+                return 'Pengingat tagihan: tidak ada tagihan terbuka untuk santri ini.';
+            }
+            $openInvoices = collect([$invoice]);
+        }
 
         $lines = [];
-        $breakdown = $invoice->resolvedBreakdown();
-        if ($breakdown !== []) {
-            $n = 1;
-            foreach ($breakdown as $row) {
-                $label = trim((string) ($row['label'] ?? 'Item'));
-                $amt = (float) ($row['amount'] ?? 0);
-                $lines[] = $n.'. '.$label.' — '.self::rp($amt);
-                $n++;
+        $totalRemaining = 0.0;
+        $n = 1;
+        foreach ($openInvoices as $inv) {
+            $inv->loadMissing('paymentType:id,name', 'academicYear:id,name');
+            $paid = (float) ($inv->verified_paid_amount ?? $inv->totalPaid());
+            $lineRemain = max(0.0, (float) $inv->final_amount - $paid);
+            if ($lineRemain <= 0.009) {
+                continue;
             }
-        } else {
-            $lines[] = '1. '.self::invoiceFallbackLineTitle($invoice).' — '.$remainingFmt;
+            $totalRemaining += $lineRemain;
+            $lines[] = $n.'. '.self::invoiceListLineTitle($inv).' — '.self::rp($lineRemain);
+            $n++;
+        }
+
+        if ($lines === []) {
+            return 'Pengingat tagihan: tidak ada tagihan terbuka untuk santri ini.';
         }
 
         $bodyLines = implode("\n", $lines);
+        $totalFmt = self::rp($totalRemaining);
         $appName = (string) config('app.name', 'Aplikasi');
 
         return <<<TXT
 Assalamu'alaikum Warahmatullahi Wabarakatuh.
 
-Sebagai pengingat, kami informasikan bahwa ananda *{$student}* masih memiliki tunggakan pembayaran sebagai berikut:
+Sebagai pengingat, kami informasikan bahwa ananda *{$student}* masih memiliki tunggakan. Berikut daftar tagihan yang masih terbuka (nominal sisa per entri):
 
 {$bodyLines}
 
-**Total Tagihan: {$remainingFmt}**
+**Total sisa yang perlu diselesaikan: {$totalFmt}**
 
 Kami mohon kesediaannya untuk segera melakukan pembayaran, baik secara tunai maupun transfer. Pembayaran juga dapat dilakukan melalui aplikasi *{$appName}* yang tersedia di Play Store. Silakan login menggunakan akun Wali Santri/Santri yang telah kami sediakan.
 
@@ -212,21 +244,23 @@ TXT;
         return $rows;
     }
 
-    private static function invoiceFallbackLineTitle(Invoice $invoice): string
+    private static function invoiceListLineTitle(Invoice $invoice): string
     {
-        $type = (string) ($invoice->paymentType?->name ?? 'Tagihan');
+        $numRaw = trim((string) ($invoice->invoice_number ?? ''));
+        $num = $numRaw !== '' ? $invoice->invoice_number : '#'.$invoice->id;
+        $type = trim((string) ($invoice->paymentType?->name ?? 'Tagihan'));
+        $parts = [];
+        if ($invoice->academicYear?->name) {
+            $parts[] = (string) $invoice->academicYear->name;
+        }
         $month = $invoice->month;
         if (is_int($month) || (is_numeric($month) && (int) $month >= 1 && (int) $month <= 12)) {
             $m = (int) $month;
-            $year = $invoice->due_date instanceof CarbonInterface
-                ? (int) $invoice->due_date->format('Y')
-                : (int) now()->format('Y');
-            $monthName = self::MONTH_NAMES[$m] ?? 'Bulan '.$m;
-
-            return $monthName.' '.$year.' ('.$type.')';
+            $parts[] = self::MONTH_NAMES[$m] ?? 'Bulan '.$m;
         }
+        $period = $parts !== [] ? ' • '.implode(' ', $parts) : '';
 
-        return $type;
+        return "{$num} — {$type}{$period}";
     }
 
     private static function formatIdDate(CarbonInterface|\DateTimeInterface|string|null $date): string

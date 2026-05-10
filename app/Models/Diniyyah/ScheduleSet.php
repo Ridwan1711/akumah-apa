@@ -2,6 +2,7 @@
 
 namespace App\Models\Diniyyah;
 
+use App\Models\AcademicPeriod;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -45,5 +46,28 @@ class ScheduleSet extends Model
     public function schedules(): HasMany
     {
         return $this->hasMany(AcademicSchedule::class, 'schedule_set_id');
+    }
+
+    /**
+     * ScheduleSet yang ditandai aktif untuk periode (satu nama jadwal tayang per periode).
+     */
+    public static function activeSetIdForPeriod(int $periodId): ?int
+    {
+        $id = static::query()
+            ->where('period_id', $periodId)
+            ->where('is_active', true)
+            ->value('id');
+
+        return $id !== null ? (int) $id : null;
+    }
+
+    public static function activeSetIdForCurrentPeriod(): ?int
+    {
+        $periodId = AcademicPeriod::query()->active()->value('id');
+        if ($periodId === null) {
+            return null;
+        }
+
+        return self::activeSetIdForPeriod((int) $periodId);
     }
 }

@@ -26,6 +26,7 @@ class GuruAttendanceController extends Controller
         $activeSemester = AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester;
 
         $schedules = AcademicSchedule::query()
+            ->forActivePublishedSet()
             ->where('day', $dayOfWeek)
             ->where('teacher_id', $user->id)
             ->with([

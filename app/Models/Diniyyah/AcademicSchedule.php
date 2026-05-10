@@ -3,6 +3,7 @@
 namespace App\Models\Diniyyah;
 
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -106,5 +107,31 @@ class AcademicSchedule extends Model
     public function lessonSessions(): HasMany
     {
         return $this->hasMany(\App\Models\LessonSession::class, 'schedule_id');
+    }
+
+    /**
+     * Hanya sel dari ScheduleSet yang sedang ditayangkan (is_active) pada periode akademik aktif.
+     */
+    public function scopeForActivePublishedSet(Builder $query): Builder
+    {
+        $setId = ScheduleSet::activeSetIdForCurrentPeriod();
+        if ($setId === null) {
+            return $query->whereRaw('0 = 1');
+        }
+
+        return $query->where($query->getModel()->qualifyColumn('schedule_set_id'), $setId);
+    }
+
+    /**
+     * Hanya sel dari ScheduleSet yang ditayangkan pada periode akademik tertentu.
+     */
+    public function scopeForActivePublishedSetInPeriod(Builder $query, int $periodId): Builder
+    {
+        $setId = ScheduleSet::activeSetIdForPeriod($periodId);
+        if ($setId === null) {
+            return $query->whereRaw('0 = 1');
+        }
+
+        return $query->where($query->getModel()->qualifyColumn('schedule_set_id'), $setId);
     }
 }

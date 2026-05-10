@@ -30,6 +30,12 @@ class AdminScheduleController extends Controller
             ->orderBy('day')
             ->orderBy('time_start');
 
+        if ($request->filled('schedule_set_id')) {
+            $query->where('schedule_set_id', (int) $request->schedule_set_id);
+        } else {
+            $query->forActivePublishedSet();
+        }
+
         if ($request->filled('class_id')) {
             $classId = (int) $request->class_id;
             $query->where('class_id', $classId);

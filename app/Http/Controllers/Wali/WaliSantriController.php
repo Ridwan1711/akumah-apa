@@ -132,6 +132,7 @@ class WaliSantriController extends Controller
 
         $activeSemester = AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester;
         $schedules = AcademicSchedule::query()
+            ->forActivePublishedSet()
             ->where('class_id', $student->currentClass->id)
             ->whereIn('day', AcademicSchedule::TEACHING_DAYS)
             ->with([

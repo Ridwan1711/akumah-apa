@@ -267,6 +267,7 @@ export default function InvoiceShow({ invoice }: Props) {
                 open={reminderOpen}
                 onClose={() => setReminderOpen(false)}
                 invoiceId={invoice.id}
+                studentName={invoice.student?.full_name}
                 invoiceNumber={invoice.invoice_number}
             />
         </AppLayout>

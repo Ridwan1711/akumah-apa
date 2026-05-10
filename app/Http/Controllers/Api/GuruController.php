@@ -97,6 +97,7 @@ class GuruController extends Controller
         $todayDow = (int) now()->isoWeekday();
 
         $todayScheduleSlots = AcademicSchedule::query()
+            ->forActivePublishedSet()
             ->where('teacher_id', $user->id)
             ->where('day', $todayDow)
             ->count();
@@ -170,6 +171,7 @@ class GuruController extends Controller
         $activeSemester = AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester;
 
         $schedulesQuery = AcademicSchedule::query()
+            ->forActivePublishedSet()
             ->where('teacher_id', $user->id)
             ->whereIn('day', AcademicSchedule::TEACHING_DAYS)
             ->with([

@@ -10,10 +10,10 @@ use App\Models\Diniyyah\Score;
 use App\Models\EmProfile;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Services\Finance\InstallmentService;
 use App\Models\Student;
 use App\Models\StudentViolation;
 use App\Notifications\PaymentPendingNotification;
+use App\Services\Finance\InstallmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -222,6 +222,7 @@ class WaliController extends Controller
         abort_unless($student->currentClass, 404, 'Kelas santri tidak ditemukan.');
 
         $schedules = AcademicSchedule::query()
+            ->forActivePublishedSet()
             ->where('class_id', $student->currentClass->id)
             ->whereIn('day', AcademicSchedule::TEACHING_DAYS)
             ->with([

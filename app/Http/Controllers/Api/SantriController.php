@@ -14,8 +14,8 @@ use App\Models\LessonAttendance;
 use App\Models\Payment;
 use App\Models\Semester;
 use App\Models\Student;
-use App\Services\Finance\InstallmentService;
 use App\Notifications\PaymentPendingNotification;
+use App\Services\Finance\InstallmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -258,6 +258,7 @@ class SantriController extends Controller
         $activeSemester = AcademicPeriod::query()->active()->with('semester:id,name')->first()?->semester;
 
         $schedulesQuery = AcademicSchedule::query()
+            ->forActivePublishedSet()
             ->where('class_id', $class->id)
             ->whereIn('day', AcademicSchedule::TEACHING_DAYS)
             ->with([

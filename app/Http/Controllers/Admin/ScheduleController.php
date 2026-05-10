@@ -48,7 +48,10 @@ class ScheduleController extends Controller
                 'teacher:id,name',
                 'period:id,academic_year_id,semester_id,is_active',
             ])
-            ->when($selectedPeriodId > 0, fn ($q) => $q->where('period_id', $selectedPeriodId))
+            ->when($selectedPeriodId > 0, function ($q) use ($selectedPeriodId) {
+                $q->where('period_id', $selectedPeriodId)
+                    ->forActivePublishedSetInPeriod($selectedPeriodId);
+            })
             ->when($request->filled('class_id'), fn ($q) => $q->where('class_id', (int) $request->class_id))
             ->when($request->filled('teacher_id'), fn ($q) => $q->where('teacher_id', (int) $request->teacher_id))
             ->when(

@@ -36,6 +36,7 @@ class SendTomorrowScheduleReminders extends Command
         $this->info("Mengirim pengingat untuk {$dayName} ({$dateStr}).");
 
         $schedules = AcademicSchedule::query()
+            ->forActivePublishedSet()
             ->where('day', $dayOfWeek)
             ->with([
                 'schoolClass:id,name,grade_level_id',
