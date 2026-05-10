@@ -9,6 +9,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class SendFinanceWhatsappMessageJob implements ShouldQueue
 {
@@ -28,6 +29,13 @@ class SendFinanceWhatsappMessageJob implements ShouldQueue
     public function handle(NgedeployWaClient $client): void
     {
         if (! config('services.wa.enabled')) {
+            Log::warning('wa_send_skipped_job_wa_disabled', [
+                'context' => $this->context,
+                'invoice_id' => $this->invoiceId,
+                'number_suffix' => NgedeployWaClient::maskNumber($this->normalizedPhone),
+                'hint' => 'WA_ENABLED=false saat job jalan (atau config cache usang). Job tidak memanggil API.',
+            ]);
+
             return;
         }
 
@@ -43,6 +51,17 @@ class SendFinanceWhatsappMessageJob implements ShouldQueue
             'context' => $this->context,
             'invoice_id' => $this->invoiceId,
             'number_suffix' => NgedeployWaClient::maskNumber($this->normalizedPhone),
+        ]);
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        Log::error('wa_send_job_failed_permanent', [
+            'context' => $this->context,
+            'invoice_id' => $this->invoiceId,
+            'number_suffix' => NgedeployWaClient::maskNumber($this->normalizedPhone),
+            'error' => $exception?->getMessage(),
+            'exception_class' => $exception !== null ? $exception::class : null,
         ]);
     }
 }

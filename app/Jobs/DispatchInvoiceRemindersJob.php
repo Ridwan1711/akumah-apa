@@ -6,6 +6,7 @@ use App\Models\Invoice;
 use App\Services\Finance\DispatchInvoiceRemindersAction;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Log;
 
 class DispatchInvoiceRemindersJob implements ShouldQueue
 {
@@ -28,6 +29,13 @@ class DispatchInvoiceRemindersJob implements ShouldQueue
 
     public function handle(DispatchInvoiceRemindersAction $action): void
     {
+        Log::info('dispatch_invoice_reminders_job_started', [
+            'invoice_ids_count' => count($this->invoiceIds),
+            'send_app_notification' => $this->sendAppNotification,
+            'send_whatsapp' => $this->sendWhatsapp,
+            'wa_enabled' => (bool) config('services.wa.enabled'),
+        ]);
+
         $waStaggerStart = 0;
 
         foreach (array_chunk($this->invoiceIds, 200) as $invoiceIdChunk) {

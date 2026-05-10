@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Notifications\InvoiceReminderNotification;
 use App\Notifications\PaymentVerifiedNotification;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Log;
 
 final class FinanceWhatsappOutbound
 {
@@ -24,6 +25,12 @@ final class FinanceWhatsappOutbound
         int $staggerIndex,
     ): void {
         if (! Config::boolean('services.wa.enabled')) {
+            Log::warning('wa_queue_skipped_disabled', [
+                'context' => 'invoice_reminder',
+                'invoice_id' => (int) $invoice->id,
+                'hint' => 'WA_ENABLED=false — job WA tidak di-dispatch. Aktifkan di .env lalu php artisan config:clear.',
+            ]);
+
             return;
         }
 
@@ -42,6 +49,12 @@ final class FinanceWhatsappOutbound
     public function queuePaymentVerifiedForPayment(Payment $payment): int
     {
         if (! Config::boolean('services.wa.enabled')) {
+            Log::warning('wa_queue_skipped_disabled', [
+                'context' => 'payment_verified',
+                'payment_id' => (int) $payment->id,
+                'hint' => 'WA_ENABLED=false — job WA tidak di-dispatch.',
+            ]);
+
             return 0;
         }
 
@@ -92,9 +105,20 @@ final class FinanceWhatsappOutbound
     {
         $interval = max(0, (int) config('services.wa.bulk_delay_seconds', 12));
         $delaySeconds = max(0, $staggerIndex) * $interval;
+        $queueName = (string) config('services.wa.queue', 'wa');
 
         SendFinanceWhatsappMessageJob::dispatch($phone, $text, $context, $invoiceId)
-            ->onQueue((string) config('services.wa.queue', 'wa'))
+            ->onQueue($queueName)
             ->delay(now()->addSeconds($delaySeconds));
+
+        Log::info('wa_job_dispatched', [
+            'context' => $context,
+            'invoice_id' => $invoiceId,
+            'queue' => $queueName,
+            'delay_seconds' => $delaySeconds,
+            'stagger_index' => $staggerIndex,
+            'number_suffix' => NgedeployWaClient::maskNumber($phone),
+            'hint' => 'Pastikan worker memproses queue ini, mis: php artisan queue:work --queue='.$queueName.',default',
+        ]);
     }
 }

@@ -8,6 +8,7 @@ use App\Models\Student;
 use App\Models\User;
 use App\Notifications\InvoiceReminderNotification;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 final class DispatchInvoiceRemindersAction
 {
@@ -33,6 +34,14 @@ final class DispatchInvoiceRemindersAction
         bool $sendWhatsapp,
         int $waStaggerStart = 0,
     ): array {
+        Log::info('invoice_reminders_dispatch_run', [
+            'invoice_count' => $invoices->count(),
+            'send_app_notification' => $sendAppNotification,
+            'send_whatsapp' => $sendWhatsapp,
+            'wa_enabled' => (bool) config('services.wa.enabled'),
+            'wa_queue' => (string) config('services.wa.queue', 'wa'),
+        ]);
+
         $sentCount = 0;
         $recipientsWithoutAccount = 0;
         $waQueued = 0;
@@ -184,11 +193,24 @@ final class DispatchInvoiceRemindersAction
             : $this->recipient->resolve($student, $waliUser);
 
         if ($phone === null) {
+            Log::warning('invoice_wa_skipped_no_phone', [
+                'invoice_id' => (int) $invoice->id,
+                'student_id' => (int) $student->id,
+                'wali_user_id' => $waliUser !== null ? (int) $waliUser->id : null,
+                'guardian_without_user_id' => $guardianWithoutUser !== null ? (int) $guardianWithoutUser->id : null,
+                'hint' => 'Isi WhatsApp di akun santri, No HP (EM), telepon wali, atau aktifkan WA_ALLOW_FALLBACK_RECIPIENT + WA_FALLBACK_PHONE.',
+            ]);
+
             return false;
         }
 
         $dedupeKey = $invoice->id.'|'.$phone;
         if (isset($waDedupePhones[$dedupeKey])) {
+            Log::info('invoice_wa_skipped_dedupe', [
+                'invoice_id' => (int) $invoice->id,
+                'number_suffix' => NgedeployWaClient::maskNumber($phone),
+            ]);
+
             return false;
         }
 
