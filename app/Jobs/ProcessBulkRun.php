@@ -12,21 +12,18 @@ use App\Models\Invoice;
 use App\Models\PaymentType;
 use App\Models\Role;
 use App\Models\Student;
-use App\Models\StudentDiscount;
 use App\Models\User;
 use App\Notifications\BulkRunFinishedNotification;
-use App\Notifications\InvoiceCreatedNotification;
-use App\Services\SystemLogService;
-use Illuminate\Database\QueryException;
+use App\Services\Finance\InvoiceImportSupport;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Throwable;
 
-class ProcessBulkRun implements ShouldQueue, ShouldBeUnique
+class ProcessBulkRun implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
@@ -125,19 +122,21 @@ class ProcessBulkRun implements ShouldQueue, ShouldBeUnique
                     ->where('month', $month)
                     ->first();
                 if ($resendNotificationOnExisting && $existingInvoice) {
-                    $this->notifyInvoiceCreatedTargets($existingInvoice);
+                    InvoiceImportSupport::notifyInvoiceCreatedTargets($existingInvoice);
                 }
                 $this->incrementRunCounters($run, 'skipped');
+
                 continue;
             }
 
             $amount = $this->resolveAmount($paymentType, $student);
             if ($amount === null) {
                 $this->incrementRunCounters($run, 'skipped');
+
                 continue;
             }
-            $discount = $this->resolveDiscount($student->id, $paymentTypeId, $academicYearId, $amount);
-            $breakdown = $this->resolveInvoiceBreakdown($paymentType, $amount, $overrideBreakdown);
+            $discount = InvoiceImportSupport::studentMasterDiscount($student->id, $paymentTypeId, $academicYearId, $amount);
+            $breakdown = InvoiceImportSupport::resolveBreakdownScaled($paymentType, $amount, $overrideBreakdown);
 
             try {
                 $invoice = Invoice::create([
@@ -164,15 +163,16 @@ class ProcessBulkRun implements ShouldQueue, ShouldBeUnique
                             ->where('month', $month)
                             ->first();
                         if ($existingInvoice) {
-                            $this->notifyInvoiceCreatedTargets($existingInvoice);
+                            InvoiceImportSupport::notifyInvoiceCreatedTargets($existingInvoice);
                         }
                     }
                     $this->incrementRunCounters($run, 'skipped');
+
                     continue;
                 }
                 throw $e;
             }
-            $this->notifyInvoiceCreatedTargets($invoice);
+            InvoiceImportSupport::notifyInvoiceCreatedTargets($invoice);
 
             $this->incrementRunCounters($run, 'created');
         }
@@ -195,6 +195,7 @@ class ProcessBulkRun implements ShouldQueue, ShouldBeUnique
             $student = Student::find($item['student_id'] ?? null);
             if (! $student) {
                 $this->incrementRunCounters($run, 'failed');
+
                 continue;
             }
 
@@ -204,10 +205,12 @@ class ProcessBulkRun implements ShouldQueue, ShouldBeUnique
                 $targetClass = SchoolClass::query()->find($targetId);
                 if (! $targetClass) {
                     $this->incrementRunCounters($run, 'failed');
+
                     continue;
                 }
                 if (! $targetClass->acceptsStudentGender($student->gender)) {
                     $this->incrementRunCounters($run, 'failed');
+
                     continue;
                 }
 
@@ -419,17 +422,6 @@ class ProcessBulkRun implements ShouldQueue, ShouldBeUnique
         return (float) $type->default_amount;
     }
 
-    protected function resolveDiscount(int $studentId, int $paymentTypeId, int $academicYearId, float $amount): float
-    {
-        $discount = StudentDiscount::query()
-            ->where('student_id', $studentId)
-            ->where('payment_type_id', $paymentTypeId)
-            ->where('academic_year_id', $academicYearId)
-            ->first();
-
-        return $discount ? $discount->calculateDiscount($amount) : 0;
-    }
-
     protected function notifyRunResult(ImportRun $run): void
     {
         $user = $run->requestedBy;
@@ -440,41 +432,6 @@ class ProcessBulkRun implements ShouldQueue, ShouldBeUnique
         $user->notify(new BulkRunFinishedNotification($run));
     }
 
-    protected function notifyInvoiceCreatedTargets(Invoice $invoice): void
-    {
-        $invoice->loadMissing('student.user', 'student.guardians.user');
-        $student = $invoice->student;
-        if (! $student) {
-            $log = new SystemLogService();
-            $log->warning('invoice_notification_skipped', [
-                'reason' => 'missing_student',
-                'invoice_id' => $invoice->id,
-            ]);
-
-            return;
-        }
-
-        $guardianUsers = $student->guardians
-            ->pluck('user')
-            ->filter()
-            ->unique('id');
-        $hasStudentUser = (bool) $student->user;
-
-        app(SystemLogService::class)->info('invoice_notification_targets', [
-            'invoice_id' => $invoice->id,
-            'student_id' => $student->id,
-            'student_user_id' => $student->user?->id,
-            'guardian_target_count' => $guardianUsers->count(),
-            'has_student_user' => $hasStudentUser,
-        ]);
-
-        $guardianUsers->each(fn ($user) => $user->notify(new InvoiceCreatedNotification($invoice)));
-
-        if ($hasStudentUser) {
-            $student->user->notify(new InvoiceCreatedNotification($invoice));
-        }
-    }
-
     protected function isUniqueConstraintViolation(QueryException $e): bool
     {
         $sqlState = $e->errorInfo[0] ?? null;
@@ -483,38 +440,5 @@ class ProcessBulkRun implements ShouldQueue, ShouldBeUnique
         return $sqlState === '23505' // PostgreSQL unique_violation
             || $sqlState === '23000' // ANSI/MySQL integrity violation
             || $driverCode === '1062'; // MySQL duplicate entry
-    }
-
-    /**
-     * @param  mixed  $overrideBreakdown
-     * @return array<int, array{label:string, amount:float}>
-     */
-    protected function resolveInvoiceBreakdown(PaymentType $paymentType, float $amount, mixed $overrideBreakdown): array
-    {
-        $normalizedOverride = PaymentType::normalizeBreakdownItems($overrideBreakdown);
-        if ($normalizedOverride !== []) {
-            $sum = PaymentType::breakdownTotal($normalizedOverride);
-            if ($sum > 0) {
-                $ratio = $amount / $sum;
-                $allocated = 0.0;
-                $scaled = [];
-                foreach ($normalizedOverride as $index => $item) {
-                    $isLast = $index === count($normalizedOverride) - 1;
-                    $itemAmount = $isLast
-                        ? round($amount - $allocated, 2)
-                        : round($item['amount'] * $ratio, 2);
-                    $itemAmount = max(0, $itemAmount);
-                    $allocated += $itemAmount;
-                    $scaled[] = [
-                        'label' => $item['label'],
-                        'amount' => $itemAmount,
-                    ];
-                }
-
-                return PaymentType::normalizeBreakdownItems($scaled);
-            }
-        }
-
-        return $paymentType->buildBreakdownForAmount($amount);
     }
 }

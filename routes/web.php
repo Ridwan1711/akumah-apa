@@ -10,8 +10,10 @@ use App\Http\Controllers\Admin\AttendanceController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\ClassPromotionController;
 use App\Http\Controllers\Admin\DiniyahClassController;
+use App\Http\Controllers\Admin\DormDataTransferController;
 use App\Http\Controllers\Admin\GuardianController;
 use App\Http\Controllers\Admin\InvoiceController;
+use App\Http\Controllers\Admin\InvoiceDataTransferController;
 use App\Http\Controllers\Admin\KitabGradeController;
 use App\Http\Controllers\Admin\KitabReadingAssessmentController;
 use App\Http\Controllers\Admin\KitabReadingExaminerAssignmentController;
@@ -212,6 +214,10 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::post('asrama/assignments', [AsramaController::class, 'storeAssignment'])->name('asrama.assignments.store');
         Route::post('asrama/assignments/copy-from-year', [AsramaController::class, 'copyAssignmentsFromAcademicYear'])->name('asrama.assignments.copy-from-year');
         Route::post('asrama/assignments/{assignment}/checkout', [AsramaController::class, 'checkout'])->name('asrama.assignments.checkout');
+        Route::get('asrama/template', [DormDataTransferController::class, 'template'])->name('asrama.template');
+        Route::get('asrama/export/master', [DormDataTransferController::class, 'exportMaster'])->name('asrama.export.master');
+        Route::get('asrama/export/assignments', [DormDataTransferController::class, 'exportAssignments'])->name('asrama.export.assignments');
+        Route::post('asrama/import', [DormDataTransferController::class, 'import'])->name('asrama.import');
 
         // Violations
         Route::get('violations', [ViolationController::class, 'index'])->name('violations.index');
@@ -293,6 +299,15 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::delete('student-discounts/{studentDiscount}', [StudentDiscountController::class, 'destroy'])->name('student-discounts.destroy');
 
         Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
+        Route::get('invoices-template', [InvoiceDataTransferController::class, 'template'])->name('invoices.template');
+        Route::get('invoices-export', [InvoiceDataTransferController::class, 'export'])->name('invoices.export');
+        Route::post('invoices-import', [InvoiceDataTransferController::class, 'import'])
+            ->middleware('permission:'.Permissions::INVOICE_CREATE)
+            ->name('invoices.import');
+        Route::get('invoices-import-errors/{token}', [InvoiceDataTransferController::class, 'downloadErrors'])->name('invoices.import-errors');
+        Route::post('invoices-import-runs/{importRun}/retry', [InvoiceDataTransferController::class, 'retry'])
+            ->middleware('permission:'.Permissions::INVOICE_CREATE)
+            ->name('invoices.import-runs.retry');
         Route::get('invoices/generate', [InvoiceController::class, 'generate'])->name('invoices.generate');
         Route::post('invoices/bulk-generate-preview', [InvoiceController::class, 'previewBulkGenerate'])->name('invoices.bulk-generate-preview');
         Route::post('invoices/bulk-generate', [InvoiceController::class, 'bulkGenerate'])->name('invoices.bulk-generate');

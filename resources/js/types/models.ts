@@ -644,7 +644,7 @@ export type PaginationLink = {
 export type ImportRun = {
     id: number;
     uuid: string;
-    type: 'students' | 'teachers' | 'enrollments' | 'bulk';
+    type: 'students' | 'teachers' | 'enrollments' | 'bulk' | 'invoices';
     job_type?: string | null;
     strategy: 'skip' | 'update';
     status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';

@@ -1,14 +1,19 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Bell, Eye, FilePlus2, Search, Wallet } from 'lucide-react';
-import { useState } from 'react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { Bell, Download, Eye, FilePlus2, FileUp, Search, Wallet } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import FlashMessage from '@/components/flash-message';
+import InputError from '@/components/input-error';
 import {
     CrudCard,
     CrudEmptyState,
+    CrudModal,
     CrudPageHeader,
     CrudPagination,
     CrudStatStrip,
     CrudTableShell,
     CrudToolbar,
+    openDownload,
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
 import { can } from '@/lib/authz';
@@ -17,6 +22,7 @@ import type {
     AcademicYear,
     Auth,
     BreadcrumbItem,
+    ImportRun,
     PaginatedData,
     PaymentType,
     SchoolClass,
@@ -47,6 +53,28 @@ function firstRemindableInvoiceId(group: StudentInvoiceGroup): number | null {
     return row ? row.id : null;
 }
 
+function invoiceExportSearchParams(filters: Record<string, string | undefined>): string {
+    const p = new URLSearchParams();
+    ['status', 'payment_type_id', 'academic_year_id', 'month', 'search', 'class_id', 'division_code'].forEach((key) => {
+        const v = filters[key];
+        if (v) {
+            p.set(key, v);
+        }
+    });
+    return p.toString();
+}
+
+function importRunStatusLabel(status: ImportRun['status']): string {
+    const map: Record<string, string> = {
+        queued: 'Antre',
+        processing: 'Memproses',
+        completed: 'Selesai',
+        failed: 'Gagal',
+        cancelled: 'Dibatalkan',
+    };
+    return map[status] ?? status;
+}
+
 type Props = {
     studentGroups: PaginatedData<StudentInvoiceGroup>;
     totalInvoiceCount: number;
@@ -56,6 +84,7 @@ type Props = {
     divisionOptions: string[];
     filters: Record<string, string | undefined>;
     statusCounts: Record<string, number>;
+    invoiceImportRuns?: ImportRun[];
 };
 
 export default function InvoiceIndex({
@@ -67,11 +96,33 @@ export default function InvoiceIndex({
     divisionOptions,
     filters,
     statusCounts,
+    invoiceImportRuns = [],
 }: Props) {
     const { auth } = usePage<{ auth?: Auth }>().props;
     const canCreateInvoice = can(auth, 'invoice.create');
     const canSendReminder = can(auth, 'invoice.reminder.send');
     const [reminderTarget, setReminderTarget] = useState<{ invoiceId: number; studentName: string } | null>(null);
+    const [importOpen, setImportOpen] = useState(false);
+
+    const importForm = useForm<{ file: File | null; strategy: 'skip' | 'update' }>({
+        file: null,
+        strategy: 'skip',
+    });
+
+    const hasRunningImport = useMemo(
+        () => invoiceImportRuns.some((run) => run.status === 'queued' || run.status === 'processing'),
+        [invoiceImportRuns],
+    );
+
+    useEffect(() => {
+        if (!hasRunningImport) {
+            return undefined;
+        }
+        const id = window.setInterval(() => {
+            router.reload({ only: ['invoiceImportRuns'] });
+        }, 5000);
+        return () => window.clearInterval(id);
+    }, [hasRunningImport]);
 
     function handleFilter(key: string, value: string) {
         router.get(
@@ -81,9 +132,36 @@ export default function InvoiceIndex({
         );
     }
 
+    function handleImportSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        importForm.post('/admin/invoices-import', {
+            forceFormData: true,
+            onSuccess: () => {
+                setImportOpen(false);
+                importForm.reset('file');
+                toast.success('Import tagihan dimasukkan ke antrean');
+            },
+            onError: () => toast.error('Gagal mengunggah file import'),
+        });
+    }
+
+    function handleRetryImport(runId: number) {
+        router.post(
+            `/admin/invoices-import-runs/${runId}/retry`,
+            {},
+            {
+                onSuccess: () => toast.success('Retry import dimasukkan ke antrean'),
+                onError: () => toast.error('Gagal mengulang import'),
+            },
+        );
+    }
+
+    const exportQuery = invoiceExportSearchParams(filters);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Tagihan" />
+            <FlashMessage />
             <div>
                 <CrudPageHeader
                     title="Tagihan Santri"
@@ -124,6 +202,12 @@ export default function InvoiceIndex({
                                     <option key={item.id} value={String(item.id)}>{item.name}</option>
                                 ))}
                             </select>
+                            <select className="mcr-filter-select" value={filters.month ?? ''} onChange={(e) => handleFilter('month', e.target.value)}>
+                                <option value="">Semua Bulan</option>
+                                {monthNames.slice(1).map((label, idx) => (
+                                    <option key={label} value={String(idx + 1)}>{label}</option>
+                                ))}
+                            </select>
                             <select className="mcr-filter-select" value={filters.class_id ?? ''} onChange={(e) => handleFilter('class_id', e.target.value)}>
                                 <option value="">Semua Kelas</option>
                                 {classes.map((item) => (
@@ -139,14 +223,95 @@ export default function InvoiceIndex({
                         </>
                     }
                     right={
-                        canCreateInvoice ? (
-                        <Link href="/admin/invoices/generate" className="mcr-btn primary">
-                            <FilePlus2 size={14} />
-                            Bulk Generate
-                        </Link>
-                        ) : null
+                        <>
+                            <button
+                                type="button"
+                                className="mcr-btn secondary"
+                                onClick={() => openDownload('/admin/invoices-template?format=xlsx')}
+                            >
+                                <Download size={14} />
+                                Template
+                            </button>
+                            <button
+                                type="button"
+                                className="mcr-btn secondary"
+                                onClick={() =>
+                                    openDownload(
+                                        `/admin/invoices-export?format=xlsx${exportQuery ? `&${exportQuery}` : ''}`,
+                                    )
+                                }
+                            >
+                                <Download size={14} />
+                                Export
+                            </button>
+                            {canCreateInvoice ? (
+                                <button type="button" className="mcr-btn secondary" onClick={() => setImportOpen(true)}>
+                                    <FileUp size={14} />
+                                    Import
+                                </button>
+                            ) : null}
+                            {canCreateInvoice ? (
+                                <Link href="/admin/invoices/generate" className="mcr-btn primary">
+                                    <FilePlus2 size={14} />
+                                    Bulk Generate
+                                </Link>
+                            ) : null}
+                        </>
                     }
                 />
+
+                {canCreateInvoice ? (
+                    <div className="mb-4">
+                        <CrudCard>
+                        <div className="mcr-section-title">Riwayat import file</div>
+                        {invoiceImportRuns.length === 0 ? (
+                            <CrudEmptyState
+                                title="Belum ada import"
+                                description="Unggah file Excel lewat tombol Import untuk membuat tagihan per baris."
+                            />
+                        ) : (
+                            <div className="space-y-3">
+                                {invoiceImportRuns.map((run) => (
+                                    <div key={run.id} className="rounded-md border px-3 py-2 text-sm">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <div>
+                                                <span className="font-medium">{run.file_name}</span>
+                                                <span className="ml-2 text-muted-foreground">
+                                                    {importRunStatusLabel(run.status)}
+                                                </span>
+                                                {run.requestedBy?.name ? (
+                                                    <span className="ml-2 text-muted-foreground">• {run.requestedBy.name}</span>
+                                                ) : null}
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                {run.status === 'failed' ? (
+                                                    <button type="button" className="mcr-btn ghost text-xs" onClick={() => handleRetryImport(run.id)}>
+                                                        Retry
+                                                    </button>
+                                                ) : null}
+                                                {run.error_report_path ? (
+                                                    <a
+                                                        className="mcr-btn ghost text-xs"
+                                                        href={`/admin/invoices-import-errors/${run.uuid}`}
+                                                    >
+                                                        Unduh error CSV
+                                                    </a>
+                                                ) : null}
+                                            </div>
+                                        </div>
+                                        <div className="mt-1 text-xs text-muted-foreground">
+                                            Baris: {run.processed_rows}/{run.total_rows} • dibuat {run.created_count} • dilewati {run.skipped_count} • gagal {run.failed_count}
+                                        </div>
+                                        {run.error_message ? (
+                                            <div className="mt-1 text-xs text-destructive">{run.error_message}</div>
+                                        ) : null}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        </CrudCard>
+                    </div>
+                ) : null}
 
                 <CrudCard>
                     {studentGroups.data.length === 0 ? (
@@ -250,6 +415,54 @@ export default function InvoiceIndex({
                         studentName={reminderTarget.studentName}
                     />
                 ) : null}
+
+                <CrudModal
+                    open={importOpen}
+                    onClose={() => setImportOpen(false)}
+                    title="Import tagihan (Excel)"
+                    subtitle="Gunakan sheet Tagihan dari template. Proses berjalan di background."
+                >
+                    <form onSubmit={handleImportSubmit}>
+                        <div className="mcr-form-grid">
+                            <div className="mcr-form-group full">
+                                <label htmlFor="invoice-import-file">File</label>
+                                <input
+                                    id="invoice-import-file"
+                                    className="mcr-input"
+                                    type="file"
+                                    accept=".xlsx,.xls,.csv"
+                                    onChange={(e) => importForm.setData('file', e.target.files?.[0] ?? null)}
+                                />
+                                <InputError message={importForm.errors.file} />
+                            </div>
+                            <div className="mcr-form-group full">
+                                <label htmlFor="invoice-import-strategy">Strategi duplikat</label>
+                                <select
+                                    id="invoice-import-strategy"
+                                    className="mcr-form-select"
+                                    value={importForm.data.strategy}
+                                    onChange={(e) => importForm.setData('strategy', e.target.value as 'skip' | 'update')}
+                                >
+                                    <option value="skip">Lewati baris jika tagihan sudah ada</option>
+                                    <option value="update">Sama seperti lewati (v1 tidak menimpa tagihan)</option>
+                                </select>
+                                <InputError message={importForm.errors.strategy} />
+                            </div>
+                        </div>
+                        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                            <button type="button" className="mcr-btn secondary" onClick={() => openDownload('/admin/invoices-template?format=xlsx')}>
+                                <Download size={14} />
+                                Unduh template
+                            </button>
+                            <button type="button" className="mcr-btn ghost" onClick={() => setImportOpen(false)}>
+                                Batal
+                            </button>
+                            <button type="submit" className="mcr-btn primary" disabled={importForm.processing}>
+                                {importForm.processing ? 'Mengunggah…' : 'Kirim ke antrean'}
+                            </button>
+                        </div>
+                    </form>
+                </CrudModal>
             </div>
         </AppLayout>
     );

@@ -1,5 +1,5 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { BedDouble, CheckCircle2, Home, Plus, Users } from 'lucide-react';
+import { BedDouble, CheckCircle2, Download, FileText, FileUp, Home, Plus, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import FlashMessage from '@/components/flash-message';
@@ -8,11 +8,13 @@ import {
     CrudBulkActionBar,
     CrudCard,
     CrudEmptyState,
+    CrudModal,
     CrudPageHeader,
     CrudPagination,
     CrudStatStrip,
     CrudTableShell,
     CrudToolbar,
+    openDownload,
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
 import type { AcademicYear, BreadcrumbItem, DormRoom, PaginatedData, Student } from '@/types';
@@ -46,12 +48,21 @@ export default function AsramaAssign({
 }: Props) {
     const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
     const [copyProcessing, setCopyProcessing] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
     const assignForm = useForm<{ student_ids: number[]; room_id: string; checkin_date: string }>({
         student_ids: [],
         room_id: '',
         checkin_date: new Date().toISOString().slice(0, 10),
     });
     const currentAcademicYearId = Number(filters.academic_year_id ?? String(selectedAcademicYearId));
+
+    const importForm = useForm<{
+        file: File | null;
+        strategy: 'skip' | 'update';
+    }>({
+        file: null,
+        strategy: 'skip',
+    });
 
     const availableSlots = useMemo(
         () => availableRooms.reduce((sum, room) => sum + Math.max(0, room.capacity - (room.occupants_count ?? 0)), 0),
@@ -90,6 +101,19 @@ export default function AsramaAssign({
                 toast.success('Santri berhasil ditempatkan');
             },
             onError: () => toast.error('Gagal melakukan penempatan kamar'),
+        });
+    }
+
+    function submitImport(e: React.FormEvent) {
+        e.preventDefault();
+        importForm.post('/admin/asrama/import', {
+            forceFormData: true,
+            onSuccess: () => {
+                setImportOpen(false);
+                importForm.reset('file');
+                toast.success('Impor asrama selesai');
+            },
+            onError: () => toast.error('Gagal mengimpor file'),
         });
     }
 
@@ -141,6 +165,26 @@ export default function AsramaAssign({
                                 ))}
                             </select>
                             <span className="mcr-table-meta">Pilih santri, lalu tentukan kamar dan tanggal check-in.</span>
+                        </>
+                    }
+                    right={
+                        <>
+                            <button type="button" className="mcr-btn ghost" onClick={() => openDownload('/admin/asrama/template?format=xlsx')}>
+                                <FileText size={14} />
+                                Template
+                            </button>
+                            <button
+                                type="button"
+                                className="mcr-btn ghost"
+                                onClick={() => openDownload(`/admin/asrama/export/assignments?academic_year_id=${currentAcademicYearId}&format=xlsx`)}
+                            >
+                                <Download size={14} />
+                                Export penempatan
+                            </button>
+                            <button type="button" className="mcr-btn secondary" onClick={() => setImportOpen(true)}>
+                                <FileUp size={14} />
+                                Impor Excel
+                            </button>
                         </>
                     }
                 />
@@ -213,6 +257,50 @@ export default function AsramaAssign({
                     </CrudBulkActionBar>
                 </CrudCard>
             </div>
+
+            <CrudModal
+                open={importOpen}
+                onClose={() => setImportOpen(false)}
+                title="Impor Asrama (Excel)"
+                subtitle="Sheet Gedung_Kamar dan Penempatan. Santri yang sudah punya kobong aktif di tahun ajaran baris akan dilewati."
+            >
+                <form onSubmit={submitImport}>
+                    <div className="mcr-form-grid">
+                        <div className="mcr-form-group full">
+                            <label htmlFor="assign-asrama-import-file">File</label>
+                            <input
+                                id="assign-asrama-import-file"
+                                className="mcr-input"
+                                type="file"
+                                accept=".xlsx,.xls"
+                                onChange={(e) => importForm.setData('file', e.target.files?.[0] ?? null)}
+                            />
+                            <InputError message={importForm.errors.file} />
+                        </div>
+                        <div className="mcr-form-group full">
+                            <label htmlFor="assign-asrama-import-strategy">Strategi kamar duplikat</label>
+                            <select
+                                id="assign-asrama-import-strategy"
+                                className="mcr-form-select"
+                                value={importForm.data.strategy}
+                                onChange={(e) => importForm.setData('strategy', e.target.value as 'skip' | 'update')}
+                            >
+                                <option value="skip">Lewati kamar yang nomornya sudah ada</option>
+                                <option value="update">Perbarui kapasitas/lantai kamar yang sudah ada</option>
+                            </select>
+                            <InputError message={importForm.errors.strategy} />
+                        </div>
+                    </div>
+                    <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                        <button type="button" className="mcr-btn ghost" onClick={() => setImportOpen(false)}>
+                            Batal
+                        </button>
+                        <button type="submit" className="mcr-btn primary" disabled={importForm.processing}>
+                            {importForm.processing ? 'Memproses…' : 'Proses impor'}
+                        </button>
+                    </div>
+                </form>
+            </CrudModal>
         </AppLayout>
     );
 }

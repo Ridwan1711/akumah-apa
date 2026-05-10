@@ -11,22 +11,39 @@ class ImportRun extends Model
     use HasFactory;
 
     public const TYPE_STUDENTS = 'students';
+
     public const TYPE_TEACHERS = 'teachers';
+
     public const TYPE_ENROLLMENTS = 'enrollments';
+
     public const TYPE_BULK = 'bulk';
 
+    public const TYPE_INVOICES = 'invoices';
+
     public const JOB_STUDENT_IMPORT = 'student_import';
+
     public const JOB_TEACHER_IMPORT = 'teacher_import';
+
     public const JOB_ENROLLMENT_IMPORT = 'enrollment_import';
+
+    public const JOB_INVOICE_IMPORT = 'invoice_import';
+
     public const JOB_INVOICE_BULK_GENERATE = 'invoice_bulk_generate';
+
     public const JOB_CLASS_PROMOTION = 'class_promotion';
+
     public const JOB_ACCOUNT_GENERATE_STUDENTS = 'account_generate_students';
+
     public const JOB_ACCOUNT_GENERATE_GUARDIANS = 'account_generate_guardians';
 
     public const STATUS_QUEUED = 'queued';
+
     public const STATUS_PROCESSING = 'processing';
+
     public const STATUS_COMPLETED = 'completed';
+
     public const STATUS_FAILED = 'failed';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     public const FINAL_STATUSES = [

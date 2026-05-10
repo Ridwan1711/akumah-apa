@@ -11,12 +11,11 @@ use App\Models\ImportRun;
 use App\Models\Invoice;
 use App\Models\PaymentType;
 use App\Models\Student;
-use App\Models\StudentDiscount;
 use App\Models\StudentPosition;
 use App\Models\User;
-use App\Notifications\InvoiceCreatedNotification;
 use App\Services\Authorization\InvoiceVisibilityScope;
 use App\Services\Finance\DispatchInvoiceRemindersAction;
+use App\Services\Finance\InvoiceImportSupport;
 use App\Support\Authorization\Permissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -26,11 +25,15 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
 
 class InvoiceController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, InvoiceVisibilityScope $invoiceVisibilityScope): Response
     {
+        $user = $request->user();
+        abort_unless($user !== null, 403);
+
         // Base invoice query carrying all filter conditions. Reused both as a
         // sub-query for paginating distinct students AND for hydrating each
         // student's filtered invoices below.
@@ -48,6 +51,8 @@ class InvoiceController extends Controller
                     fn ($positionQuery) => $positionQuery->where('division_code', (string) $request->string('division_code'))
                 )
             );
+
+        $invoiceVisibilityScope->applyToInvoiceQuery($invoiceFilterQuery, $user);
 
         $totalInvoiceCount = (clone $invoiceFilterQuery)->count();
 
@@ -124,14 +129,32 @@ class InvoiceController extends Controller
                 ->pluck('division_code')
                 ->values(),
             'filters' => $request->only(['status', 'payment_type_id', 'academic_year_id', 'month', 'search', 'class_id', 'division_code']),
-            'statusCounts' => [
-                'all' => Invoice::count(),
-                'pending' => Invoice::where('status', Invoice::STATUS_PENDING)->count(),
-                'partial' => Invoice::where('status', Invoice::STATUS_PARTIAL)->count(),
-                'paid' => Invoice::where('status', Invoice::STATUS_PAID)->count(),
-                'overdue' => Invoice::where('status', Invoice::STATUS_OVERDUE)->count(),
-            ],
+            'statusCounts' => $this->scopedInvoiceStatusCounts($invoiceVisibilityScope, $user),
+            'invoiceImportRuns' => ImportRun::query()
+                ->with('requestedBy:id,name')
+                ->where('type', ImportRun::TYPE_INVOICES)
+                ->where('job_type', ImportRun::JOB_INVOICE_IMPORT)
+                ->latest('id')
+                ->limit(20)
+                ->get(),
         ]);
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function scopedInvoiceStatusCounts(InvoiceVisibilityScope $invoiceVisibilityScope, User $user): array
+    {
+        $base = Invoice::query();
+        $invoiceVisibilityScope->applyToInvoiceQuery($base, $user);
+
+        return [
+            'all' => (clone $base)->count(),
+            'pending' => (clone $base)->where('status', Invoice::STATUS_PENDING)->count(),
+            'partial' => (clone $base)->where('status', Invoice::STATUS_PARTIAL)->count(),
+            'paid' => (clone $base)->where('status', Invoice::STATUS_PAID)->count(),
+            'overdue' => (clone $base)->where('status', Invoice::STATUS_OVERDUE)->count(),
+        ];
     }
 
     public function generate(Request $request): Response
@@ -334,13 +357,24 @@ class InvoiceController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
         $paymentType = PaymentType::query()->findOrFail((int) $validated['payment_type_id']);
-        $breakdown = $this->resolveInvoiceBreakdown(
-            $paymentType,
-            (float) $validated['amount'],
-            $validated['breakdown'] ?? null
-        );
+        try {
+            $breakdown = InvoiceImportSupport::resolveBreakdownForInvoice(
+                $paymentType,
+                (float) $validated['amount'],
+                $validated['breakdown'] ?? null
+            );
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages([
+                'breakdown' => $e->getMessage(),
+            ]);
+        }
 
-        $discount = $this->resolveDiscount($validated['student_id'], $validated['payment_type_id'], $validated['academic_year_id'], $validated['amount']);
+        $discount = InvoiceImportSupport::studentMasterDiscount(
+            (int) $validated['student_id'],
+            (int) $validated['payment_type_id'],
+            (int) $validated['academic_year_id'],
+            (float) $validated['amount']
+        );
 
         $invoice = Invoice::create([
             'invoice_number' => Invoice::generateNumber(),
@@ -357,7 +391,7 @@ class InvoiceController extends Controller
             'notes' => $validated['notes'] ?? null,
             'generated_by' => $request->user()->id,
         ]);
-        $this->notifyInvoiceCreatedTargets($invoice);
+        InvoiceImportSupport::notifyInvoiceCreatedTargets($invoice);
 
         return redirect()->route('admin.invoices.index')->with('success', 'Tagihan berhasil dibuat.');
     }
@@ -580,65 +614,5 @@ class InvoiceController extends Controller
         ]);
 
         return redirect()->back()->with('success', 'Rincian tagihan berhasil diperbarui.');
-    }
-
-    private function resolveAmount(PaymentType $type, Student $student): ?float
-    {
-        if ($student->is_kuliah) {
-            return $type->kuliah_amount !== null ? (float) $type->kuliah_amount : null;
-        }
-
-        return (float) $type->default_amount;
-    }
-
-    private function resolveDiscount(int $studentId, int $paymentTypeId, int $academicYearId, float $amount): float
-    {
-        $discount = StudentDiscount::where('student_id', $studentId)
-            ->where('payment_type_id', $paymentTypeId)
-            ->where('academic_year_id', $academicYearId)
-            ->first();
-
-        return $discount ? $discount->calculateDiscount($amount) : 0;
-    }
-
-    private function notifyInvoiceCreatedTargets(Invoice $invoice): void
-    {
-        $invoice->loadMissing('student.user', 'student.guardians.user');
-        $student = $invoice->student;
-        if (! $student) {
-            return;
-        }
-
-        $student->guardians
-            ->pluck('user')
-            ->filter()
-            ->unique('id')
-            ->each(fn ($user) => $user->notify(new InvoiceCreatedNotification($invoice)));
-
-        if ($student->user) {
-            $student->user->notify(new InvoiceCreatedNotification($invoice));
-        }
-    }
-
-    /**
-     * @return array<int, array{label:string, amount:float}>
-     */
-    private function resolveInvoiceBreakdown(PaymentType $paymentType, float $amount, mixed $overrideBreakdown): array
-    {
-        $normalized = PaymentType::normalizeBreakdownItems($overrideBreakdown);
-        $resolved = $normalized !== [] ? $normalized : $paymentType->buildBreakdownForAmount($amount);
-
-        if ($resolved === []) {
-            return [];
-        }
-
-        $sum = PaymentType::breakdownTotal($resolved);
-        if (abs($sum - round($amount, 2)) > 0.01) {
-            throw ValidationException::withMessages([
-                'breakdown' => 'Total rincian harus sama dengan nominal tagihan.',
-            ]);
-        }
-
-        return $resolved;
     }
 }

@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\ImportRun;
 use App\Services\Imports\EnrollmentImportRowProcessor;
+use App\Services\Imports\InvoiceImportRowProcessor;
 use App\Services\Imports\StudentImportRowProcessor;
 use App\Services\Imports\TeacherImportRowProcessor;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -14,7 +15,7 @@ use Maatwebsite\Excel\Concerns\ToArray;
 use Maatwebsite\Excel\Facades\Excel;
 use Throwable;
 
-class ProcessImportRun implements ShouldQueue, ShouldBeUnique
+class ProcessImportRun implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
@@ -38,9 +39,9 @@ class ProcessImportRun implements ShouldQueue, ShouldBeUnique
     public function handle(
         StudentImportRowProcessor $studentProcessor,
         TeacherImportRowProcessor $teacherProcessor,
-        EnrollmentImportRowProcessor $enrollmentProcessor
-    ): void
-    {
+        EnrollmentImportRowProcessor $enrollmentProcessor,
+        InvoiceImportRowProcessor $invoiceProcessor,
+    ): void {
         $importRun = ImportRun::query()->find($this->importRunId);
         if (! $importRun || $importRun->isFinal()) {
             return;
@@ -61,7 +62,7 @@ class ProcessImportRun implements ShouldQueue, ShouldBeUnique
 
             foreach (array_chunk($rows, 500) as $chunk) {
                 foreach ($chunk as $row) {
-                    $result = $this->processRow($importRun, $row, $studentProcessor, $teacherProcessor, $enrollmentProcessor);
+                    $result = $this->processRow($importRun, $row, $studentProcessor, $teacherProcessor, $enrollmentProcessor, $invoiceProcessor);
                     $this->applyResult($importRun, $result);
 
                     if (! empty($result['message'])) {
@@ -144,9 +145,9 @@ class ProcessImportRun implements ShouldQueue, ShouldBeUnique
         array $row,
         StudentImportRowProcessor $studentProcessor,
         TeacherImportRowProcessor $teacherProcessor,
-        EnrollmentImportRowProcessor $enrollmentProcessor
-    ): array
-    {
+        EnrollmentImportRowProcessor $enrollmentProcessor,
+        InvoiceImportRowProcessor $invoiceProcessor,
+    ): array {
         if ($importRun->type === ImportRun::TYPE_STUDENTS) {
             return $studentProcessor->process($row, $importRun->strategy);
         }
@@ -155,7 +156,15 @@ class ProcessImportRun implements ShouldQueue, ShouldBeUnique
             return $enrollmentProcessor->process($row, $importRun->strategy);
         }
 
-        return $teacherProcessor->process($row, $importRun->strategy);
+        if ($importRun->type === ImportRun::TYPE_INVOICES) {
+            return $invoiceProcessor->process($row, $importRun->strategy, $importRun->requested_by);
+        }
+
+        if ($importRun->type === ImportRun::TYPE_TEACHERS) {
+            return $teacherProcessor->process($row, $importRun->strategy);
+        }
+
+        return ['status' => 'failed', 'message' => 'Tipe import tidak dikenal: '.$importRun->type];
     }
 
     protected function applyResult(ImportRun $importRun, array $result): void

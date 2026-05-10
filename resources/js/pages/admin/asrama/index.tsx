@@ -1,5 +1,5 @@
-import { Head, router, useForm } from '@inertiajs/react';
-import { BedDouble, Building2, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { BedDouble, Building2, Download, FileText, FileUp, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import FlashMessage from '@/components/flash-message';
@@ -12,6 +12,7 @@ import {
     CrudPageHeader,
     CrudStatStrip,
     CrudToolbar,
+    openDownload,
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem, DormBuilding, DormRoom } from '@/types';
@@ -35,11 +36,19 @@ type RoomForm = { building_id: string; room_number: string; capacity: string; fl
 export default function AsramaIndex({ buildings }: Props) {
     const [buildingModalOpen, setBuildingModalOpen] = useState(false);
     const [roomModalOpen, setRoomModalOpen] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
     const [deleteBuildingTarget, setDeleteBuildingTarget] = useState<BuildingRow | null>(null);
     const [deleteRoomTarget, setDeleteRoomTarget] = useState<DormRoom | null>(null);
 
     const buildingForm = useForm<BuildingForm>({ name: '', description: '' });
     const roomForm = useForm<RoomForm>({ building_id: '', room_number: '', capacity: '4', floor: '' });
+    const importForm = useForm<{
+        file: File | null;
+        strategy: 'skip' | 'update';
+    }>({
+        file: null,
+        strategy: 'skip',
+    });
 
     const roomCount = useMemo(
         () => buildings.reduce((sum, b) => sum + (b.rooms?.length ?? 0), 0),
@@ -90,6 +99,19 @@ export default function AsramaIndex({ buildings }: Props) {
         });
     }
 
+    function submitImport(e: React.FormEvent) {
+        e.preventDefault();
+        importForm.post('/admin/asrama/import', {
+            forceFormData: true,
+            onSuccess: () => {
+                setImportOpen(false);
+                importForm.reset('file');
+                toast.success('Impor asrama selesai');
+            },
+            onError: () => toast.error('Gagal mengimpor file'),
+        });
+    }
+
     function deleteRoom() {
         if (!deleteRoomTarget) return;
         router.delete(`/admin/asrama/rooms/${deleteRoomTarget.id}`, {
@@ -118,9 +140,25 @@ export default function AsramaIndex({ buildings }: Props) {
                 <FlashMessage />
 
                 <CrudToolbar
-                    left={<span className="mcr-table-meta">Tambahkan gedung dan kamar, lalu lakukan penempatan via menu assign.</span>}
+                    left={<span className="mcr-table-meta">Tambahkan gedung dan kamar, lalu lakukan penempatan via menu assign. Import file Excel (2 sheet) dari halaman ini setelah unduh template.</span>}
                     right={
                         <>
+                            <button type="button" className="mcr-btn ghost" onClick={() => openDownload('/admin/asrama/template?format=xlsx')}>
+                                <FileText size={14} />
+                                Template Excel
+                            </button>
+                            <button type="button" className="mcr-btn ghost" onClick={() => openDownload('/admin/asrama/export/master?format=xlsx')}>
+                                <Download size={14} />
+                                Export master
+                            </button>
+                            <Link href="/admin/asrama/assign" className="mcr-btn ghost">
+                                <Pencil size={14} />
+                                Assign kamar
+                            </Link>
+                            <button type="button" className="mcr-btn secondary" onClick={() => setImportOpen(true)}>
+                                <FileUp size={14} />
+                                Impor Excel
+                            </button>
                             <button type="button" className="mcr-btn secondary" onClick={() => setRoomModalOpen(true)}>
                                 <Plus size={14} />
                                 Tambah Kamar
@@ -246,6 +284,50 @@ export default function AsramaIndex({ buildings }: Props) {
                     <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                         <button type="button" className="mcr-btn ghost" onClick={() => setRoomModalOpen(false)}>Batal</button>
                         <button type="submit" className="mcr-btn primary" disabled={roomForm.processing}>{roomForm.processing ? 'Menyimpan...' : 'Simpan'}</button>
+                    </div>
+                </form>
+            </CrudModal>
+
+            <CrudModal
+                open={importOpen}
+                onClose={() => setImportOpen(false)}
+                title="Impor Asrama (Excel)"
+                subtitle="File .xlsx dengan sheet Gedung_Kamar dan Penempatan (sesuai template). Strategi memengaruhi baris gedung/kamar yang sudah ada."
+            >
+                <form onSubmit={submitImport}>
+                    <div className="mcr-form-grid">
+                        <div className="mcr-form-group full">
+                            <label htmlFor="asrama-import-file">File</label>
+                            <input
+                                id="asrama-import-file"
+                                className="mcr-input"
+                                type="file"
+                                accept=".xlsx,.xls"
+                                onChange={(e) => importForm.setData('file', e.target.files?.[0] ?? null)}
+                            />
+                            <InputError message={importForm.errors.file} />
+                        </div>
+                        <div className="mcr-form-group full">
+                            <label htmlFor="asrama-import-strategy">Strategi kamar duplikat</label>
+                            <select
+                                id="asrama-import-strategy"
+                                className="mcr-form-select"
+                                value={importForm.data.strategy}
+                                onChange={(e) => importForm.setData('strategy', e.target.value as 'skip' | 'update')}
+                            >
+                                <option value="skip">Lewati kamar yang nomornya sudah ada</option>
+                                <option value="update">Perbarui kapasitas/lantai kamar yang sudah ada</option>
+                            </select>
+                            <InputError message={importForm.errors.strategy} />
+                        </div>
+                    </div>
+                    <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                        <button type="button" className="mcr-btn ghost" onClick={() => setImportOpen(false)}>
+                            Batal
+                        </button>
+                        <button type="submit" className="mcr-btn primary" disabled={importForm.processing}>
+                            {importForm.processing ? 'Memproses…' : 'Proses impor'}
+                        </button>
                     </div>
                 </form>
             </CrudModal>
