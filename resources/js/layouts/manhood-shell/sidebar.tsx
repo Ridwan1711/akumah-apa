@@ -1,254 +1,17 @@
 import { Link, usePage } from '@inertiajs/react';
-import {
-    AlertTriangle,
-    ArrowUpDown,
-    Banknote,
-    Bell,
-    BookOpen,
-    BookOpenCheck,
-    Building,
-    CalendarClock,
-    CalendarDays,
-    ClipboardList,
-    CreditCard,
-    FileText,
-    GraduationCap,
-    Home,
-    KeyRound,
-    LayoutGrid,
-    Layers,
-    ListChecks,
-    PieChart,
-    Receipt,
-    School,
-    ScrollText,
-    Shield,
-    User,
-    UserCheck,
-    UserPlus,
-    Users,
-    Wallet
-    
-} from 'lucide-react';
-import type {LucideIcon} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useMemo } from 'react';
+
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import { useInitials } from '@/hooks/use-initials';
-import { can, canAny } from '@/lib/authz';
 import { toUrl } from '@/lib/utils';
-import type { Auth, NavItem } from '@/types';
+import type { Auth } from '@/types';
 
-type NavSection = {
-    label: string;
-    items: NavItem[];
-};
-
-const adminRoles = ['super_admin', 'admin_akademik'];
-const keuanganRoles = ['super_admin', 'admin_keuangan'];
-const musyrifRoles = ['musyrif'];
-
-function hasAnyRole(userRoleNames: string[], allowedRoles: readonly string[]) {
-    return allowedRoles.some((allowedRole) => userRoleNames.includes(allowedRole));
-}
-
-function getUserRoleNames(user: Auth['user']): string[] {
-    const directRole = user.role?.name ? [user.role.name] : [];
-    const relationRoles =
-        'roles' in user && Array.isArray(user.roles)
-            ? user.roles
-                  .map((role) => role?.name)
-                  .filter((roleName): roleName is string => !!roleName)
-            : [];
-
-    return Array.from(new Set([...directRole, ...relationRoles]));
-}
-
-function formatRoleLabel(roleNames: string[]): string {
-    if (roleNames.length === 0) return 'User';
-
-    return roleNames
-        .map((roleName) => roleName.replace(/_/g, ' '))
-        .join(', ');
-}
-
-function buildSections(
-    auth: Auth,
-    userRoleNames: string[],
-    hasGuruRecord: boolean,
-    hasWaliKelasRecord: boolean,
-    hasKitabReadingExaminerRecord: boolean,
-): NavSection[] {
-    const isAdmin = hasAnyRole(userRoleNames, adminRoles);
-    const hasFinanceAccess = canAny(auth, ['invoice.view', 'payment.view', 'payment.report.view']) || hasAnyRole(userRoleNames, keuanganRoles);
-    const isSuperAdmin = userRoleNames.includes('super_admin');
-    const isMusyrif = hasAnyRole(userRoleNames, musyrifRoles);
-    const isSantri = userRoleNames.includes('santri');
-    const isWaliSantri = userRoleNames.includes('wali_santri');
-    const canAccessKitabGrades =
-        canAny(auth, ['dashboard.guru.view', 'dashboard.admin.view']) || isAdmin || hasGuruRecord || hasKitabReadingExaminerRecord;
-    const canAccessRaportKelas = hasWaliKelasRecord;
-
-    const sections: NavSection[] = [
-        {
-            label: 'Utama',
-            items: [{ title: 'Dashboard', href: '/dashboard', icon: LayoutGrid }],
-        },
-    ];
-
-    if (isAdmin) {
-        sections.push({
-            label: 'Data Master',
-            items: [
-                { title: 'Data Santri', href: '/admin/students', icon: Users },
-                { title: 'Wali Santri', href: '/admin/guardians', icon: UserCheck },
-                { title: 'Pengurus Santri', href: '/admin/student-positions', icon: Shield },
-                { title: 'Enroll Kelas Santri', href: '/admin/student-enrollments', icon: UserPlus },
-                { title: 'Enroll Tingkat Formal', href: '/admin/formal-tingkat/assign', icon: School },
-                { title: 'Master Tingkat Formal', href: '/admin/tingkat-sekolahs', icon: Layers },
-                { title: 'Kelas Diniyah', href: '/admin/diniyah-classes', icon: GraduationCap },
-                { title: 'Tahun Ajaran', href: '/admin/academic-years', icon: CalendarDays },
-                { title: 'Generate Akun', href: '/admin/account-generator', icon: KeyRound },
-            ],
-        });
-        sections.push({
-            label: 'Akademik',
-            items: [
-                { title: 'Mata Pelajaran Kitab', href: '/admin/kitab-subjects', icon: BookOpen },
-                { title: 'Mapping Mapel-Tingkat', href: '/admin/subject-level-mappings', icon: ClipboardList },
-                { title: 'Subject Setting', href: '/admin/subject-settings', icon: ClipboardList },
-                { title: 'Komponen Penilaian', href: '/admin/assessment-components', icon: ListChecks },
-                { title: 'Manajemen Guru', href: '/admin/teachers', icon: Users },
-                { title: 'Penugasan Guru', href: '/admin/teaching-assignments', icon: UserPlus },
-                { title: 'Penguji Baca Kitab', href: '/admin/kitab-reading-examiners', icon: UserCheck },
-                { title: 'Surat Keterangan', href: '/admin/role-certificates', icon: ScrollText },
-                { title: 'Jadwal Kitab', href: '/admin/schedules', icon: CalendarClock },
-                { title: 'Jadwal (Matrix)', href: '/admin/schedule-sets', icon: CalendarClock },
-                { title: 'Kehadiran Santri', href: '/admin/attendances', icon: CalendarDays },
-                { title: 'Nilai Kitab', href: '/admin/kitab-grades', icon: ClipboardList },
-                { title: 'Nilai Baca Kitab', href: '/admin/kitab-reading-assessments', icon: BookOpenCheck },
-                { title: 'Raport', href: '/admin/report-cards', icon: ScrollText },
-                { title: 'Kenaikan Kelas', href: '/admin/class-promotion', icon: ArrowUpDown },
-            ],
-        });
-        sections.push({
-            label: 'Operasional',
-            items: [
-                { title: 'Asrama', href: '/admin/asrama', icon: Building },
-                { title: 'Pelanggaran', href: '/admin/violations', icon: AlertTriangle },
-                { title: 'Perizinan Pulang', href: '/admin/leave-permissions', icon: Home },
-                ...(can(auth, 'notification.manual.send')
-                    ? [{ title: 'Kirim Notifikasi', href: '/admin/notifications/manual', icon: Bell }]
-                    : []),
-            ],
-        });
-        if (isSuperAdmin) {
-            sections.push({
-                label: 'Sistem',
-                items: [
-                    { title: 'Manajemen User', href: '/admin/users', icon: Shield },
-                    { title: 'Log Sistem', href: '/admin/system-logs', icon: FileText },
-                    { title: 'Laravel Log', href: '/admin/laravel-logs', icon: FileText },
-                    { title: 'Log Aktivitas', href: '/admin/audit-logs', icon: FileText },
-                ],
-            });
-        } else if (can(auth, 'audit_log.view_akademik')) {
-            sections.push({
-                label: 'Sistem',
-                items: [
-                    { title: 'Log Sistem', href: '/admin/system-logs', icon: FileText },
-                    { title: 'Log Aktivitas', href: '/admin/audit-logs', icon: FileText },
-                ],
-            });
-        }
-    }
-
-    if (hasFinanceAccess) {
-        sections.push({
-            label: 'Keuangan',
-            items: [
-                ...(canAny(auth, ['invoice.view']) ? [{ title: 'Tagihan', href: '/admin/invoices', icon: Banknote }] : []),
-                ...(canAny(auth, ['payment.view']) ? [{ title: 'Pembayaran', href: '/admin/payments', icon: CreditCard }] : []),
-                ...(canAny(auth, ['invoice.view', 'payment.view', 'payment.report.view'])
-                    ? [
-                          { title: 'Diskon Santri', href: '/admin/student-discounts', icon: Wallet },
-                          { title: 'Jenis Tagihan', href: '/admin/payment-types', icon: ClipboardList },
-                      ]
-                    : []),
-                ...(canAny(auth, ['payment.report.view']) ? [{ title: 'Laporan Keuangan', href: '/admin/payment-reports', icon: PieChart }] : []),
-                ...(can(auth, 'audit_log.view_finance') && !isSuperAdmin
-                    ? [{ title: 'Log Aktivitas Keuangan', href: '/admin/audit-logs', icon: FileText }]
-                    : []),
-            ],
-        });
-    }
-
-    if (canAccessKitabGrades && !isAdmin) {
-        sections.push({
-            label: 'Guru',
-            items: [
-                ...(hasGuruRecord
-                    ? [
-                          { title: 'Jadwal Guru', href: '/admin/schedule', icon: CalendarDays },
-                          { title: 'Absensi Siswa', href: '/admin/attendance-sessions', icon: CalendarClock },
-                          { title: 'Nilai Kitab', href: '/admin/kitab-grades', icon: ClipboardList },
-                      ]
-                    : []),
-                ...(hasKitabReadingExaminerRecord
-                    ? [{ title: 'Nilai Baca Kitab', href: '/admin/kitab-reading-assessments', icon: BookOpenCheck }]
-                    : []),
-            ],
-        });
-    }
-
-    if (isMusyrif) {
-        sections.push({
-            label: 'Musyrif',
-            items: [
-                { title: 'Pelanggaran', href: '/admin/violations', icon: AlertTriangle },
-                { title: 'Perizinan Pulang', href: '/admin/leave-permissions', icon: Home },
-            ],
-        });
-    }
-
-    if (isSantri) {
-        sections.push({
-            label: 'Akademik',
-            items: [
-                { title: 'Jadwal', href: '/santri/schedule', icon: CalendarDays },
-                { title: 'Kehadiran', href: '/santri/attendances', icon: CalendarClock },
-                { title: 'Nilai Kitab', href: '/santri/grades', icon: ClipboardList },
-                { title: 'Pelanggaran', href: '/santri/violations', icon: AlertTriangle },
-                { title: 'Profil', href: '/santri/profile', icon: User },
-            ],
-        });
-    }
-
-    if (isWaliSantri) {
-        sections.push({
-            label: 'Anak Saya',
-            items: [
-                { title: 'Data Anak', href: '/wali/children', icon: Users },
-                { title: 'Tagihan', href: '/wali/invoices', icon: Banknote },
-                { title: 'Riwayat Bayar', href: '/wali/payment-history', icon: Receipt },
-            ],
-        });
-    }
-
-    if (canAccessRaportKelas) {
-        sections.push({
-            label: 'Wali Kelas',
-            items: [
-                { title: 'Review Nilai Kelas', href: '/wali-kelas/grade-reviews', icon: ClipboardList },
-                { title: 'Rekap Kenaikan Kelas', href: '/wali-kelas/class-promotion-recaps', icon: ArrowUpDown },
-                { title: 'Raport Kelas', href: '/wali-kelas/report-cards', icon: ScrollText },
-            ],
-        });
-    }
-
-    return sections
-        .map((section) => ({ ...section, items: section.items.filter(Boolean) }))
-        .filter((section) => section.items.length > 0);
-}
+import {
+    buildSidebarSections,
+    formatRoleLabel,
+    getUserRoleNames,
+} from './sidebar-build-sections';
 
 type Props = {
     collapsed: boolean;
@@ -264,6 +27,7 @@ export function ShellSidebar({ collapsed, mobileOpen, onClose }: Props) {
             hasWaliKelasRecord?: boolean;
             hasKitabReadingExaminerRecord?: boolean;
         }>().props;
+
     const { isCurrentUrl, isCurrentOrParentUrl } = useCurrentUrl();
     const getInitials = useInitials();
 
@@ -271,16 +35,12 @@ export function ShellSidebar({ collapsed, mobileOpen, onClose }: Props) {
     const initials = getInitials(user.name ?? '');
     const userRoleNames = useMemo(() => getUserRoleNames(user), [user]);
     const sections = useMemo(
-        () => buildSections(auth, userRoleNames, !!hasGuruRecord, !!hasWaliKelasRecord, !!hasKitabReadingExaminerRecord),
+        () => buildSidebarSections(auth, userRoleNames, !!hasGuruRecord, !!hasWaliKelasRecord, !!hasKitabReadingExaminerRecord),
         [auth, userRoleNames, hasGuruRecord, hasWaliKelasRecord, hasKitabReadingExaminerRecord],
     );
     const roleLabel = useMemo(() => formatRoleLabel(userRoleNames), [userRoleNames]);
 
-    const sidebarClass = [
-        'mhs-sidebar',
-        collapsed ? 'mhs-collapsed' : '',
-        mobileOpen ? 'mhs-mobile-open' : '',
-    ]
+    const sidebarClass = ['mhs-sidebar', collapsed ? 'mhs-collapsed' : '', mobileOpen ? 'mhs-mobile-open' : '']
         .filter(Boolean)
         .join(' ');
 
@@ -313,9 +73,8 @@ export function ShellSidebar({ collapsed, mobileOpen, onClose }: Props) {
                         <div className="mhs-nav-section-label">{section.label}</div>
                         {section.items.map((item) => {
                             const Icon = item.icon as LucideIcon | undefined;
-                            const active = item.href === '/dashboard'
-                                ? isCurrentUrl(item.href)
-                                : isCurrentOrParentUrl(item.href);
+                            const active =
+                                item.href === '/dashboard' ? isCurrentUrl(item.href) : isCurrentOrParentUrl(item.href);
                             return (
                                 <Link
                                     key={`${section.label}-${item.title}`}
