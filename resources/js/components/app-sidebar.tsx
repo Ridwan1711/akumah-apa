@@ -14,6 +14,7 @@ import {
     GraduationCap,
     Home,
     KeyRound,
+    Layers,
     LayoutGrid,
     ListChecks,
     PieChart,
@@ -75,13 +76,15 @@ export function AppSidebar() {
     ];
 
     const dataNavItems: NavItem[] = [
+        { title: 'Tahun Ajaran', href: '/admin/academic-years', icon: CalendarDays },
         { title: 'Data Santri', href: '/admin/students', icon: Users },
+        { title: 'Generate Akun', href: '/admin/account-generator', icon: KeyRound },
         { title: 'Pengurus Santri', href: '/admin/student-positions', icon: Shield },
+        { title: 'Asrama & Kobong', href: '/admin/asrama', icon: Building },
+        { title: 'Kelas Diniyah', href: '/admin/diniyah-classes', icon: GraduationCap },
         { title: 'Enroll Kelas Santri', href: '/admin/student-enrollments', icon: UserPlus },
         { title: 'Enroll Tingkat Formal', href: '/admin/formal-tingkat/assign', icon: School },
-        { title: 'Kelas Diniyah', href: '/admin/diniyah-classes', icon: GraduationCap },
-        { title: 'Tahun Ajaran', href: '/admin/academic-years', icon: CalendarDays },
-        { title: 'Generate Akun', href: '/admin/account-generator', icon: KeyRound },
+        { title: 'Master Tingkat Formal', href: '/admin/tingkat-sekolahs', icon: Layers },
     ];
 
     const akademikNavItems: NavItem[] = [
@@ -101,7 +104,6 @@ export function AppSidebar() {
     ];
 
     const operasionalNavItems: NavItem[] = [
-        { title: 'Asrama', href: '/admin/asrama', icon: Building },
         { title: 'Pelanggaran', href: '/admin/violations', icon: AlertTriangle },
         { title: 'Perizinan Pulang', href: '/admin/leave-permissions', icon: Home },
     ];
@@ -109,11 +111,12 @@ export function AppSidebar() {
     const keuanganNavItems: NavItem[] = [
         ...(canAny(auth, ['invoice.view']) ? [{ title: 'Tagihan', href: '/admin/invoices', icon: Banknote }] : []),
         ...(canAny(auth, ['payment.view']) ? [{ title: 'Pembayaran', href: '/admin/payments', icon: CreditCard }] : []),
-        ...(canAny(auth, ['invoice.create']) ? [
-            { title: 'Diskon Santri', href: '/admin/student-discounts', icon: Wallet },
-            { title: 'Tingkat Sekolah', href: '/admin/tingkat-sekolahs', icon: School },
-            { title: 'Jenis Tagihan', href: '/admin/payment-types', icon: ClipboardList }
-        ] : []),
+        ...(canAny(auth, ['invoice.view', 'payment.view', 'payment.report.view'])
+            ? [
+                  { title: 'Diskon Santri', href: '/admin/student-discounts', icon: Wallet },
+                  { title: 'Jenis Tagihan', href: '/admin/payment-types', icon: ClipboardList },
+              ]
+            : []),
         ...(canAny(auth, ['payment.report.view']) ? [{ title: 'Laporan Keuangan', href: '/admin/payment-reports', icon: PieChart }] : []),
         ...(can(auth, 'audit_log.view_finance') && !isSuperAdmin
             ? [{ title: 'Log Aktivitas Keuangan', href: '/admin/audit-logs', icon: FileText }]

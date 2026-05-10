@@ -488,6 +488,8 @@ export type TingkatSekolahFormal = {
     name: string;
     code: string | null;
     group: string | null;
+    order?: number;
+    is_billable?: boolean;
 };
 
 export type PaymentTypeTingkatRule = {

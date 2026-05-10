@@ -16,6 +16,7 @@ import {
     Home,
     KeyRound,
     LayoutGrid,
+    Layers,
     ListChecks,
     PieChart,
     Receipt,
@@ -103,6 +104,7 @@ function buildSections(
                 { title: 'Pengurus Santri', href: '/admin/student-positions', icon: Shield },
                 { title: 'Enroll Kelas Santri', href: '/admin/student-enrollments', icon: UserPlus },
                 { title: 'Enroll Tingkat Formal', href: '/admin/formal-tingkat/assign', icon: School },
+                { title: 'Master Tingkat Formal', href: '/admin/tingkat-sekolahs', icon: Layers },
                 { title: 'Kelas Diniyah', href: '/admin/diniyah-classes', icon: GraduationCap },
                 { title: 'Tahun Ajaran', href: '/admin/academic-years', icon: CalendarDays },
                 { title: 'Generate Akun', href: '/admin/account-generator', icon: KeyRound },
@@ -166,7 +168,12 @@ function buildSections(
             items: [
                 ...(canAny(auth, ['invoice.view']) ? [{ title: 'Tagihan', href: '/admin/invoices', icon: Banknote }] : []),
                 ...(canAny(auth, ['payment.view']) ? [{ title: 'Pembayaran', href: '/admin/payments', icon: CreditCard }] : []),
-                ...(canAny(auth, ['invoice.create']) ? [{ title: 'Diskon Santri', href: '/admin/student-discounts', icon: Wallet }] : []),
+                ...(canAny(auth, ['invoice.view', 'payment.view', 'payment.report.view'])
+                    ? [
+                          { title: 'Diskon Santri', href: '/admin/student-discounts', icon: Wallet },
+                          { title: 'Jenis Tagihan', href: '/admin/payment-types', icon: ClipboardList },
+                      ]
+                    : []),
                 ...(canAny(auth, ['payment.report.view']) ? [{ title: 'Laporan Keuangan', href: '/admin/payment-reports', icon: PieChart }] : []),
                 ...(can(auth, 'audit_log.view_finance') && !isSuperAdmin
                     ? [{ title: 'Log Aktivitas Keuangan', href: '/admin/audit-logs', icon: FileText }]

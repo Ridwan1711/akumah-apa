@@ -40,6 +40,7 @@ use App\Http\Controllers\Admin\SubjectSettingController;
 use App\Http\Controllers\Admin\SystemLogController;
 use App\Http\Controllers\Admin\TeacherDataTransferController;
 use App\Http\Controllers\Admin\TeacherManagementController;
+use App\Http\Controllers\Admin\TingkatSekolahController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\ViolationController;
 use App\Http\Controllers\Auth\ForceChangePasswordController;
@@ -231,6 +232,8 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::get('formal-tingkat/export/enrollments', [FormalTingkatTransferController::class, 'exportEnrollments'])->name('formal-tingkat.export.enrollments');
         Route::post('formal-tingkat/import', [FormalTingkatTransferController::class, 'import'])->name('formal-tingkat.import');
         Route::get('formal-tingkat/import-errors', [FormalTingkatTransferController::class, 'downloadImportErrors'])->name('formal-tingkat.import-errors');
+
+        Route::resource('tingkat-sekolahs', TingkatSekolahController::class)->only(['index', 'store', 'update', 'destroy']);
 
         // Violations
         Route::get('violations', [ViolationController::class, 'index'])->name('violations.index');

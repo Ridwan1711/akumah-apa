@@ -57,4 +57,9 @@ class TingkatSekolah extends Model
     {
         return $this->hasMany(PaymentTypeTingkatSekolahRule::class);
     }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class);
+    }
 }
