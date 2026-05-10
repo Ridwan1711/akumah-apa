@@ -14,14 +14,22 @@ import {
     CrudToolbar,
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
-import type { BreadcrumbItem, PaymentType } from '@/types';
+import type { BreadcrumbItem, PaymentType, PaymentTypeTingkatRule, TingkatSekolahFormal } from '@/types';
 
 type Props = {
     paymentTypes: PaymentType[];
+    tingkatSekolahs: TingkatSekolahFormal[];
 };
 
 type BreakdownItemForm = {
     label: string;
+    amount: string;
+};
+
+type TingkatRuleRowForm = {
+    tingkat_sekolah_id: number;
+    tingkat_label: string;
+    is_enabled: boolean;
     amount: string;
 };
 
@@ -33,6 +41,7 @@ type PaymentTypeForm = {
     default_amount: string;
     kuliah_amount: string;
     default_breakdown: BreakdownItemForm[];
+    tingkat_rules: TingkatRuleRowForm[];
     description: string;
     is_active: boolean;
 };
@@ -52,7 +61,29 @@ function toCurrency(value: number | string): string {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(Number(value));
 }
 
-export default function PaymentTypesIndex({ paymentTypes }: Props) {
+function buildTingkatRules(tingkatList: TingkatSekolahFormal[], editing: PaymentType | null): TingkatRuleRowForm[] {
+    const map = new Map<number, PaymentTypeTingkatRule>();
+    const rules = editing?.tingkat_rules ?? [];
+    rules.forEach((r) => map.set(r.tingkat_sekolah_id, r));
+
+    return tingkatList.map((t) => {
+        const ex = map.get(t.id);
+        const amt = ex?.amount;
+
+        return {
+            tingkat_sekolah_id: t.id,
+            tingkat_label: t.group ? `${t.name} (${t.group})` : t.name,
+            is_enabled: ex?.is_enabled ?? false,
+            amount: amt !== null && amt !== undefined && amt !== '' ? String(amt) : '',
+        };
+    });
+}
+
+function countEnabledTingkatRules(item: PaymentType): number {
+    return (item.tingkat_rules ?? []).filter((r) => r.is_enabled).length;
+}
+
+export default function PaymentTypesIndex({ paymentTypes, tingkatSekolahs }: Props) {
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<PaymentType | null>(null);
     const [deleting, setDeleting] = useState<PaymentType | null>(null);
@@ -65,6 +96,7 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
         default_amount: '0',
         kuliah_amount: '',
         default_breakdown: [],
+        tingkat_rules: buildTingkatRules(tingkatSekolahs, null),
         description: '',
         is_active: true,
     });
@@ -81,6 +113,7 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
             default_amount: '0',
             kuliah_amount: '',
             default_breakdown: [],
+            tingkat_rules: buildTingkatRules(tingkatSekolahs, null),
             description: '',
             is_active: true,
         });
@@ -101,11 +134,19 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
                 label: part.label,
                 amount: String(part.amount),
             })),
+            tingkat_rules: buildTingkatRules(tingkatSekolahs, item),
             description: item.description ?? '',
             is_active: item.is_active,
         });
         form.clearErrors();
         setModalOpen(true);
+    }
+
+    function setTingkatRuleField(index: number, patch: Partial<TingkatRuleRowForm>) {
+        form.setData(
+            'tingkat_rules',
+            form.data.tingkat_rules.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+        );
     }
 
     function submit(e: React.FormEvent) {
@@ -120,6 +161,11 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
                     label: item.label.trim(),
                     amount: Number(item.amount),
                 })),
+            tingkat_rules: data.tingkat_rules.map((row) => ({
+                tingkat_sekolah_id: row.tingkat_sekolah_id,
+                is_enabled: row.is_enabled,
+                amount: row.is_enabled && row.amount !== '' ? Number(row.amount) : null,
+            })),
         }));
 
         if (editing) {
@@ -176,7 +222,7 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
             <div>
                 <CrudPageHeader
                     title="Jenis Pembayaran"
-                    description="Master tipe tagihan untuk invoice, tarif, diskon, dan laporan keuangan."
+                    description="Master tipe tagihan. Atur tarif default dan per tingkat sekolah formal (MTs/MA/Kuliah) untuk pembentukan invoice."
                 />
 
                 <CrudStatStrip
@@ -209,7 +255,8 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
                                     <th>Kode</th>
                                     <th>Kategori</th>
                                     <th>Default</th>
-                                    <th>Nominal Kuliah</th>
+                                    <th>Aturan formal</th>
+                                    <th>Kuliah (legacy)</th>
                                     <th>Status</th>
                                     <th style={{ textAlign: 'right' }}>Aksi</th>
                                 </tr>
@@ -217,7 +264,7 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
                             <tbody>
                                 {paymentTypes.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7}>
+                                        <td colSpan={8}>
                                             <CrudEmptyState title="Belum ada jenis pembayaran" description="Tambahkan jenis pembayaran pertama." />
                                         </td>
                                     </tr>
@@ -231,6 +278,9 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
                                             <td><code>{item.code}</code></td>
                                             <td>{categoryLabels[item.category]}</td>
                                             <td>{toCurrency(item.default_amount)}</td>
+                                            <td>
+                                                <span className="mcr-dot-badge keluar">{countEnabledTingkatRules(item)} aktif</span>
+                                            </td>
                                             <td>{item.kuliah_amount !== null && item.kuliah_amount !== undefined ? toCurrency(item.kuliah_amount) : '-'}</td>
                                             <td>
                                                 <span className={item.is_active ? 'mcr-dot-badge active' : 'mcr-dot-badge keluar'}>
@@ -260,7 +310,7 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
                 open={modalOpen}
                 onClose={() => setModalOpen(false)}
                 title={editing ? 'Edit Jenis Pembayaran' : 'Tambah Jenis Pembayaran'}
-                footer={
+                footer={(
                     <>
                         <button type="button" className="mcr-btn ghost" onClick={() => setModalOpen(false)} disabled={form.processing}>
                             Batal
@@ -269,7 +319,7 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
                             {form.processing ? 'Menyimpan...' : 'Simpan'}
                         </button>
                     </>
-                }
+                )}
             >
                 <form id="payment-type-form" className="mcr-form-grid" onSubmit={submit}>
                     <div className="mcr-form-group">
@@ -292,12 +342,12 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
                         <InputError message={form.errors.category} />
                     </div>
                     <div className="mcr-form-group">
-                        <label htmlFor="payment-type-default">Default Nominal</label>
+                        <label htmlFor="payment-type-default">Fallback nominal (tanpa / belum ada aturan formal)</label>
                         <input id="payment-type-default" className="mcr-input" type="number" min={0} value={form.data.default_amount} onChange={(e) => form.setData('default_amount', e.target.value)} />
                         <InputError message={form.errors.default_amount} />
                     </div>
                     <div className="mcr-form-group">
-                        <label htmlFor="payment-type-kuliah">Nominal Santri Kuliah (opsional)</label>
+                        <label htmlFor="payment-type-kuliah">Nominal santri kuliah tanpa enrollment formal (legacy)</label>
                         <input id="payment-type-kuliah" className="mcr-input" type="number" min={0} value={form.data.kuliah_amount} onChange={(e) => form.setData('kuliah_amount', e.target.value)} />
                         <InputError message={form.errors.kuliah_amount} />
                     </div>
@@ -308,7 +358,7 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
                     </div>
                     <div className="mcr-form-group full">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                            <label>Rincian Default (opsional)</label>
+                            <label>Rincian Default (fallback skala nominal)</label>
                             <button type="button" className="mcr-btn ghost" onClick={appendBreakdownRow}>
                                 <Plus size={14} />
                                 Tambah Rincian
@@ -346,6 +396,48 @@ export default function PaymentTypesIndex({ paymentTypes }: Props) {
                         </p>
                         <InputError message={form.errors.default_breakdown} />
                     </div>
+
+                    <div className="mcr-form-group full">
+                        <label>Tarif per tingkat formal</label>
+                        <p className="mcr-table-meta" style={{ marginBottom: 8 }}>
+                            Centang aktif untuk membebankan santri sesuai enrollment tingkat sekolah tahun ajaran. Nonaktif = tidak ada tagihan (mis. Kuliah di luar pesantren).
+                        </p>
+                        <div style={{ display: 'grid', gap: 10 }}>
+                            {form.data.tingkat_rules.map((row, index) => (
+                                <div
+                                    key={row.tingkat_sekolah_id}
+                                    style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'minmax(0, 1fr) 120px auto',
+                                        gap: 10,
+                                        alignItems: 'center',
+                                        padding: '8px 0',
+                                        borderBottom: index < form.data.tingkat_rules.length - 1 ? '1px solid var(--mhs-card-border-soft, rgba(0,0,0,0.08))' : undefined,
+                                    }}
+                                >
+                                    <label style={{ display: 'flex', gap: 8, alignItems: 'center', margin: 0 }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={row.is_enabled}
+                                            onChange={(e) => setTingkatRuleField(index, { is_enabled: e.target.checked })}
+                                        />
+                                        <span style={{ fontWeight: 500 }}>{row.tingkat_label}</span>
+                                    </label>
+                                    <input
+                                        className="mcr-input"
+                                        type="number"
+                                        min={0}
+                                        placeholder="Rp"
+                                        disabled={!row.is_enabled}
+                                        value={row.amount}
+                                        onChange={(e) => setTingkatRuleField(index, { amount: e.target.value })}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                        <InputError message={form.errors.tingkat_rules as unknown as string} />
+                    </div>
+
                     <label className="mcr-form-group">
                         <span>Berulang</span>
                         <input type="checkbox" checked={form.data.is_recurring} onChange={(e) => form.setData('is_recurring', e.target.checked)} />

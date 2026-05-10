@@ -27,14 +27,17 @@ function formatCurrency(amount: number) {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
 }
 
+type TingkatOpt = { id: number; name: string };
+
 type Props = {
     invoices: PaginatedData<Invoice>;
     classes: Pick<DiniyahClass, 'id' | 'name'>[];
+    tingkatSekolahs: TingkatOpt[];
     paymentTypes: Pick<PaymentType, 'id' | 'name'>[];
-    filters: { class_id?: string; payment_type_id?: string };
+    filters: { class_id?: string; payment_type_id?: string; tingkat_sekolah_id?: string };
 };
 
-export default function ArrearsReport({ invoices, classes, paymentTypes, filters }: Props) {
+export default function ArrearsReport({ invoices, classes, tingkatSekolahs, paymentTypes, filters }: Props) {
     const { auth } = usePage<{ auth?: Auth }>().props;
     const canViewInvoice = can(auth, 'invoice.view');
 
@@ -48,9 +51,16 @@ export default function ArrearsReport({ invoices, classes, paymentTypes, filters
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
                 <Heading title="Daftar Tunggakan" description="Tagihan yang belum lunas atau jatuh tempo" />
 
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
+                    <Select value={filters.tingkat_sekolah_id ?? ''} onValueChange={(v) => handleFilter('tingkat_sekolah_id', v === '_none' ? '' : v)}>
+                        <SelectTrigger className="w-[220px]"><SelectValue placeholder="Semua Tingkat Formal" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="_none">Semua Tingkat Formal</SelectItem>
+                            {tingkatSekolahs.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
                     <Select value={filters.class_id ?? ''} onValueChange={(v) => handleFilter('class_id', v)}>
-                        <SelectTrigger className="w-[180px]"><SelectValue placeholder="Semua Kelas" /></SelectTrigger>
+                        <SelectTrigger className="w-[180px]"><SelectValue placeholder="Semua Kelas Diniyyah" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="_none">Semua Kelas</SelectItem>
                             {classes.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
@@ -76,7 +86,8 @@ export default function ArrearsReport({ invoices, classes, paymentTypes, filters
                                 <thead className="border-b bg-muted/50">
                                     <tr>
                                         <th className="px-4 py-3 text-left font-medium">Santri</th>
-                                        <th className="px-4 py-3 text-left font-medium">Kelas</th>
+                                        <th className="px-4 py-3 text-left font-medium">Tingkat formal</th>
+                                        <th className="px-4 py-3 text-left font-medium">Kelas diniyyah</th>
                                         <th className="px-4 py-3 text-left font-medium">Jenis Bayar</th>
                                         <th className="px-4 py-3 text-right font-medium">Sisa</th>
                                         <th className="px-4 py-3 text-left font-medium">Jatuh Tempo</th>
@@ -91,7 +102,8 @@ export default function ArrearsReport({ invoices, classes, paymentTypes, filters
                                                 <div className="font-medium">{inv.student?.full_name}</div>
                                                 <div className="text-xs text-muted-foreground">{inv.student?.nis}</div>
                                             </td>
-                                            <td className="px-4 py-3">{inv.student?.current_class?.name}</td>
+                                            <td className="px-4 py-3">{inv.tingkat_sekolah?.name ?? '-'}</td>
+                                            <td className="px-4 py-3">{inv.student?.current_class?.name ?? '-'}</td>
                                             <td className="px-4 py-3">{inv.payment_type?.name}</td>
                                             <td className="px-4 py-3 text-right font-medium">{formatCurrency(Number(inv.remaining ?? inv.final_amount))}</td>
                                             <td className="px-4 py-3">{inv.due_date}</td>

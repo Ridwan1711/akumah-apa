@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Concerns\Auditable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,6 +16,7 @@ class Invoice extends Model
     protected $fillable = [
         'invoice_number',
         'student_id',
+        'tingkat_sekolah_id',
         'payment_type_id',
         'academic_year_id',
         'semester_id',
@@ -64,6 +66,11 @@ class Invoice extends Model
         return $this->belongsTo(Student::class);
     }
 
+    public function tingkatSekolah(): BelongsTo
+    {
+        return $this->belongsTo(TingkatSekolah::class);
+    }
+
     public function paymentType(): BelongsTo
     {
         return $this->belongsTo(PaymentType::class);
@@ -87,6 +94,26 @@ class Invoice extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    /**
+     * Tagihan milik tingkat formal: snapshot kolom tingkat atau enrollment tahun ajaran tagihan yang sama.
+     */
+    public function scopeForFormalTingkat(Builder $query, int $tingkatSekolahId): Builder
+    {
+        return $query->where(function (Builder $w) use ($tingkatSekolahId): void {
+            $w->where('invoices.tingkat_sekolah_id', $tingkatSekolahId)
+                ->orWhere(function (Builder $w2) use ($tingkatSekolahId): void {
+                    $w2->whereNull('invoices.tingkat_sekolah_id')
+                        ->whereExists(function ($sub) use ($tingkatSekolahId): void {
+                            $sub->selectRaw('1')
+                                ->from('enrollment_tingkat_sekolahs as ets')
+                                ->whereColumn('ets.student_id', 'invoices.student_id')
+                                ->whereColumn('ets.academic_year_id', 'invoices.academic_year_id')
+                                ->where('ets.tingkat_sekolah_id', $tingkatSekolahId);
+                        });
+                });
+        });
     }
 
     public function totalPaid(): float

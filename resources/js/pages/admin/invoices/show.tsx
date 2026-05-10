@@ -158,7 +158,9 @@ export default function InvoiceShow({ invoice }: Props) {
                     <div className="mcr-run-stats">
                         <span>Santri: {invoice.student?.full_name ?? '-'}</span>
                         <span>NIS: {invoice.student?.nis ?? '-'}</span>
-                        <span>Kelas: {invoice.student?.current_class?.name ?? '-'}</span>
+                        <span>Kelas Diniyyah: {invoice.student?.current_class?.name ?? '-'}</span>
+                        {' · '}
+                        <span>Tingkat Formal: {invoice.tingkat_sekolah?.name ?? '-'}</span>
                         <span>Jenis Bayar: {invoice.payment_type?.name ?? '-'} ({invoice.payment_type?.code ?? '-'})</span>
                         <span>Tahun Ajaran: {invoice.academic_year?.name ?? '-'}</span>
                         <span>Bulan: {invoice.month ? monthNames[invoice.month] : '-'}</span>

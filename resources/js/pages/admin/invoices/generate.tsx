@@ -29,6 +29,8 @@ const PREVIEW_URL = '/admin/invoices/bulk-generate-preview';
 
 type BulkPreviewResponse = {
     target_student_count: number;
+    would_skip_invoice_count?: number;
+    students_without_formal_enrollment_count?: number;
     kuliah_without_tariff_count: number;
     summary: {
         payment_type_name: string;
@@ -722,11 +724,18 @@ export default function InvoiceGenerate({
                                 {' '}
                                 {previewData.target_student_count}
                             </p>
-                            {previewData.kuliah_without_tariff_count > 0 ? (
+                            {previewData.students_without_formal_enrollment_count !== undefined ? (
                                 <p className="mcr-table-meta" style={{ margin: 0 }}>
-                                    Perkiraan santri kuliah tanpa nominal tarif (akan dilewati oleh job):
+                                    Santri aktif tanpa enrollment tingkat formal untuk tahun ajaran ini (fallback tarif legacy):
                                     {' '}
-                                    <strong>{previewData.kuliah_without_tariff_count}</strong>
+                                    <strong>{previewData.students_without_formal_enrollment_count}</strong>
+                                </p>
+                            ) : null}
+                            {(previewData.would_skip_invoice_count ?? previewData.kuliah_without_tariff_count) > 0 ? (
+                                <p className="mcr-table-meta" style={{ margin: 0 }}>
+                                    Perkiraan baris santri dilewati (tanpa nominal / aturan dinonaktifkan):
+                                    {' '}
+                                    <strong>{previewData.would_skip_invoice_count ?? previewData.kuliah_without_tariff_count}</strong>
                                 </p>
                             ) : null}
                         </div>

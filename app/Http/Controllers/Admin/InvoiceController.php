@@ -12,9 +12,11 @@ use App\Models\Invoice;
 use App\Models\PaymentType;
 use App\Models\Student;
 use App\Models\StudentPosition;
+use App\Models\TingkatSekolah;
 use App\Models\User;
 use App\Services\Authorization\InvoiceVisibilityScope;
 use App\Services\Finance\DispatchInvoiceRemindersAction;
+use App\Services\Finance\FinanceInvoicePricingResolver;
 use App\Services\Finance\InvoiceImportSupport;
 use App\Support\Authorization\Permissions;
 use Illuminate\Http\JsonResponse;
@@ -43,7 +45,14 @@ class InvoiceController extends Controller
             ->when($request->academic_year_id, fn ($q, $id) => $q->where('academic_year_id', $id))
             ->when($request->month, fn ($q, $m) => $q->where('month', $m))
             ->when($request->search, fn ($q, $s) => $q->whereHas('student', fn ($sq) => $sq->where('full_name', 'ilike', "%{$s}%")->orWhere('nis', 'like', "%{$s}%")))
-            ->when($request->class_id, fn ($q, $id) => $q->whereHas('student', fn ($sq) => $sq->where('current_class_id', $id)))
+            ->when(
+                $request->filled('tingkat_sekolah_id'),
+                fn ($q) => $q->forFormalTingkat((int) $request->tingkat_sekolah_id)
+            )
+            ->when(
+                ! $request->filled('tingkat_sekolah_id') && $request->filled('class_id'),
+                fn ($q) => $q->whereHas('student', fn ($sq) => $sq->where('current_class_id', (int) $request->class_id))
+            )
             ->when(
                 $request->filled('division_code'),
                 fn ($q) => $q->whereHas(
@@ -79,6 +88,7 @@ class InvoiceController extends Controller
             ->with([
                 'paymentType:id,name,code,category',
                 'academicYear:id,name',
+                'tingkatSekolah:id,name,code',
             ])
             ->withCount('payments')
             ->withSum([
@@ -100,12 +110,14 @@ class InvoiceController extends Controller
 
         $studentPaginator->getCollection()->transform(function (Student $student) use ($invoicesByStudent) {
             $invoices = ($invoicesByStudent->get($student->id) ?? collect())->values();
+            $firstInvoice = $invoices->first();
 
             return [
                 'student_id' => $student->id,
                 'student_nis' => $student->nis,
                 'student_name' => $student->full_name,
                 'class_name' => $student->currentClass?->name,
+                'tingkat_formal_name' => $firstInvoice instanceof Invoice ? ($firstInvoice->tingkatSekolah?->name ?? null) : null,
                 'invoice_count' => $invoices->count(),
                 'total_amount' => (float) $invoices->sum(fn (Invoice $i) => (float) $i->final_amount),
                 'total_paid' => (float) $invoices->sum(fn (Invoice $i) => (float) ($i->total_paid ?? 0)),
@@ -128,7 +140,8 @@ class InvoiceController extends Controller
                 ->orderBy('division_code')
                 ->pluck('division_code')
                 ->values(),
-            'filters' => $request->only(['status', 'payment_type_id', 'academic_year_id', 'month', 'search', 'class_id', 'division_code']),
+            'tingkatSekolahs' => TingkatSekolah::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'code', 'group']),
+            'filters' => $request->only(['status', 'payment_type_id', 'academic_year_id', 'month', 'search', 'class_id', 'tingkat_sekolah_id', 'division_code']),
             'statusCounts' => $this->scopedInvoiceStatusCounts($invoiceVisibilityScope, $user),
             'invoiceImportRuns' => ImportRun::query()
                 ->with('requestedBy:id,name')
@@ -200,16 +213,29 @@ class InvoiceController extends Controller
 
         $targetStudentCount = (clone $studentQuery)->count();
 
-        $kuliahWithoutTariffCount = 0;
-        if ($paymentType->kuliah_amount === null) {
-            $kuliahWithoutTariffCount = (clone $studentQuery)->where('is_kuliah', true)->count();
+        $pricing = app(FinanceInvoicePricingResolver::class);
+        $wouldSkipCount = 0;
+        $withoutFormalEnrollment = 0;
+
+        foreach ((clone $studentQuery)->cursor() as $studentRow) {
+            /** @var Student $studentRow */
+            if ($studentRow->formalTingkatEnrollmentForYear((int) $academicYear->id) === null) {
+                $withoutFormalEnrollment++;
+            }
+            $resolved = $pricing->resolveAmountAndRule($paymentType, $studentRow, (int) $academicYear->id);
+            if ($resolved['amount'] === null || $resolved['amount'] <= 0) {
+                $wouldSkipCount++;
+            }
         }
 
         $monthLabel = $this->resolveIndonesianMonthLabel($validated['month'] ?? null);
 
         return response()->json([
             'target_student_count' => $targetStudentCount,
-            'kuliah_without_tariff_count' => $kuliahWithoutTariffCount,
+            'would_skip_invoice_count' => $wouldSkipCount,
+            'students_without_formal_enrollment_count' => $withoutFormalEnrollment,
+            /** @deprecated gunakan would_skip_invoice_count */
+            'kuliah_without_tariff_count' => $wouldSkipCount,
             'summary' => [
                 'payment_type_name' => $paymentType->name,
                 'payment_type_code' => $paymentType->code,
@@ -376,9 +402,18 @@ class InvoiceController extends Controller
             (float) $validated['amount']
         );
 
+        $student = Student::query()->findOrFail((int) $validated['student_id']);
+        $tingkatSnapshot = $student->formalTingkatEnrollmentForYear((int) $validated['academic_year_id'])?->tingkat_sekolah_id;
+        if ($tingkatSnapshot === null && $student->is_kuliah) {
+            $tingkatSnapshot = TingkatSekolah::query()
+                ->where('code', TingkatSekolah::CODE_KULIAH)
+                ->value('id');
+        }
+
         $invoice = Invoice::create([
             'invoice_number' => Invoice::generateNumber(),
             'student_id' => $validated['student_id'],
+            'tingkat_sekolah_id' => $tingkatSnapshot,
             'payment_type_id' => $validated['payment_type_id'],
             'academic_year_id' => $validated['academic_year_id'],
             'month' => $validated['month'] ?? null,
@@ -437,6 +472,7 @@ class InvoiceController extends Controller
         $invoice->load([
             'student:id,nis,full_name,current_class_id',
             'student.currentClass:id,name',
+            'tingkatSekolah:id,name,code,group',
             'paymentType:id,name,code,category,default_breakdown',
             'academicYear:id,name',
             'payments' => fn ($q) => $q->orderByDesc('payment_date'),

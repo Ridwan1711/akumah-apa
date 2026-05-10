@@ -14,6 +14,7 @@ use App\Models\Role;
 use App\Models\Student;
 use App\Models\User;
 use App\Notifications\BulkRunFinishedNotification;
+use App\Services\Finance\FinanceInvoicePricingResolver;
 use App\Services\Finance\InvoiceImportSupport;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -105,10 +106,34 @@ class ProcessBulkRun implements ShouldBeUnique, ShouldQueue
         $retryMode = (string) ($meta['retry_mode'] ?? '');
         $resendOnly = $retryMode === 'resend_existing_only';
         $paymentType = PaymentType::findOrFail($paymentTypeId);
+        $tingkatIds = collect($meta['tingkat_sekolah_ids'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->values()
+            ->all();
+        $classIds = collect($meta['class_ids'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->values()
+            ->all();
+
         $students = Student::query()
             ->where('status', Student::STATUS_ACTIVE)
             ->when($targetType === 'selected', fn ($query) => $query->whereIn('id', $selectedStudentIds))
+            ->when(
+                count($tingkatIds) > 0,
+                fn ($query) => $query->whereHas(
+                    'enrollmentTingkatSekolahs',
+                    fn ($q) => $q->where('academic_year_id', $academicYearId)->whereIn('tingkat_sekolah_id', $tingkatIds)
+                )
+            )
+            ->when(
+                count($tingkatIds) === 0 && count($classIds) > 0,
+                fn ($query) => $query->whereIn('current_class_id', $classIds)
+            )
             ->get();
+
+        $pricing = app(FinanceInvoicePricingResolver::class);
 
         $run->update(['total_rows' => $students->count()]);
 
@@ -129,19 +154,27 @@ class ProcessBulkRun implements ShouldBeUnique, ShouldQueue
                 continue;
             }
 
-            $amount = $this->resolveAmount($paymentType, $student);
-            if ($amount === null) {
+            $resolved = $pricing->resolveAmountAndRule($paymentType, $student, $academicYearId);
+            $amount = $resolved['amount'];
+            if ($amount === null || $amount <= 0) {
                 $this->incrementRunCounters($run, 'skipped');
 
                 continue;
             }
             $discount = InvoiceImportSupport::studentMasterDiscount($student->id, $paymentTypeId, $academicYearId, $amount);
-            $breakdown = InvoiceImportSupport::resolveBreakdownScaled($paymentType, $amount, $overrideBreakdown);
+            $breakdown = $pricing->resolveBreakdown(
+                $paymentType,
+                $amount,
+                $resolved['applied_rule'],
+                $overrideBreakdown,
+                true
+            );
 
             try {
                 $invoice = Invoice::create([
                     'invoice_number' => Invoice::generateNumber($paymentTypeId, $month, $academicYearId, $student->full_name),
                     'student_id' => $student->id,
+                    'tingkat_sekolah_id' => $resolved['tingkat_sekolah_id'],
                     'payment_type_id' => $paymentTypeId,
                     'academic_year_id' => $academicYearId,
                     'month' => $month,
@@ -411,15 +444,6 @@ class ProcessBulkRun implements ShouldBeUnique, ShouldQueue
             $updates['failed_count'] = $run->failed_count + 1;
         }
         $run->update($updates);
-    }
-
-    protected function resolveAmount(PaymentType $type, Student $student): ?float
-    {
-        if ($student->is_kuliah) {
-            return $type->kuliah_amount !== null ? (float) $type->kuliah_amount : null;
-        }
-
-        return (float) $type->default_amount;
     }
 
     protected function notifyRunResult(ImportRun $run): void

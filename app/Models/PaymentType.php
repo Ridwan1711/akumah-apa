@@ -54,6 +54,11 @@ class PaymentType extends Model
         return $this->hasMany(StudentDiscount::class);
     }
 
+    public function tingkatRules(): HasMany
+    {
+        return $this->hasMany(PaymentTypeTingkatSekolahRule::class);
+    }
+
     /**
      * @return array<int, array{label:string, amount:float}>
      */
@@ -106,31 +111,33 @@ class PaymentType extends Model
     }
 
     /**
+     * Skala daftar rincian (sudah dinormalisasi) ke nominal target; baris terakhir menyerap pembulatan.
+     *
+     * @param  array<int, array{label:string, amount:float}>  $normalizedItems
      * @return array<int, array{label:string, amount:float}>
      */
-    public function buildBreakdownForAmount(float $targetAmount): array
+    public static function scaleNormalizedBreakdownToAmount(array $normalizedItems, float $targetAmount): array
     {
-        $items = $this->normalizedDefaultBreakdown();
-        if ($items === []) {
+        if ($normalizedItems === []) {
             return [];
         }
 
         $targetAmount = round(max(0, $targetAmount), 2);
-        $templateTotal = self::breakdownTotal($items);
+        $templateTotal = self::breakdownTotal($normalizedItems);
         if ($templateTotal <= 0 || $targetAmount <= 0) {
             return [];
         }
 
         if (abs($templateTotal - $targetAmount) < 0.01) {
-            return $items;
+            return $normalizedItems;
         }
 
         $ratio = $targetAmount / $templateTotal;
         $adjusted = [];
         $allocated = 0.0;
 
-        foreach ($items as $index => $item) {
-            $isLast = $index === count($items) - 1;
+        foreach ($normalizedItems as $index => $item) {
+            $isLast = $index === count($normalizedItems) - 1;
             $amount = $isLast
                 ? round($targetAmount - $allocated, 2)
                 : round($item['amount'] * $ratio, 2);
@@ -144,5 +151,26 @@ class PaymentType extends Model
         }
 
         return self::normalizeBreakdownItems($adjusted);
+    }
+
+    /**
+     * @return array<int, array{label:string, amount:float}>
+     */
+    public function buildBreakdownForAmount(float $targetAmount): array
+    {
+        return self::scaleNormalizedBreakdownToAmount($this->normalizedDefaultBreakdown(), $targetAmount);
+    }
+
+    /**
+     * @return array<int, array{label:string, amount:float}>
+     */
+    public function breakdownForAmountWithTemplate(float $targetAmount, mixed $templateRows): array
+    {
+        $items = self::normalizeBreakdownItems($templateRows);
+        if ($items === []) {
+            return $this->buildBreakdownForAmount($targetAmount);
+        }
+
+        return self::scaleNormalizedBreakdownToAmount($items, $targetAmount);
     }
 }

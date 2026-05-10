@@ -27,6 +27,7 @@ import type {
     PaymentType,
     SchoolClass,
     StudentInvoiceGroup,
+    TingkatSekolahFormal,
 } from '@/types';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -55,7 +56,7 @@ function firstRemindableInvoiceId(group: StudentInvoiceGroup): number | null {
 
 function invoiceExportSearchParams(filters: Record<string, string | undefined>): string {
     const p = new URLSearchParams();
-    ['status', 'payment_type_id', 'academic_year_id', 'month', 'search', 'class_id', 'division_code'].forEach((key) => {
+    ['status', 'payment_type_id', 'academic_year_id', 'month', 'search', 'class_id', 'tingkat_sekolah_id', 'division_code'].forEach((key) => {
         const v = filters[key];
         if (v) {
             p.set(key, v);
@@ -81,6 +82,7 @@ type Props = {
     paymentTypes: Pick<PaymentType, 'id' | 'name' | 'code'>[];
     academicYears: Pick<AcademicYear, 'id' | 'name'>[];
     classes: Pick<SchoolClass, 'id' | 'name'>[];
+    tingkatSekolahs: Pick<TingkatSekolahFormal, 'id' | 'name' | 'code' | 'group'>[];
     divisionOptions: string[];
     filters: Record<string, string | undefined>;
     statusCounts: Record<string, number>;
@@ -93,6 +95,7 @@ export default function InvoiceIndex({
     paymentTypes,
     academicYears,
     classes,
+    tingkatSekolahs,
     divisionOptions,
     filters,
     statusCounts,
@@ -214,6 +217,14 @@ export default function InvoiceIndex({
                                     <option key={item.id} value={String(item.id)}>{item.name}</option>
                                 ))}
                             </select>
+                            <select className="mcr-filter-select" value={filters.tingkat_sekolah_id ?? ''} onChange={(e) => handleFilter('tingkat_sekolah_id', e.target.value)}>
+                                <option value="">Tingkat formal (semua)</option>
+                                {tingkatSekolahs.map((item) => (
+                                    <option key={item.id} value={String(item.id)}>
+                                        {item.group ? `${item.name} (${item.group})` : item.name}
+                                    </option>
+                                ))}
+                            </select>
                             <select className="mcr-filter-select" value={filters.division_code ?? ''} onChange={(e) => handleFilter('division_code', e.target.value)}>
                                 <option value="">Semua Divisi Pengurus</option>
                                 {divisionOptions.map((code) => (
@@ -330,7 +341,8 @@ export default function InvoiceIndex({
                                                 <div className="font-medium">{group.student_name}</div>
                                                 <div className="text-xs text-muted-foreground">
                                                     NIS: {group.student_nis}
-                                                    {group.class_name ? ` • ${group.class_name}` : ''}
+                                                    {group.class_name ? ` • Diniyyah: ${group.class_name}` : ''}
+                                                    {group.tingkat_formal_name ? ` • Formal: ${group.tingkat_formal_name}` : ''}
                                                 </div>
                                             </div>
                                             {canSendReminder && firstRemindableInvoiceId(group) !== null ? (

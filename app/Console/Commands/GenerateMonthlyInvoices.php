@@ -7,6 +7,7 @@ use App\Models\Invoice;
 use App\Models\PaymentType;
 use App\Models\Student;
 use App\Models\StudentDiscount;
+use App\Services\Finance\FinanceInvoicePricingResolver;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -47,7 +48,9 @@ class GenerateMonthlyInvoices extends Command
         $created = 0;
         $skipped = 0;
 
-        DB::transaction(function () use ($students, $recurringTypes, $activePeriod, $month, $dueDate, &$created, &$skipped) {
+        $pricing = app(FinanceInvoicePricingResolver::class);
+
+        DB::transaction(function () use ($students, $recurringTypes, $activePeriod, $month, $dueDate, &$created, &$skipped, $pricing) {
             foreach ($recurringTypes as $type) {
                 foreach ($students as $student) {
                     $exists = Invoice::where('student_id', $student->id)
@@ -63,18 +66,20 @@ class GenerateMonthlyInvoices extends Command
                         continue;
                     }
 
-                    $amount = $this->resolveAmount($type, $student);
-                    if ($amount === null) {
+                    $resolved = $pricing->resolveAmountAndRule($type, $student, (int) $activePeriod->academic_year_id);
+                    $amount = $resolved['amount'];
+                    if ($amount === null || $amount <= 0) {
                         $skipped++;
 
                         continue;
                     }
                     $discount = $this->resolveDiscount($student->id, $type->id, $activePeriod->academic_year_id, $amount);
-                    $breakdown = $type->buildBreakdownForAmount($amount);
+                    $breakdown = $pricing->resolveBreakdown($type, $amount, $resolved['applied_rule'], null, true);
 
                     Invoice::create([
                         'invoice_number' => Invoice::generateNumber(),
                         'student_id' => $student->id,
+                        'tingkat_sekolah_id' => $resolved['tingkat_sekolah_id'],
                         'payment_type_id' => $type->id,
                         'academic_year_id' => $activePeriod->academic_year_id,
                         'semester_id' => $activePeriod->semester_id,
@@ -95,15 +100,6 @@ class GenerateMonthlyInvoices extends Command
         $this->info("Selesai. Dibuat: {$created}, Dilewati: {$skipped}");
 
         return self::SUCCESS;
-    }
-
-    private function resolveAmount(PaymentType $type, Student $student): ?float
-    {
-        if ($student->is_kuliah) {
-            return $type->kuliah_amount !== null ? (float) $type->kuliah_amount : null;
-        }
-
-        return (float) $type->default_amount;
     }
 
     private function resolveDiscount(int $studentId, int $paymentTypeId, int $academicYearId, float $amount): float

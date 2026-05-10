@@ -483,6 +483,22 @@ export type ReportCard = {
 
 // --- Keuangan ---
 
+export type TingkatSekolahFormal = {
+    id: number;
+    name: string;
+    code: string | null;
+    group: string | null;
+};
+
+export type PaymentTypeTingkatRule = {
+    id?: number;
+    tingkat_sekolah_id: number;
+    is_enabled: boolean;
+    amount: number | string | null;
+    breakdown?: Array<{ label: string; amount: number | string }> | null;
+    tingkat_sekolah?: TingkatSekolahFormal;
+};
+
 export type PaymentType = {
     id: number;
     name: string;
@@ -492,6 +508,8 @@ export type PaymentType = {
     default_amount: number;
     kuliah_amount?: number | null;
     default_breakdown?: Array<{ label: string; amount: number }> | null;
+    /** Aturan nominal per tingkat sekolah formal — dari backend `tingkat_rules`. */
+    tingkat_rules?: PaymentTypeTingkatRule[];
     description: string | null;
     is_active: boolean;
     created_at: string;
@@ -519,6 +537,7 @@ export type Invoice = {
     id: number;
     invoice_number: string;
     student_id: number;
+    tingkat_sekolah_id?: number | null;
     payment_type_id: number;
     academic_year_id: number;
     semester_id: number | null;
@@ -537,6 +556,7 @@ export type Invoice = {
     remaining?: number;
     payments_count?: number;
     student?: Student;
+    tingkat_sekolah?: TingkatSekolahFormal | null;
     payment_type?: PaymentType;
     academic_year?: AcademicYear;
     semester?: Semester;
@@ -550,6 +570,8 @@ export type StudentInvoiceGroup = {
     student_nis: string;
     student_name: string;
     class_name: string | null;
+    /** Tingkat formal dari invoice pertama dalam grup (acuan keuangan). */
+    tingkat_formal_name?: string | null;
     invoice_count: number;
     total_amount: number;
     total_paid: number;

@@ -192,6 +192,22 @@ class Student extends Model
 
     // --- Keuangan ---
 
+    public function enrollmentTingkatSekolahs(): HasMany
+    {
+        return $this->hasMany(EnrollmentTingkatSekolah::class);
+    }
+
+    /**
+     * Tingkat sekolah formal (bukan kelas diniyyah) untuk satu tahun ajaran — acuan tarif keuangan.
+     */
+    public function formalTingkatEnrollmentForYear(int $academicYearId): ?EnrollmentTingkatSekolah
+    {
+        return $this->enrollmentTingkatSekolahs()
+            ->where('academic_year_id', $academicYearId)
+            ->with('tingkatSekolah')
+            ->first();
+    }
+
     public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class);

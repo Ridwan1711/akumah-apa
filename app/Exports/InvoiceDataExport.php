@@ -27,7 +27,14 @@ class InvoiceDataExport implements FromQuery, WithHeadings, WithMapping
             ->when($this->request->academic_year_id, fn ($q, $id) => $q->where('academic_year_id', $id))
             ->when($this->request->month, fn ($q, $m) => $q->where('month', $m))
             ->when($this->request->search, fn ($q, $s) => $q->whereHas('student', fn ($sq) => $sq->where('full_name', 'ilike', "%{$s}%")->orWhere('nis', 'like', "%{$s}%")))
-            ->when($this->request->class_id, fn ($q, $id) => $q->whereHas('student', fn ($sq) => $sq->where('current_class_id', $id)))
+            ->when(
+                $this->request->filled('tingkat_sekolah_id'),
+                fn ($q) => $q->forFormalTingkat((int) $this->request->integer('tingkat_sekolah_id'))
+            )
+            ->when(
+                ! $this->request->filled('tingkat_sekolah_id') && $this->request->filled('class_id'),
+                fn ($q) => $q->whereHas('student', fn ($sq) => $sq->where('current_class_id', (int) $this->request->integer('class_id')))
+            )
             ->when(
                 $this->request->filled('division_code'),
                 fn ($q) => $q->whereHas(
@@ -43,6 +50,7 @@ class InvoiceDataExport implements FromQuery, WithHeadings, WithMapping
                 'student:id,nis,full_name',
                 'paymentType:id,name,code',
                 'academicYear:id,name',
+                'tingkatSekolah:id,name,code',
             ])
             ->withSum([
                 'payments as verified_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', \App\Models\Payment::STATUS_VERIFIED),
@@ -59,6 +67,7 @@ class InvoiceDataExport implements FromQuery, WithHeadings, WithMapping
             'payment_type_code',
             'payment_type_name',
             'academic_year_name',
+            'tingkat_formal_name',
             'month',
             'amount',
             'discount_amount',
@@ -86,6 +95,7 @@ class InvoiceDataExport implements FromQuery, WithHeadings, WithMapping
             $invoice->paymentType?->code ?? '',
             $invoice->paymentType?->name ?? '',
             $invoice->academicYear?->name ?? '',
+            (string) ($invoice->tingkatSekolah?->name ?? ''),
             $invoice->month !== null ? (string) $invoice->month : '',
             (float) $invoice->amount,
             (float) $invoice->discount_amount,

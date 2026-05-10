@@ -64,6 +64,8 @@ test('bulk generate preview returns target count for all active students', funct
 
     $response->assertOk();
     $response->assertJsonPath('target_student_count', 2);
+    $response->assertJsonPath('would_skip_invoice_count', 1);
+    $response->assertJsonPath('students_without_formal_enrollment_count', 2);
     $response->assertJsonPath('kuliah_without_tariff_count', 1);
     $response->assertJsonPath('summary.payment_type_name', 'SPP Preview');
     $response->assertJsonPath('summary.academic_year_name', '2026/2027');

@@ -8,6 +8,8 @@ use App\Models\Diniyyah\SchoolClass;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentType;
+use App\Models\TingkatSekolah;
+use App\Services\Finance\FinanceFormalTingkatSummary;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -62,6 +64,15 @@ class PaymentReportController extends Controller
                 ];
             });
 
+        $byFormalTingkat = FinanceFormalTingkatSummary::invoicedPaidByTingkat(Invoice::query())->map(fn ($row): array => [
+            'id' => $row->id,
+            'name' => $row->name,
+            'code' => $row->code,
+            'invoice_count' => $row->invoice_count,
+            'total_invoiced' => $row->total_invoiced,
+            'total_paid' => $row->total_paid,
+        ])->values()->all();
+
         $recentPayments = Payment::with([
             'invoice:id,invoice_number,student_id',
             'invoice.student:id,full_name',
@@ -81,6 +92,7 @@ class PaymentReportController extends Controller
             ],
             'byCategory' => $byCategory,
             'byClass' => $byClass,
+            'byFormalTingkat' => $byFormalTingkat,
             'recentPayments' => $recentPayments,
         ]);
     }
@@ -90,12 +102,20 @@ class PaymentReportController extends Controller
         $query = Invoice::with([
             'student:id,nis,full_name,current_class_id',
             'student.currentClass:id,name',
+            'tingkatSekolah:id,name,code',
             'paymentType:id,name,code',
         ])->withSum([
             'payments as verified_paid_amount' => fn ($paymentQuery) => $paymentQuery->where('status', Payment::STATUS_VERIFIED),
         ], 'amount')
             ->whereIn('status', [Invoice::STATUS_OVERDUE, Invoice::STATUS_PENDING, Invoice::STATUS_PARTIAL])
-            ->when($request->class_id, fn ($q, $id) => $q->whereHas('student', fn ($sq) => $sq->where('current_class_id', $id)))
+            ->when(
+                $request->filled('tingkat_sekolah_id'),
+                fn ($q) => $q->forFormalTingkat((int) $request->tingkat_sekolah_id)
+            )
+            ->when(
+                ! $request->filled('tingkat_sekolah_id') && $request->filled('class_id'),
+                fn ($q) => $q->whereHas('student', fn ($sq) => $sq->where('current_class_id', (int) $request->class_id))
+            )
             ->when($request->payment_type_id, fn ($q, $id) => $q->where('payment_type_id', $id))
             ->orderBy('due_date');
 
@@ -110,8 +130,9 @@ class PaymentReportController extends Controller
         return Inertia::render('admin/payment-reports/arrears', [
             'invoices' => $invoices,
             'classes' => SchoolClass::orderBy('name')->get(['id', 'name']),
+            'tingkatSekolahs' => TingkatSekolah::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'code', 'group']),
             'paymentTypes' => PaymentType::where('is_active', true)->get(['id', 'name']),
-            'filters' => $request->only(['class_id', 'payment_type_id']),
+            'filters' => $request->only(['class_id', 'payment_type_id', 'tingkat_sekolah_id']),
         ]);
     }
 

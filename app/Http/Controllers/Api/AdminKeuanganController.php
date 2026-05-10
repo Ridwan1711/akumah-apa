@@ -7,18 +7,21 @@ use App\Jobs\DispatchInvoiceRemindersJob;
 use App\Jobs\ProcessBulkRun;
 use App\Models\AcademicYear;
 use App\Models\Diniyyah\SchoolClass;
+use App\Models\EnrollmentTingkatSekolah;
 use App\Models\ImportRun;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentType;
 use App\Models\Student;
 use App\Models\StudentDiscount;
+use App\Models\TingkatSekolah;
 use App\Models\User;
 use App\Notifications\InvoiceCreatedNotification;
 use App\Notifications\PaymentVerifiedNotification;
 use App\Services\Authorization\InvoiceVisibilityScope;
 use App\Services\Finance\DispatchInvoiceRemindersAction;
 use App\Services\Finance\FinanceWhatsappOutbound;
+use App\Services\Finance\FinanceFormalTingkatSummary;
 use App\Services\Finance\FinanceWhatsappPhone;
 use App\Services\Finance\FinanceWhatsappRecipient;
 use App\Services\Finance\InstallmentService;
@@ -45,6 +48,7 @@ class AdminKeuanganController extends Controller
         $query = Invoice::with([
             'student:id,nis,full_name,current_class_id',
             'student.currentClass:id,name',
+            'tingkatSekolah:id,name,code',
             'paymentType:id,name,code,category',
             'academicYear:id,name',
         ])
@@ -60,7 +64,14 @@ class AdminKeuanganController extends Controller
             ->when($request->academic_year_id, fn ($q, $id) => $q->where('academic_year_id', $id))
             ->when($request->month, fn ($q, $m) => $q->where('month', $m))
             ->when($request->search, fn ($q, $s) => $q->whereHas('student', fn ($sq) => $sq->where('full_name', 'ilike', "%{$s}%")->orWhere('nis', 'like', "%{$s}%")))
-            ->when($request->class_id, fn ($q, $id) => $q->whereHas('student', fn ($sq) => $sq->where('current_class_id', $id)))
+            ->when(
+                $request->filled('tingkat_sekolah_id'),
+                fn ($q) => $q->forFormalTingkat((int) $request->tingkat_sekolah_id)
+            )
+            ->when(
+                ! $request->filled('tingkat_sekolah_id') && $request->filled('class_id'),
+                fn ($q) => $q->whereHas('student', fn ($sq) => $sq->where('current_class_id', (int) $request->class_id))
+            )
             ->orderByDesc('created_at');
         $query = $this->invoiceVisibilityScope->applyToInvoiceQuery($query, $request->user());
 
@@ -78,7 +89,8 @@ class AdminKeuanganController extends Controller
             'payment_types' => PaymentType::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
             'academic_years' => AcademicYear::orderByDesc('start_date')->get(['id', 'name']),
             'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name']),
-            'filters' => $request->only(['status', 'payment_type_id', 'academic_year_id', 'month', 'search', 'class_id']),
+            'tingkat_sekolahs' => TingkatSekolah::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'code', 'group']),
+            'filters' => $request->only(['status', 'payment_type_id', 'academic_year_id', 'month', 'search', 'class_id', 'tingkat_sekolah_id']),
             'status_counts' => [
                 'all' => (clone $query)->count(),
                 'pending' => (clone $query)->where('status', Invoice::STATUS_PENDING)->count(),
@@ -94,9 +106,15 @@ class AdminKeuanganController extends Controller
         abort_unless(request()->user()?->hasPermission(Permissions::INVOICE_VIEW), 403, 'Anda tidak memiliki izin untuk melihat data tagihan.');
 
         return response()->json([
-            'payment_types' => PaymentType::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code', 'category', 'is_recurring', 'default_breakdown']),
+            'payment_types' => PaymentType::with(['tingkatRules.tingkatSekolah:id,name,code,group'])
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get([
+                    'id', 'name', 'code', 'category', 'is_recurring', 'default_amount', 'default_breakdown',
+                ]),
             'academic_years' => AcademicYear::orderByDesc('start_date')->get(['id', 'name']),
             'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'grade_level_id']),
+            'tingkat_sekolahs' => TingkatSekolah::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'code', 'group']),
         ]);
     }
 
@@ -107,8 +125,10 @@ class AdminKeuanganController extends Controller
         $validated = $request->validate([
             'payment_type_id' => ['required', 'exists:payment_types,id'],
             'academic_year_id' => ['required', 'exists:academic_years,id'],
-            'class_ids' => ['required', 'array', 'min:1'],
+            'class_ids' => ['nullable', 'array'],
             'class_ids.*' => ['exists:diniyah_classes,id'],
+            'tingkat_sekolah_ids' => ['nullable', 'array'],
+            'tingkat_sekolah_ids.*' => ['integer', 'exists:tingkat_sekolahs,id'],
             'month' => ['nullable', 'integer', 'min:1', 'max:12'],
             'due_date' => ['required', 'date'],
             'send_notification_for_existing' => ['sometimes', 'boolean'],
@@ -164,9 +184,18 @@ class AdminKeuanganController extends Controller
 
         $discount = $this->resolveDiscount($validated['student_id'], $validated['payment_type_id'], $validated['academic_year_id'], $validated['amount']);
 
+        $student = Student::query()->findOrFail((int) $validated['student_id']);
+        $tingkatSnapshot = $student->formalTingkatEnrollmentForYear((int) $validated['academic_year_id'])?->tingkat_sekolah_id;
+        if ($tingkatSnapshot === null && $student->is_kuliah) {
+            $tingkatSnapshot = TingkatSekolah::query()
+                ->where('code', TingkatSekolah::CODE_KULIAH)
+                ->value('id');
+        }
+
         $invoice = Invoice::create([
             'invoice_number' => Invoice::generateNumber(),
             'student_id' => $validated['student_id'],
+            'tingkat_sekolah_id' => $tingkatSnapshot,
             'payment_type_id' => $validated['payment_type_id'],
             'academic_year_id' => $validated['academic_year_id'],
             'month' => $validated['month'] ?? null,
@@ -198,6 +227,7 @@ class AdminKeuanganController extends Controller
         $invoice->load([
             'student:id,nis,full_name,current_class_id',
             'student.currentClass:id,name',
+            'tingkatSekolah:id,name,code,group',
             'paymentType:id,name,code,category,default_breakdown',
             'academicYear:id,name',
             'payments' => fn ($q) => $q->orderByDesc('payment_date'),
@@ -462,6 +492,8 @@ class AdminKeuanganController extends Controller
             ->orderBy('classes.name')
             ->get();
 
+        $byFormalTingkat = FinanceFormalTingkatSummary::invoicedPaidByTingkat($visibleInvoiceQuery);
+
         $recentPayments = Payment::with([
             'invoice:id,invoice_number,student_id',
             'invoice.student:id,full_name',
@@ -534,6 +566,7 @@ class AdminKeuanganController extends Controller
             ],
             'by_category' => $byCategory,
             'by_class' => $byClass,
+            'by_formal_tingkat' => $byFormalTingkat,
             'recent_payments' => $recentPayments,
             'top_arrears' => $topArrears,
             'payment_methods' => $paymentMethods,
@@ -548,10 +581,13 @@ class AdminKeuanganController extends Controller
         $query->with([
             'student:id,nis,full_name,current_class_id',
             'student.currentClass:id,name',
+            'tingkatSekolah:id,name,code',
             'paymentType:id,name,code',
         ]);
         $query->whereIn('status', [Invoice::STATUS_OVERDUE, Invoice::STATUS_PENDING, Invoice::STATUS_PARTIAL]);
-        if ($request->class_id) {
+        if ($request->filled('tingkat_sekolah_id')) {
+            $query->forFormalTingkat((int) $request->tingkat_sekolah_id);
+        } elseif ($request->class_id) {
             $query->whereHas('student', fn (Builder $studentQuery) => $studentQuery->where('current_class_id', $request->class_id));
         }
         if ($request->payment_type_id) {
@@ -566,7 +602,8 @@ class AdminKeuanganController extends Controller
             'invoices' => $invoices,
             'classes' => SchoolClass::orderBy('name')->get(['id', 'name']),
             'payment_types' => PaymentType::where('is_active', true)->get(['id', 'name']),
-            'filters' => $request->only(['class_id', 'payment_type_id']),
+            'tingkat_sekolahs' => TingkatSekolah::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'code', 'group']),
+            'filters' => $request->only(['class_id', 'payment_type_id', 'tingkat_sekolah_id']),
         ]);
     }
 
@@ -626,10 +663,12 @@ class AdminKeuanganController extends Controller
             'all_unpaid' => ['nullable', 'boolean'],
             'payment_type_id' => ['nullable', 'integer', 'exists:payment_types,id'],
             'class_id' => ['nullable', 'integer', 'exists:classes,id'],
+            'tingkat_sekolah_id' => ['nullable', 'integer', 'exists:tingkat_sekolahs,id'],
             'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
         ]);
 
         $invoices = $this->resolveReminderInvoices($validated, $user)->loadMissing(
+            'tingkatSekolah:id,name,code',
             'student.currentClass',
             'student.guardians.user',
             'student.user:id,whatsapp_phone',
@@ -652,6 +691,7 @@ class AdminKeuanganController extends Controller
             'all_unpaid' => ['nullable', 'boolean'],
             'payment_type_id' => ['nullable', 'integer', 'exists:payment_types,id'],
             'class_id' => ['nullable', 'integer', 'exists:classes,id'],
+            'tingkat_sekolah_id' => ['nullable', 'integer', 'exists:tingkat_sekolahs,id'],
             'academic_year_id' => ['nullable', 'integer', 'exists:academic_years,id'],
             'message' => ['nullable', 'string', 'max:500'],
         ]);
@@ -781,15 +821,6 @@ class AdminKeuanganController extends Controller
         ]);
     }
 
-    private function resolveAmount(PaymentType $type, Student $student): ?float
-    {
-        if ($student->is_kuliah) {
-            return $type->kuliah_amount !== null ? (float) $type->kuliah_amount : null;
-        }
-
-        return (float) $type->default_amount;
-    }
-
     private function resolveDiscount(int $studentId, int $paymentTypeId, int $academicYearId, float $amount): float
     {
         $discount = StudentDiscount::where('student_id', $studentId)
@@ -841,7 +872,9 @@ class AdminKeuanganController extends Controller
             if (! empty($validated['academic_year_id'])) {
                 $query->where('academic_year_id', $validated['academic_year_id']);
             }
-            if (! empty($validated['class_id'])) {
+            if (! empty($validated['tingkat_sekolah_id'])) {
+                $query->forFormalTingkat((int) $validated['tingkat_sekolah_id']);
+            } elseif (! empty($validated['class_id'])) {
                 $query->whereHas('student', fn (Builder $studentQuery) => $studentQuery->where('current_class_id', $validated['class_id']));
             }
         } else {
@@ -859,7 +892,7 @@ class AdminKeuanganController extends Controller
      *   recipients_with_account: int,
      *   recipients_without_account: int,
      *   sample_recipients: array<int, array{name:string,student:string}>,
-     *   by_class: array<int, array{class_name:string,invoices_count:int}>
+     *   by_formal_tingkat: array<int, array{tingkat_name:string,class_name:string,invoices_count:int}>
      * }
      */
     private function buildReminderPreview($invoices): array
@@ -871,6 +904,8 @@ class AdminKeuanganController extends Controller
         $waPhonesEstimate = collect();
         $waliWithoutAppWithPhone = 0;
 
+        /** @var array<string, EnrollmentTingkatSekolah|null> $formalEnrollmentCache */
+        $formalEnrollmentCache = [];
         foreach ($invoices as $invoice) {
             $studentName = (string) ($invoice->student?->full_name ?? 'Santri');
             $student = $invoice->student;
@@ -905,10 +940,34 @@ class AdminKeuanganController extends Controller
             }
         }
 
-        $byClass = $invoices
-            ->groupBy(fn (Invoice $invoice): string => (string) ($invoice->student?->currentClass?->name ?? 'Tanpa Kelas'))
-            ->map(fn ($group, $className): array => [
-                'class_name' => (string) $className,
+        foreach ($invoices as $invoice) {
+            /** @var Invoice $invoice */
+            $pk = (string) $invoice->student_id.'|'.(string) ($invoice->academic_year_id ?? '0');
+            if (! isset($formalEnrollmentCache[$pk])) {
+                $formalEnrollmentCache[$pk] = EnrollmentTingkatSekolah::query()
+                    ->where('student_id', $invoice->student_id)
+                    ->where('academic_year_id', $invoice->academic_year_id)
+                    ->with('tingkatSekolah')
+                    ->first();
+            }
+        }
+
+        $resolveFormalLabel = function (Invoice $invoice) use ($formalEnrollmentCache): string {
+            $fromSnapshot = $invoice->tingkatSekolah?->name;
+            if (is_string($fromSnapshot) && $fromSnapshot !== '') {
+                return $fromSnapshot;
+            }
+            $pk = (string) $invoice->student_id.'|'.(string) ($invoice->academic_year_id ?? '0');
+            $label = $formalEnrollmentCache[$pk]?->tingkatSekolah?->name;
+
+            return is_string($label) && $label !== '' ? $label : 'Tanpa tingkat formal';
+        };
+
+        $byFormalTingkat = $invoices
+            ->groupBy(fn (Invoice $invoice): string => $resolveFormalLabel($invoice))
+            ->map(fn ($group, $tingkatLabel): array => [
+                'tingkat_name' => (string) $tingkatLabel,
+                'class_name' => (string) $tingkatLabel,
                 'invoices_count' => $group->count(),
             ])
             ->values()
@@ -922,7 +981,8 @@ class AdminKeuanganController extends Controller
             'wali_without_app_with_phone' => $waliWithoutAppWithPhone,
             'wa_estimated_unique_recipients' => $waPhonesEstimate->unique()->count(),
             'sample_recipients' => $sampleRecipients->all(),
-            'by_class' => $byClass,
+            'by_formal_tingkat' => $byFormalTingkat,
+            'by_class' => $byFormalTingkat,
         ];
     }
 

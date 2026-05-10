@@ -50,6 +50,7 @@ function formatCurrency(amount: number) {
 }
 
 type ClassSummary = { id: number; name: string; invoice_count: number; total_invoiced: number; total_paid: number };
+type FormalTingkatSummary = { id: number | null; name: string; code?: string | null; invoice_count: number; total_invoiced: number; total_paid: number };
 type CategorySummary = { category: string; total_invoiced: number };
 
 type Props = {
@@ -62,29 +63,36 @@ type Props = {
     };
     byCategory: CategorySummary[];
     byClass: ClassSummary[];
+    byFormalTingkat?: FormalTingkatSummary[];
     recentPayments: Payment[];
 };
 
-export default function PaymentReportSummary({ stats, byCategory, byClass, recentPayments }: Props) {
+export default function PaymentReportSummary({ stats, byCategory, byClass, byFormalTingkat = [], recentPayments }: Props) {
     const { auth } = usePage<{ auth?: Auth }>().props;
     const canViewReport = can(auth, 'payment.report.view');
 
     const trendRef = useRef<HTMLCanvasElement | null>(null);
     const donutRef = useRef<HTMLCanvasElement | null>(null);
 
+    const chartRows = useMemo(
+        (): Array<ClassSummary | FormalTingkatSummary> =>
+            byFormalTingkat.length > 0 ? byFormalTingkat.slice(0, 8) : byClass.slice(0, 8),
+        [byClass, byFormalTingkat],
+    );
+
     const trendLabels = useMemo(
-        () => byClass.slice(0, 8).map((item) => item.name),
-        [byClass],
+        () => chartRows.map((item) => item.name),
+        [chartRows],
     );
 
     const trendInvoiced = useMemo(
-        () => byClass.slice(0, 8).map((item) => Number(item.total_invoiced)),
-        [byClass],
+        () => chartRows.map((item) => Number(item.total_invoiced)),
+        [chartRows],
     );
 
     const trendPaid = useMemo(
-        () => byClass.slice(0, 8).map((item) => Number(item.total_paid)),
-        [byClass],
+        () => chartRows.map((item) => Number(item.total_paid)),
+        [chartRows],
     );
 
     useEffect(() => {
@@ -147,7 +155,7 @@ export default function PaymentReportSummary({ stats, byCategory, byClass, recen
             trendChart.destroy();
             donutChart.destroy();
         };
-    }, [trendLabels, trendInvoiced, trendPaid, byCategory]);
+    }, [trendLabels, trendInvoiced, trendPaid, byCategory, chartRows]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -155,7 +163,7 @@ export default function PaymentReportSummary({ stats, byCategory, byClass, recen
             <div>
                 <CrudPageHeader
                     title="Laporan Keuangan"
-                    description="Ringkasan koleksi pembayaran, tagihan, dan tunggakan per kategori serta per kelas."
+                    description="Ringkasan koleksi pembayaran, tagihan, dan tunggakan per kategori serta per tingkat sekolah formal (utama) dan kelas diniyyah (informasi)."
                 />
 
                 <CrudStatStrip
@@ -188,7 +196,7 @@ export default function PaymentReportSummary({ stats, byCategory, byClass, recen
                 />
 
                 <div className="mcr-no-print" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14, marginBottom: 14 }}>
-                    <CrudCard title="Tren Tagihan vs Terbayar (Top Kelas)">
+                    <CrudCard title={byFormalTingkat.length > 0 ? 'Tren Tagihan vs Terbayar (Tingkat Formal)' : 'Tren Tagihan vs Terbayar (Top Kelas)'}>
                         <div style={{ height: 280 }}>
                             <canvas ref={trendRef} />
                         </div>
@@ -216,8 +224,35 @@ export default function PaymentReportSummary({ stats, byCategory, byClass, recen
                     </div>
                 </CrudCard>
 
+                {byFormalTingkat.length > 0 ? (
+                    <CrudCard title="Rekap Per Tingkat Sekolah Formal" subtitle="Digunakan sebagai acuan keuangan (MTs / MA / Kuliah)">
+                        <CrudTableShell>
+                            <table className="mcr-table">
+                                <thead>
+                                    <tr>
+                                        <th>Tingkat</th>
+                                        <th style={{ textAlign: 'right' }}>Invoice</th>
+                                        <th style={{ textAlign: 'right' }}>Tagihan</th>
+                                        <th style={{ textAlign: 'right' }}>Terbayar</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {byFormalTingkat.map((item) => (
+                                        <tr key={item.id === null ? 'none' : String(item.id)}>
+                                            <td>{item.name}</td>
+                                            <td style={{ textAlign: 'right' }}>{item.invoice_count}</td>
+                                            <td style={{ textAlign: 'right' }}>{formatCurrency(item.total_invoiced)}</td>
+                                            <td style={{ textAlign: 'right' }}>{formatCurrency(item.total_paid)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </CrudTableShell>
+                    </CrudCard>
+                ) : null}
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 14 }}>
-                    <CrudCard title="Rekap Per Kelas">
+                    <CrudCard title="Rekap Per Kelas Diniyyah">
                         <CrudTableShell>
                             <table className="mcr-table">
                                 <thead>

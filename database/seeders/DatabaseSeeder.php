@@ -12,6 +12,7 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             PermissionSeeder::class,
             SuperAdminSeeder::class,
+            TingkatSekolahSeeder::class,
             GradeLevelSeeder::class,
             LevelSubjectDefaultSeeder::class,
             AssessmentComponentSeeder::class,

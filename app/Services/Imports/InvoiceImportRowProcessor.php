@@ -6,6 +6,7 @@ use App\Models\AcademicYear;
 use App\Models\Invoice;
 use App\Models\PaymentType;
 use App\Models\Student;
+use App\Models\TingkatSekolah;
 use App\Services\Finance\InvoiceImportSupport;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
@@ -100,9 +101,17 @@ class InvoiceImportRowProcessor
         }
 
         try {
+            $tingkatSnapshot = $student->formalTingkatEnrollmentForYear((int) $academicYear->id)?->tingkat_sekolah_id;
+            if ($tingkatSnapshot === null && $student->is_kuliah) {
+                $tingkatSnapshot = TingkatSekolah::query()
+                    ->where('code', TingkatSekolah::CODE_KULIAH)
+                    ->value('id');
+            }
+
             $invoice = Invoice::create([
                 'invoice_number' => Invoice::generateNumber($paymentType->id, $month, $academicYear->id, $student->full_name),
                 'student_id' => $student->id,
+                'tingkat_sekolah_id' => $tingkatSnapshot,
                 'payment_type_id' => $paymentType->id,
                 'academic_year_id' => $academicYear->id,
                 'month' => $month,
