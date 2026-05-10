@@ -9,16 +9,27 @@ export default function FlashMessage() {
             error?: string;
             warning?: string;
             dorm_import_error_token?: string | null;
+            formal_tingkat_import_error_token?: string | null;
         };
     }>();
     const flash = props.flash;
 
-    const hasBanner = flash?.success || flash?.error || flash?.warning || flash?.dorm_import_error_token;
+    const hasBanner =
+        flash?.success ||
+        flash?.error ||
+        flash?.warning ||
+        flash?.dorm_import_error_token ||
+        flash?.formal_tingkat_import_error_token;
     if (!hasBanner) return null;
 
-    const errorCsvHref =
+    const dormErrorCsvHref =
         flash?.dorm_import_error_token != null && flash.dorm_import_error_token !== ''
             ? `/admin/asrama/import-errors?token=${encodeURIComponent(flash.dorm_import_error_token)}`
+            : null;
+
+    const formalTingkatErrorCsvHref =
+        flash?.formal_tingkat_import_error_token != null && flash.formal_tingkat_import_error_token !== ''
+            ? `/admin/formal-tingkat/import-errors?token=${encodeURIComponent(flash.formal_tingkat_import_error_token)}`
             : null;
 
     return (
@@ -36,12 +47,20 @@ export default function FlashMessage() {
                     <AlertTitle>Perhatian</AlertTitle>
                     <AlertDescription>
                         <span className="block whitespace-pre-wrap">{flash.warning}</span>
-                        {errorCsvHref ? (
+                        {dormErrorCsvHref ? (
                             <a
-                                href={errorCsvHref}
-                                className="mt-3 inline-flex font-semibold underline underline-offset-4 text-amber-900 hover:text-amber-950 dark:text-amber-200 dark:hover:text-amber-50"
+                                href={dormErrorCsvHref}
+                                className="mt-3 block font-semibold underline underline-offset-4 text-amber-900 hover:text-amber-950 dark:text-amber-200 dark:hover:text-amber-50"
                             >
                                 Unduh CSV detail error impor kobong
+                            </a>
+                        ) : null}
+                        {formalTingkatErrorCsvHref ? (
+                            <a
+                                href={formalTingkatErrorCsvHref}
+                                className="mt-3 block font-semibold underline underline-offset-4 text-amber-900 hover:text-amber-950 dark:text-amber-200 dark:hover:text-amber-50"
+                            >
+                                Unduh CSV detail error impor tingkat formal
                             </a>
                         ) : null}
                     </AlertDescription>
@@ -57,6 +76,20 @@ export default function FlashMessage() {
                             className="inline-flex font-semibold underline underline-offset-4 text-amber-900 hover:text-amber-950 dark:text-amber-200 dark:hover:text-amber-50"
                         >
                             Unduh CSV detail error impor kobong
+                        </a>
+                    </AlertDescription>
+                </Alert>
+            )}
+            {!flash.warning && flash.formal_tingkat_import_error_token && (
+                <Alert className="border-amber-400 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
+                    <AlertTriangle className="text-amber-600 dark:text-amber-400" />
+                    <AlertTitle>Detail error impor</AlertTitle>
+                    <AlertDescription>
+                        <a
+                            href={`/admin/formal-tingkat/import-errors?token=${encodeURIComponent(flash.formal_tingkat_import_error_token)}`}
+                            className="inline-flex font-semibold underline underline-offset-4 text-amber-900 hover:text-amber-950 dark:text-amber-200 dark:hover:text-amber-50"
+                        >
+                            Unduh CSV detail error impor tingkat formal
                         </a>
                     </AlertDescription>
                 </Alert>

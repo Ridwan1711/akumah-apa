@@ -11,6 +11,8 @@ use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\ClassPromotionController;
 use App\Http\Controllers\Admin\DiniyahClassController;
 use App\Http\Controllers\Admin\DormDataTransferController;
+use App\Http\Controllers\Admin\FormalTingkatEnrollmentController;
+use App\Http\Controllers\Admin\FormalTingkatTransferController;
 use App\Http\Controllers\Admin\GuardianController;
 use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\InvoiceDataTransferController;
@@ -219,6 +221,16 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::get('asrama/export/assignments', [DormDataTransferController::class, 'exportAssignments'])->name('asrama.export.assignments');
         Route::post('asrama/import', [DormDataTransferController::class, 'import'])->name('asrama.import');
         Route::get('asrama/import-errors', [DormDataTransferController::class, 'downloadImportErrors'])->name('asrama.import-errors');
+
+        // Enrollment tingkat sekolah formal (acuan keuangan; bukan kelas diniyyah)
+        Route::get('formal-tingkat/assign', [FormalTingkatEnrollmentController::class, 'assign'])->name('formal-tingkat.assign');
+        Route::post('formal-tingkat/enrollments', [FormalTingkatEnrollmentController::class, 'storeEnrollment'])->name('formal-tingkat.enrollments.store');
+        Route::post('formal-tingkat/enrollments/copy-from-year', [FormalTingkatEnrollmentController::class, 'copyEnrollmentsFromAcademicYear'])->name('formal-tingkat.enrollments.copy-from-year');
+        Route::get('formal-tingkat/template', [FormalTingkatTransferController::class, 'template'])->name('formal-tingkat.template');
+        Route::get('formal-tingkat/export/master', [FormalTingkatTransferController::class, 'exportMaster'])->name('formal-tingkat.export.master');
+        Route::get('formal-tingkat/export/enrollments', [FormalTingkatTransferController::class, 'exportEnrollments'])->name('formal-tingkat.export.enrollments');
+        Route::post('formal-tingkat/import', [FormalTingkatTransferController::class, 'import'])->name('formal-tingkat.import');
+        Route::get('formal-tingkat/import-errors', [FormalTingkatTransferController::class, 'downloadImportErrors'])->name('formal-tingkat.import-errors');
 
         // Violations
         Route::get('violations', [ViolationController::class, 'index'])->name('violations.index');

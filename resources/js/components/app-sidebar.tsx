@@ -18,6 +18,7 @@ import {
     ListChecks,
     PieChart,
     Receipt,
+    School,
     ScrollText,
     Shield,
     User,
@@ -77,6 +78,7 @@ export function AppSidebar() {
         { title: 'Data Santri', href: '/admin/students', icon: Users },
         { title: 'Pengurus Santri', href: '/admin/student-positions', icon: Shield },
         { title: 'Enroll Kelas Santri', href: '/admin/student-enrollments', icon: UserPlus },
+        { title: 'Enroll Tingkat Formal', href: '/admin/formal-tingkat/assign', icon: School },
         { title: 'Kelas Diniyah', href: '/admin/diniyah-classes', icon: GraduationCap },
         { title: 'Tahun Ajaran', href: '/admin/academic-years', icon: CalendarDays },
         { title: 'Generate Akun', href: '/admin/account-generator', icon: KeyRound },
@@ -107,7 +109,11 @@ export function AppSidebar() {
     const keuanganNavItems: NavItem[] = [
         ...(canAny(auth, ['invoice.view']) ? [{ title: 'Tagihan', href: '/admin/invoices', icon: Banknote }] : []),
         ...(canAny(auth, ['payment.view']) ? [{ title: 'Pembayaran', href: '/admin/payments', icon: CreditCard }] : []),
-        ...(canAny(auth, ['invoice.create']) ? [{ title: 'Diskon Santri', href: '/admin/student-discounts', icon: Wallet }] : []),
+        ...(canAny(auth, ['invoice.create']) ? [
+            { title: 'Diskon Santri', href: '/admin/student-discounts', icon: Wallet },
+            { title: 'Tingkat Sekolah', href: '/admin/tingkat-sekolahs', icon: School },
+            { title: 'Jenis Tagihan', href: '/admin/payment-types', icon: ClipboardList }
+        ] : []),
         ...(canAny(auth, ['payment.report.view']) ? [{ title: 'Laporan Keuangan', href: '/admin/payment-reports', icon: PieChart }] : []),
         ...(can(auth, 'audit_log.view_finance') && !isSuperAdmin
             ? [{ title: 'Log Aktivitas Keuangan', href: '/admin/audit-logs', icon: FileText }]
@@ -127,10 +133,10 @@ export function AppSidebar() {
     const guruNavItems: NavItem[] = [
         ...(hasGuruRecord
             ? [
-                  { title: 'Jadwal Guru', href: '/admin/schedule', icon: CalendarDays },
-                  { title: 'Absensi Siswa', href: '/admin/attendance-sessions', icon: CalendarClock },
-                  { title: 'Nilai Kitab', href: '/admin/kitab-grades', icon: ClipboardList },
-              ]
+                { title: 'Jadwal Guru', href: '/admin/schedule', icon: CalendarDays },
+                { title: 'Absensi Siswa', href: '/admin/attendance-sessions', icon: CalendarClock },
+                { title: 'Nilai Kitab', href: '/admin/kitab-grades', icon: ClipboardList },
+            ]
             : []),
         ...(hasKitabReadingExaminerRecord
             ? [{ title: 'Nilai Baca Kitab', href: '/admin/kitab-reading-assessments', icon: BookOpenCheck }]
@@ -155,7 +161,7 @@ export function AppSidebar() {
         { title: 'Tagihan', href: '/wali/invoices', icon: Banknote },
         { title: 'Riwayat Bayar', href: '/wali/payment-history', icon: Receipt },
     ];
-    
+
     const waliKelasNavItems: NavItem[] = [
         { title: 'Review Nilai Kelas', href: '/wali-kelas/grade-reviews', icon: ClipboardList },
         { title: 'Rekap Kenaikan Kelas', href: '/wali-kelas/class-promotion-recaps', icon: ArrowUpDown },
