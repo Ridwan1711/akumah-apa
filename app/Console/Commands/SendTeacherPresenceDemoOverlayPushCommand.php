@@ -37,7 +37,7 @@ class SendTeacherPresenceDemoOverlayPushCommand extends Command
         }
 
         $this->info("Push terkirim ke {$teacher->name} (ID {$teacher->id}), sesi #{$session->id}.");
-        $this->warn('Pastikan aplikasi guru terbuka di foreground dan izin "tampil di atas aplikasi lain" sudah diberikan.');
+        $this->warn('Di Android overlay bisa muncul di background jika izin "tampil di atas aplikasi lain" sudah diberikan.');
 
         return self::SUCCESS;
     }

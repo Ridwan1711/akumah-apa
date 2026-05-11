@@ -356,8 +356,9 @@ export default function AdminManualNotificationPage({ filters, users, summary }:
                         subtitle="Payload sama dengan reminder produksi (teacher_presence_confirmation_required) — untuk rekaman video Play Store / QA."
                     >
                         <p className="mcr-muted" style={{ fontSize: 13, marginBottom: 12 }}>
-                            Setelah kirim, overlay muncul bila aplikasi guru <strong>sudah terbuka di layar</strong>{' '}
-                            (foreground), token FCM aktif, dan izin &quot;tampil di atas aplikasi lain&quot; diberikan.
+                            Push ini data-only: overlay bisa muncul saat aplikasi di <strong>background</strong> atau
+                            foreground, asalkan token FCM aktif dan izin &quot;tampil di atas aplikasi lain&quot; sudah
+                            pernah diberikan (Android).
                         </p>
                         <form onSubmit={submitDemoOverlay} className="mcr-form-grid">
                             <div className="mcr-form-group">

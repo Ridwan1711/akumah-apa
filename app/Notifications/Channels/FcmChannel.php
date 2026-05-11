@@ -62,12 +62,17 @@ class FcmChannel
         $type = $data['type'] ?? class_basename($notification);
         $collapseKey = $data['collapse_key'] ?? $this->buildDefaultCollapseKey($type, $data['entity_id'] ?? null);
 
-        $message = CloudMessage::new()
-            ->withNotification(FcmNotification::create(
+        $dataOnly = method_exists($notification, 'fcmUsesDataOnly')
+            && $notification->fcmUsesDataOnly($notifiable);
+
+        $message = CloudMessage::new()->withData($data);
+
+        if (! $dataOnly) {
+            $message = $message->withNotification(FcmNotification::create(
                 $payload['title'] ?? 'Notifikasi',
                 $payload['body'] ?? '',
-            ))
-            ->withData($data);
+            ));
+        }
         $androidConfig = [
             'priority' => 'high',
             'ttl' => '3600s',

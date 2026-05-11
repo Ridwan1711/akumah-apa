@@ -38,6 +38,16 @@ class TeacherPresenceConfirmationNotification extends Notification implements Sh
     }
 
     /**
+     * Tanpa payload FCM "notification" supaya Android menyerahkan pesan ke
+     * isolat Dart (onBackgroundMessage) — diperlukan agar overlay bisa muncul
+     * saat aplikasi tidak di foreground. Judul & isi tetap ada di map `data`.
+     */
+    public function fcmUsesDataOnly(object $notifiable): bool
+    {
+        return true;
+    }
+
+    /**
      * @return array{title: string, body: string, data: array<string, string>}
      */
     public function toFcm(object $notifiable): array
@@ -74,4 +84,3 @@ class TeacherPresenceConfirmationNotification extends Notification implements Sh
         return "Sesi {$subject} ({$class}) {$date} {$time} belum memiliki konfirmasi kehadiran. Mohon pilih status Hadir/Izin/Sakit/Alpa.";
     }
 }
-

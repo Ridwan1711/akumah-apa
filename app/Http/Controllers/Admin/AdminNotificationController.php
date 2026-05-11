@@ -127,8 +127,8 @@ class AdminNotificationController extends Controller
 
         return redirect()->back()->with(
             'success',
-            "Push demo overlay terkirim ke {$teacher->name} (sesi #{$session->id}). ".
-            'Biarkan aplikasi guru terbuka di layar (foreground) dan izin tampil di atas aplikasi lain aktif.',
+            "Push demo overlay (data-only) terkirim ke {$teacher->name} (sesi #{$session->id}). ".
+            'Di Android overlay bisa muncul di background jika izin tampil di atas aplikasi lain sudah diberikan.',
         );
     }
 
