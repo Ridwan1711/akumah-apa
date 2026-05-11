@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { BellRing, Search } from 'lucide-react';
+import { BellRing, Search, Smartphone } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import FlashMessage from '@/components/flash-message';
@@ -68,6 +68,9 @@ export default function AdminManualNotificationPage({ filters, users, summary }:
         device_token_ids: [],
     });
 
+    const [demoUserId, setDemoUserId] = useState('');
+    const [demoSessionId, setDemoSessionId] = useState('');
+
     const userOptions = useMemo<SelectOption[]>(
         () =>
             users.map((user) => ({
@@ -123,6 +126,46 @@ export default function AdminManualNotificationPage({ filters, users, summary }:
         setPreviewSummary(null);
     }
 
+    function submitDemoOverlay(e: React.FormEvent) {
+        e.preventDefault();
+        if (!canSend) return;
+
+        const uid = parseInt(demoUserId.trim(), 10);
+        if (!Number.isFinite(uid) || uid <= 0) {
+            toast.error('Isi User ID guru (angka valid).');
+            return;
+        }
+
+        const payload: { user_id: number; lesson_session_id?: number } = { user_id: uid };
+        if (demoSessionId.trim() !== '') {
+            const sid = parseInt(demoSessionId.trim(), 10);
+            if (!Number.isFinite(sid) || sid <= 0) {
+                toast.error('ID sesi tidak valid.');
+                return;
+            }
+            payload.lesson_session_id = sid;
+        }
+
+        router.post('/admin/notifications/manual/teacher-presence-overlay-demo', payload, {
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success(
+                    'Push demo terkirim. Biarkan aplikasi guru di foreground dan izin tampil di atas aplikasi lain aktif.',
+                );
+                setDemoUserId('');
+                setDemoSessionId('');
+            },
+            onError: (errors) => {
+                const msg =
+                    errors.user_id?.[0] ??
+                    errors.lesson_session_id?.[0] ??
+                    errors.demo_overlay?.[0] ??
+                    'Gagal mengirim demo overlay.';
+                toast.error(String(msg));
+            },
+        });
+    }
+
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         if (!canSend) return;
@@ -154,7 +197,11 @@ export default function AdminManualNotificationPage({ filters, users, summary }:
             <FlashMessage />
 
             {!canSend ? (
-                <CrudCard title="Akses dibatasi" subtitle="Anda tidak memiliki permission untuk mengirim notifikasi manual." />
+                <CrudCard title="Akses dibatasi" subtitle="Anda tidak memiliki permission untuk mengirim notifikasi manual.">
+                    <p className="mcr-muted" style={{ fontSize: 13 }}>
+                        Hubungi administrator jika Anda memerlukan akses ini.
+                    </p>
+                </CrudCard>
             ) : (
                 <>
                     <CrudToolbar
@@ -299,6 +346,46 @@ export default function AdminManualNotificationPage({ filters, users, summary }:
                                 <button type="submit" className="mcr-btn primary" disabled={form.processing}>
                                     <BellRing size={14} />
                                     {form.processing ? 'Mengirim...' : 'Kirim Notifikasi'}
+                                </button>
+                            </div>
+                        </form>
+                    </CrudCard>
+
+                    <CrudCard
+                        title="Demo overlay kehadiran guru (FCM)"
+                        subtitle="Payload sama dengan reminder produksi (teacher_presence_confirmation_required) — untuk rekaman video Play Store / QA."
+                    >
+                        <p className="mcr-muted" style={{ fontSize: 13, marginBottom: 12 }}>
+                            Setelah kirim, overlay muncul bila aplikasi guru <strong>sudah terbuka di layar</strong>{' '}
+                            (foreground), token FCM aktif, dan izin &quot;tampil di atas aplikasi lain&quot; diberikan.
+                        </p>
+                        <form onSubmit={submitDemoOverlay} className="mcr-form-grid">
+                            <div className="mcr-form-group">
+                                <label>User ID guru</label>
+                                <input
+                                    className="mcr-input"
+                                    type="number"
+                                    min={1}
+                                    value={demoUserId}
+                                    onChange={(e) => setDemoUserId(e.target.value)}
+                                    placeholder="Lihat daftar user di atas"
+                                />
+                            </div>
+                            <div className="mcr-form-group">
+                                <label>ID sesi (opsional)</label>
+                                <input
+                                    className="mcr-input"
+                                    type="number"
+                                    min={1}
+                                    value={demoSessionId}
+                                    onChange={(e) => setDemoSessionId(e.target.value)}
+                                    placeholder="lesson_sessions.id — kosong = sesi terbaru guru"
+                                />
+                            </div>
+                            <div className="mcr-form-group full" style={{ marginTop: 4 }}>
+                                <button type="submit" className="mcr-btn secondary">
+                                    <Smartphone size={14} />
+                                    Kirim push demo overlay
                                 </button>
                             </div>
                         </form>

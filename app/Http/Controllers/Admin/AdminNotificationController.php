@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\TeacherPresence\SendTeacherPresenceOverlayDemoPush;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\SendManualNotificationRequest;
 use App\Jobs\DispatchAdminManualNotificationJob;
@@ -12,8 +13,10 @@ use App\Support\Authorization\Permissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
 
 class AdminNotificationController extends Controller
 {
@@ -92,6 +95,41 @@ class AdminNotificationController extends Controller
         DispatchAdminManualNotificationJob::dispatch($title, $body, $deeplink, $targets);
 
         return redirect()->back()->with('success', "Notifikasi bulk masuk antrean ({$totalDeviceTargets} device target).");
+    }
+
+    public function sendTeacherPresenceOverlayDemo(
+        Request $request,
+        SendTeacherPresenceOverlayDemoPush $action,
+    ): RedirectResponse {
+        $this->authorizePage($request);
+
+        $validated = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'lesson_session_id' => ['nullable', 'integer', 'exists:lesson_sessions,id'],
+        ]);
+
+        $teacher = User::query()
+            ->whereKey((int) $validated['user_id'])
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        $sessionId = isset($validated['lesson_session_id'])
+            ? (int) $validated['lesson_session_id']
+            : null;
+
+        try {
+            $session = $action->execute($teacher, $sessionId);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages([
+                'demo_overlay' => [$e->getMessage()],
+            ]);
+        }
+
+        return redirect()->back()->with(
+            'success',
+            "Push demo overlay terkirim ke {$teacher->name} (sesi #{$session->id}). ".
+            'Biarkan aplikasi guru terbuka di layar (foreground) dan izin tampil di atas aplikasi lain aktif.',
+        );
     }
 
     private function authorizePage(Request $request): void

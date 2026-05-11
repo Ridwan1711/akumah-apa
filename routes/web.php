@@ -47,10 +47,10 @@ use App\Http\Controllers\Auth\ForceChangePasswordController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Guru\GuruAcademicController;
 use App\Http\Controllers\Guru\GuruAttendanceController;
+use App\Http\Controllers\LegalController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentGatewayController;
 use App\Http\Controllers\QueueRunController;
-use App\Http\Controllers\LegalController;
 use App\Http\Controllers\ReportCardVerificationController;
 use App\Http\Controllers\Santri\SantriController;
 use App\Http\Controllers\Wali\WaliPaymentController;
@@ -292,6 +292,9 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::post('notifications/manual/send', [AdminNotificationController::class, 'send'])
             ->middleware('permission:'.Permissions::NOTIFICATION_MANUAL_SEND)
             ->name('notifications.manual.send');
+        Route::post('notifications/manual/teacher-presence-overlay-demo', [AdminNotificationController::class, 'sendTeacherPresenceOverlayDemo'])
+            ->middleware('permission:'.Permissions::NOTIFICATION_MANUAL_SEND)
+            ->name('notifications.manual.teacher-presence-overlay-demo');
     });
 
 // Audit log: super_admin (semua modul), admin_keuangan (keuangan), admin_akademik (akademik & operasional)
