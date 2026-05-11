@@ -50,6 +50,7 @@ use App\Http\Controllers\Guru\GuruAttendanceController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentGatewayController;
 use App\Http\Controllers\QueueRunController;
+use App\Http\Controllers\LegalController;
 use App\Http\Controllers\ReportCardVerificationController;
 use App\Http\Controllers\Santri\SantriController;
 use App\Http\Controllers\Wali\WaliPaymentController;
@@ -68,6 +69,7 @@ Route::get('/', function () {
 
 // Public raport verification (no auth)
 Route::get('raport/verify/{token}', [ReportCardVerificationController::class, 'show'])->name('raport.verify');
+Route::get('privacy-policy', [LegalController::class, 'privacyPolicy'])->name('legal.privacy-policy');
 Route::post('payment/midtrans/notification', [PaymentGatewayController::class, 'handleNotification'])->name('payment.midtrans.notification');
 
 Route::middleware('auth')->group(function () {

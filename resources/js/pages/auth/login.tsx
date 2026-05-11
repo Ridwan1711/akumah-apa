@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthLayout from '@/layouts/auth-layout';
+import { privacyPolicy } from '@/routes/legal';
 import { request } from '@/routes/password';
 
 type Props = {
@@ -92,6 +93,12 @@ export default function Login({
                                 {processing && <Spinner />}
                                 Masuk
                             </Button>
+
+                            <p className="text-center text-sm text-muted-foreground">
+                                <TextLink href={privacyPolicy.url()} tabIndex={6}>
+                                    Kebijakan privasi
+                                </TextLink>
+                            </p>
                         </div>
                     </>
                 )}
