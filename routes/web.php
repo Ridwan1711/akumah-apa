@@ -212,8 +212,10 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         // Asrama
         Route::get('asrama', [AsramaController::class, 'index'])->name('asrama.index');
         Route::post('asrama/buildings', [AsramaController::class, 'storeBuilding'])->name('asrama.buildings.store');
+        Route::put('asrama/buildings/{building}', [AsramaController::class, 'updateBuilding'])->name('asrama.buildings.update');
         Route::delete('asrama/buildings/{building}', [AsramaController::class, 'destroyBuilding'])->name('asrama.buildings.destroy');
         Route::post('asrama/rooms', [AsramaController::class, 'storeRoom'])->name('asrama.rooms.store');
+        Route::put('asrama/rooms/{room}', [AsramaController::class, 'updateRoom'])->name('asrama.rooms.update');
         Route::delete('asrama/rooms/{room}', [AsramaController::class, 'destroyRoom'])->name('asrama.rooms.destroy');
         Route::get('asrama/assign', [AsramaController::class, 'assign'])->name('asrama.assign');
         Route::post('asrama/assignments', [AsramaController::class, 'storeAssignment'])->name('asrama.assignments.store');

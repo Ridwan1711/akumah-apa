@@ -35,7 +35,9 @@ type RoomForm = { building_id: string; room_number: string; capacity: string; fl
 
 export default function AsramaIndex({ buildings }: Props) {
     const [buildingModalOpen, setBuildingModalOpen] = useState(false);
+    const [editingBuilding, setEditingBuilding] = useState<BuildingRow | null>(null);
     const [roomModalOpen, setRoomModalOpen] = useState(false);
+    const [editingRoom, setEditingRoom] = useState<DormRoom | null>(null);
     const [importOpen, setImportOpen] = useState(false);
     const [deleteBuildingTarget, setDeleteBuildingTarget] = useState<BuildingRow | null>(null);
     const [deleteRoomTarget, setDeleteRoomTarget] = useState<DormRoom | null>(null);
@@ -66,26 +68,44 @@ export default function AsramaIndex({ buildings }: Props) {
 
     function submitBuilding(e: React.FormEvent) {
         e.preventDefault();
-        buildingForm.post('/admin/asrama/buildings', {
-            onSuccess: () => {
-                setBuildingModalOpen(false);
-                buildingForm.reset();
-                toast.success('Gedung ditambahkan');
-            },
-            onError: () => toast.error('Gagal menambah gedung'),
-        });
+        const done = () => {
+            setBuildingModalOpen(false);
+            setEditingBuilding(null);
+            buildingForm.reset();
+            toast.success(editingBuilding ? 'Gedung asrama diperbarui' : 'Gedung ditambahkan');
+        };
+        if (editingBuilding) {
+            buildingForm.put(`/admin/asrama/buildings/${editingBuilding.id}`, {
+                onSuccess: done,
+                onError: () => toast.error('Gagal memperbarui gedung'),
+            });
+        } else {
+            buildingForm.post('/admin/asrama/buildings', {
+                onSuccess: done,
+                onError: () => toast.error('Gagal menambah gedung'),
+            });
+        }
     }
 
     function submitRoom(e: React.FormEvent) {
         e.preventDefault();
-        roomForm.post('/admin/asrama/rooms', {
-            onSuccess: () => {
-                setRoomModalOpen(false);
-                roomForm.reset();
-                toast.success('Kamar ditambahkan');
-            },
-            onError: () => toast.error('Gagal menambah kamar'),
-        });
+        const done = () => {
+            setRoomModalOpen(false);
+            setEditingRoom(null);
+            roomForm.reset();
+            toast.success(editingRoom ? 'Kamar (kobong) diperbarui' : 'Kamar ditambahkan');
+        };
+        if (editingRoom) {
+            roomForm.put(`/admin/asrama/rooms/${editingRoom.id}`, {
+                onSuccess: done,
+                onError: () => toast.error('Gagal memperbarui kamar'),
+            });
+        } else {
+            roomForm.post('/admin/asrama/rooms', {
+                onSuccess: done,
+                onError: () => toast.error('Gagal menambah kamar'),
+            });
+        }
     }
 
     function deleteBuilding() {
@@ -159,11 +179,27 @@ export default function AsramaIndex({ buildings }: Props) {
                                 <FileUp size={14} />
                                 Impor Excel
                             </button>
-                            <button type="button" className="mcr-btn secondary" onClick={() => setRoomModalOpen(true)}>
+                            <button
+                                type="button"
+                                className="mcr-btn secondary"
+                                onClick={() => {
+                                    setEditingRoom(null);
+                                    roomForm.reset();
+                                    setRoomModalOpen(true);
+                                }}
+                            >
                                 <Plus size={14} />
                                 Tambah Kamar
                             </button>
-                            <button type="button" className="mcr-btn primary" onClick={() => setBuildingModalOpen(true)}>
+                            <button
+                                type="button"
+                                className="mcr-btn primary"
+                                onClick={() => {
+                                    setEditingBuilding(null);
+                                    buildingForm.reset();
+                                    setBuildingModalOpen(true);
+                                }}
+                            >
                                 <Plus size={14} />
                                 Tambah Gedung
                             </button>
@@ -184,6 +220,21 @@ export default function AsramaIndex({ buildings }: Props) {
                             right={
                                 <div className="mcr-action-group">
                                     <span className="mcr-dot-badge active">{building.rooms?.length ?? 0} kamar</span>
+                                    <button
+                                        type="button"
+                                        className="mcr-icon-action"
+                                        onClick={() => {
+                                            setEditingBuilding(building);
+                                            buildingForm.setData({
+                                                name: building.name,
+                                                description: building.description ?? '',
+                                            });
+                                            setBuildingModalOpen(true);
+                                        }}
+                                        title="Ubah gedung (asrama)"
+                                    >
+                                        <Pencil size={13} />
+                                    </button>
                                     <button type="button" className="mcr-icon-action danger" onClick={() => setDeleteBuildingTarget(building)} title="Hapus gedung">
                                         <Trash2 size={13} />
                                     </button>
@@ -216,6 +267,23 @@ export default function AsramaIndex({ buildings }: Props) {
                                                 <td>{room.musyrif?.user?.name ?? '-'}</td>
                                                 <td>
                                                     <div className="mcr-action-group">
+                                                        <button
+                                                            type="button"
+                                                            className="mcr-icon-action"
+                                                            onClick={() => {
+                                                                setEditingRoom(room);
+                                                                roomForm.setData({
+                                                                    building_id: String(room.building_id),
+                                                                    room_number: room.room_number,
+                                                                    capacity: String(room.capacity),
+                                                                    floor: room.floor != null ? String(room.floor) : '',
+                                                                });
+                                                                setRoomModalOpen(true);
+                                                            }}
+                                                            title="Ubah kamar (kobong)"
+                                                        >
+                                                            <Pencil size={13} />
+                                                        </button>
                                                         <button type="button" className="mcr-icon-action danger" onClick={() => setDeleteRoomTarget(room)} title="Hapus kamar">
                                                             <Trash2 size={13} />
                                                         </button>
@@ -231,7 +299,16 @@ export default function AsramaIndex({ buildings }: Props) {
                 )}
             </div>
 
-            <CrudModal open={buildingModalOpen} onClose={() => setBuildingModalOpen(false)} title="Tambah Gedung" subtitle="Isi informasi dasar gedung asrama.">
+            <CrudModal
+                open={buildingModalOpen}
+                onClose={() => {
+                    setBuildingModalOpen(false);
+                    setEditingBuilding(null);
+                    buildingForm.reset();
+                }}
+                title={editingBuilding ? 'Ubah Gedung (Asrama)' : 'Tambah Gedung'}
+                subtitle={editingBuilding ? 'Perbarui nama atau deskripsi gedung.' : 'Isi informasi dasar gedung asrama.'}
+            >
                 <form onSubmit={submitBuilding}>
                     <div className="mcr-form-grid">
                         <div className="mcr-form-group full">
@@ -246,13 +323,32 @@ export default function AsramaIndex({ buildings }: Props) {
                         </div>
                     </div>
                     <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                        <button type="button" className="mcr-btn ghost" onClick={() => setBuildingModalOpen(false)}>Batal</button>
+                        <button
+                            type="button"
+                            className="mcr-btn ghost"
+                            onClick={() => {
+                                setBuildingModalOpen(false);
+                                setEditingBuilding(null);
+                                buildingForm.reset();
+                            }}
+                        >
+                            Batal
+                        </button>
                         <button type="submit" className="mcr-btn primary" disabled={buildingForm.processing}>{buildingForm.processing ? 'Menyimpan...' : 'Simpan'}</button>
                     </div>
                 </form>
             </CrudModal>
 
-            <CrudModal open={roomModalOpen} onClose={() => setRoomModalOpen(false)} title="Tambah Kamar" subtitle="Pilih gedung lalu isi data kamar.">
+            <CrudModal
+                open={roomModalOpen}
+                onClose={() => {
+                    setRoomModalOpen(false);
+                    setEditingRoom(null);
+                    roomForm.reset();
+                }}
+                title={editingRoom ? 'Ubah Kamar (Kobong)' : 'Tambah Kamar'}
+                subtitle={editingRoom ? 'Perbarui gedung, nomor, kapasitas, atau lantai.' : 'Pilih gedung lalu isi data kamar.'}
+            >
                 <form onSubmit={submitRoom}>
                     <div className="mcr-form-grid">
                         <div className="mcr-form-group full">
@@ -282,7 +378,17 @@ export default function AsramaIndex({ buildings }: Props) {
                         </div>
                     </div>
                     <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                        <button type="button" className="mcr-btn ghost" onClick={() => setRoomModalOpen(false)}>Batal</button>
+                        <button
+                            type="button"
+                            className="mcr-btn ghost"
+                            onClick={() => {
+                                setRoomModalOpen(false);
+                                setEditingRoom(null);
+                                roomForm.reset();
+                            }}
+                        >
+                            Batal
+                        </button>
                         <button type="submit" className="mcr-btn primary" disabled={roomForm.processing}>{roomForm.processing ? 'Menyimpan...' : 'Simpan'}</button>
                     </div>
                 </form>

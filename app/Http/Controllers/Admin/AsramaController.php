@@ -12,6 +12,7 @@ use App\Models\Student;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -41,6 +42,17 @@ class AsramaController extends Controller
         return redirect()->back()->with('success', 'Gedung berhasil ditambahkan.');
     }
 
+    public function updateBuilding(Request $request, DormBuilding $building): RedirectResponse
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+        ]);
+        $building->update($request->only('name', 'description'));
+
+        return redirect()->back()->with('success', 'Data gedung asrama berhasil diperbarui.');
+    }
+
     public function destroyBuilding(DormBuilding $building): RedirectResponse
     {
         $building->delete();
@@ -52,13 +64,53 @@ class AsramaController extends Controller
     {
         $request->validate([
             'building_id' => 'required|exists:dorm_buildings,id',
-            'room_number' => 'required|string|max:20',
+            'room_number' => [
+                'required', 'string', 'max:20',
+                Rule::unique('dorm_rooms', 'room_number')->where(
+                    fn ($q) => $q->where('building_id', (int) $request->input('building_id'))
+                ),
+            ],
             'capacity' => 'required|integer|min:1|max:50',
             'floor' => 'nullable|integer|min:1',
         ]);
         DormRoom::create($request->only('building_id', 'room_number', 'capacity', 'floor'));
 
         return redirect()->back()->with('success', 'Kamar berhasil ditambahkan.');
+    }
+
+    public function updateRoom(Request $request, DormRoom $room): RedirectResponse
+    {
+        $request->validate([
+            'building_id' => 'required|exists:dorm_buildings,id',
+            'room_number' => [
+                'required', 'string', 'max:20',
+                Rule::unique('dorm_rooms', 'room_number')
+                    ->where(fn ($q) => $q->where('building_id', (int) $request->input('building_id')))
+                    ->ignore($room->id),
+            ],
+            'capacity' => 'required|integer|min:1|max:50',
+            'floor' => 'nullable|integer|min:1',
+        ]);
+
+        $capacity = (int) $request->input('capacity');
+        $maxActiveOccupants = (int) (DormAssignment::query()
+            ->where('room_id', $room->id)
+            ->whereNull('checkout_date')
+            ->selectRaw('COUNT(*) as cnt')
+            ->groupBy('academic_year_id')
+            ->get()
+            ->max('cnt') ?? 0);
+
+        if ($capacity < $maxActiveOccupants) {
+            return redirect()->back()->with(
+                'error',
+                "Kapasitas tidak boleh di bawah jumlah penghuni aktif (maks. {$maxActiveOccupants} untuk tahun ajaran tertentu)."
+            );
+        }
+
+        $room->update($request->only('building_id', 'room_number', 'capacity', 'floor'));
+
+        return redirect()->back()->with('success', 'Data kamar (kobong) berhasil diperbarui.');
     }
 
     public function destroyRoom(DormRoom $room): RedirectResponse
