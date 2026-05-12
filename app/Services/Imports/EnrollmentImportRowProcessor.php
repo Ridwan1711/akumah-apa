@@ -15,7 +15,7 @@ class EnrollmentImportRowProcessor
         protected StudentEnrollmentService $enrollmentService
     ) {}
 
-    public function process(array $data, string $strategy): array
+    public function process(array $data, string $strategy, array $context = []): array
     {
         $validator = Validator::make($data, [
             'nis' => ['required', 'string', 'max:20'],
@@ -34,9 +34,9 @@ class EnrollmentImportRowProcessor
             return ['status' => 'failed', 'message' => 'NIS tidak ditemukan.'];
         }
 
-        $period = $this->resolvePeriod($data);
+        $period = $this->resolvePeriod($data, $context);
         if (! $period) {
-            return ['status' => 'failed', 'message' => 'Periode akademik tidak ditemukan (gunakan period_id/period_name).'];
+            return ['status' => 'failed', 'message' => 'Periode akademik tidak ditemukan (isi period_id, period_name yang cocok dengan tahun ajaran + semester, atau pilih periode default di halaman sebelum unggah).'];
         }
 
         $class = $this->resolveClass($data);
@@ -77,17 +77,60 @@ class EnrollmentImportRowProcessor
         return ['status' => 'skipped', 'message' => null];
     }
 
-    protected function resolvePeriod(array $data): ?AcademicPeriod
+    protected function resolvePeriod(array $data, array $context = []): ?AcademicPeriod
     {
-        if (! empty($data['period_id'])) {
-            return AcademicPeriod::query()->find((int) $data['period_id']);
+        $periodId = isset($data['period_id']) && $data['period_id'] !== '' && $data['period_id'] !== null
+            ? (int) $data['period_id']
+            : 0;
+        if ($periodId > 0) {
+            return AcademicPeriod::query()->find($periodId);
         }
 
         if (! empty($data['period_name'])) {
-            return AcademicPeriod::query()->where('name', (string) $data['period_name'])->first();
+            $needle = $this->normalizePeriodLabel((string) $data['period_name']);
+            if ($needle !== '') {
+                $periods = AcademicPeriod::query()
+                    ->with(['academicYear', 'semester'])
+                    ->orderBy('id')
+                    ->get();
+
+                foreach ($periods as $period) {
+                    /** @var AcademicPeriod $period */
+                    $label = $this->normalizePeriodLabel($this->buildPeriodDisplayLabel($period));
+                    if ($label !== '' && $label === $needle) {
+                        return $period;
+                    }
+                }
+            }
+        }
+
+        $defaultId = (int) ($context['default_period_id'] ?? 0);
+        if ($defaultId > 0) {
+            return AcademicPeriod::query()->find($defaultId);
         }
 
         return null;
+    }
+
+    protected function buildPeriodDisplayLabel(AcademicPeriod $period): string
+    {
+        $year = $period->relationLoaded('academicYear')
+            ? ($period->academicYear?->name ?? '')
+            : ($period->academicYear()->value('name') ?? '');
+        $semester = $period->relationLoaded('semester')
+            ? ($period->semester?->name ?? '')
+            : ($period->semester()->value('name') ?? '');
+
+        return trim(trim((string) $year).' '.trim((string) $semester));
+    }
+
+    protected function normalizePeriodLabel(string $value): string
+    {
+        $lower = mb_strtolower($value, 'UTF-8');
+        $lower = str_replace(['—', '–', '-', '/', '\\', ','], ' ', $lower);
+        $lower = preg_replace('/\s+/u', ' ', $lower) ?? '';
+
+        return trim($lower);
     }
 
     protected function resolveClass(array $data): ?SchoolClass

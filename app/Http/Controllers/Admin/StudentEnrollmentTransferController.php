@@ -61,6 +61,11 @@ class StudentEnrollmentTransferController extends Controller
         $uploadedFile = $request->file('file');
         $storedPath = $uploadedFile->store('imports/uploads', 'local');
 
+        $meta = [];
+        if ($request->filled('default_period_id')) {
+            $meta['default_period_id'] = $request->integer('default_period_id');
+        }
+
         $importRun = ImportRun::query()->create([
             'uuid' => (string) Str::uuid(),
             'type' => ImportRun::TYPE_ENROLLMENTS,
@@ -70,12 +75,16 @@ class StudentEnrollmentTransferController extends Controller
             'requested_by' => $request->user()?->id,
             'file_name' => $uploadedFile->getClientOriginalName(),
             'file_path' => $storedPath,
+            'meta' => $meta !== [] ? $meta : null,
         ]);
 
         ProcessImportRun::dispatch($importRun->id);
 
         return redirect()->route('admin.student-enrollments.index')
-            ->with('success', 'Import enrollment diproses di background.');
+            ->with(
+                'success',
+                'File impor diterima. Pemrosesan baris berjalan di background; lihat riwayat di bawah untuk jumlah berhasil/gagal. Pastikan queue worker aktif (php artisan queue:work) agar status tidak tertahan di Antrian.'
+            );
     }
 
     public function downloadErrors(string $token)
@@ -109,13 +118,16 @@ class StudentEnrollmentTransferController extends Controller
             'requested_by' => request()->user()?->id,
             'file_name' => $importRun->file_name,
             'file_path' => $importRun->file_path,
-            'meta' => ['retry_of' => $importRun->id],
+            'meta' => array_merge($importRun->meta ?? [], ['retry_of' => $importRun->id]),
         ]);
 
         ProcessImportRun::dispatch($retryRun->id);
 
         return redirect()->route('admin.student-enrollments.index')
-            ->with('success', 'Retry import enrollment dimasukkan ke antrean background.');
+            ->with(
+                'success',
+                'Percobaan ulang impor dimasukkan ke antrean. Pantau riwayat di bawah; pastikan queue worker berjalan.'
+            );
     }
 
     protected function resolvePeriodIdBySemesterId(int $semesterId): int

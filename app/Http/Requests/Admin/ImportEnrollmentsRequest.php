@@ -17,6 +17,7 @@ class ImportEnrollmentsRequest extends FormRequest
         return [
             'file' => ['required', 'file', 'mimes:xlsx,csv,txt', 'max:20480'],
             'strategy' => ['required', Rule::in(['skip', 'update'])],
+            'default_period_id' => ['nullable', 'integer', 'exists:academic_periods,id'],
         ];
     }
 }

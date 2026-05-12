@@ -16,6 +16,14 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import AppLayout from '@/layouts/app-layout';
 import type { AcademicPeriod, BreadcrumbItem, ImportRun, PaginatedData, SchoolClass, Semester, Student } from '@/types';
 
@@ -58,18 +66,35 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-    active:  { label: 'Aktif',  color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-    alumni:  { label: 'Alumni', color: 'bg-sky-100 text-sky-700 border-sky-200' },
-    keluar:  { label: 'Keluar', color: 'bg-amber-100 text-amber-700 border-amber-200' },
-    wafat:   { label: 'Wafat',  color: 'bg-rose-100 text-rose-700 border-rose-200' },
+    active: { label: 'Aktif', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+    alumni: { label: 'Alumni', color: 'bg-sky-100 text-sky-700 border-sky-200' },
+    keluar: { label: 'Keluar', color: 'bg-amber-100 text-amber-700 border-amber-200' },
+    wafat: { label: 'Wafat', color: 'bg-rose-100 text-rose-700 border-rose-200' },
 };
 
 const IMPORT_STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
-    processing: { label: 'Diproses',  color: 'text-amber-600',  dot: 'bg-amber-400 animate-pulse' },
-    queued:     { label: 'Antrian',   color: 'text-blue-600',   dot: 'bg-blue-400 animate-pulse' },
-    completed:  { label: 'Selesai',   color: 'text-emerald-600',dot: 'bg-emerald-400' },
-    failed:     { label: 'Gagal',     color: 'text-rose-600',   dot: 'bg-rose-400' },
+    processing: { label: 'Diproses', color: 'text-amber-600', dot: 'bg-amber-400 animate-pulse' },
+    queued: { label: 'Antrian', color: 'text-blue-600', dot: 'bg-blue-400 animate-pulse' },
+    completed: { label: 'Selesai', color: 'text-emerald-600', dot: 'bg-emerald-400' },
+    failed: { label: 'Gagal', color: 'text-rose-600', dot: 'bg-rose-400' },
 };
+
+const IMPORT_STRATEGY_LABEL: Record<'skip' | 'update', string> = {
+    skip: 'Lewati jika sudah terdaftar',
+    update: 'Perbarui jika sudah terdaftar',
+};
+
+function formatImportRunDuration(startedAt: string | null, finishedAt: string | null): string {
+    if (!startedAt || !finishedAt) return '';
+    const a = Date.parse(startedAt);
+    const b = Date.parse(finishedAt);
+    if (Number.isNaN(a) || Number.isNaN(b) || b < a) return '';
+    const sec = Math.round((b - a) / 1000);
+    if (sec < 60) return `${sec} dtk`;
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m} mnt ${s} dtk`;
+}
 
 function StatusBadge({ status }: { status: string }) {
     const cfg = STATUS_CONFIG[status] ?? { label: status, color: 'bg-gray-100 text-gray-600 border-gray-200' };
@@ -101,6 +126,8 @@ export default function StudentEnrollmentsIndex({
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [search, setSearch] = useState(filters.search ?? '');
     const [preview, setPreview] = useState<PreviewSummary | null>(null);
+    const [lastPreviewForMode, setLastPreviewForMode] = useState<'assign' | 'move' | 'clear' | null>(null);
+    const [bulkConfirm, setBulkConfirm] = useState<null | { endpoint: string; mode: 'assign' | 'move' | 'clear' }>(null);
     const [isDragOver, setIsDragOver] = useState(false);
     const defaultPeriodId = String(selectedPeriodId || academicPeriods[0]?.id || '');
 
@@ -111,15 +138,10 @@ export default function StudentEnrollmentsIndex({
         student_ids: [] as number[],
     });
 
-    useEffect(() => {
-        if (form.data.period_id !== defaultPeriodId) {
-            form.setData('period_id', defaultPeriodId);
-        }
-    }, [defaultPeriodId]);
-
-    const importForm = useForm<{ file: File | null; strategy: 'skip' | 'update' }>({
+    const importForm = useForm<{ file: File | null; strategy: 'skip' | 'update'; default_period_id: string }>({
         file: null,
         strategy: 'skip',
+        default_period_id: defaultPeriodId,
     });
 
     const selectedAllCurrentPage =
@@ -129,6 +151,29 @@ export default function StudentEnrollmentsIndex({
         () => importRuns.filter((r) => r.status === 'processing' || r.status === 'queued').length,
         [importRuns],
     );
+
+    useEffect(() => {
+        if (form.data.period_id !== defaultPeriodId) {
+            form.setData('period_id', defaultPeriodId);
+        }
+    }, [defaultPeriodId]);
+
+    useEffect(() => {
+        importForm.setData('default_period_id', form.data.period_id);
+    }, [form.data.period_id]);
+
+    useEffect(() => {
+        setLastPreviewForMode(null);
+        setPreview(null);
+    }, [selectedIds]);
+
+    useEffect(() => {
+        if (runningImports === 0) return;
+        const id = window.setInterval(() => {
+            router.reload({ only: ['importRuns'] });
+        }, 4000);
+        return () => window.clearInterval(id);
+    }, [runningImports]);
 
     const activePeriod = academicPeriods.find((p) => p.id === Number(form.data.period_id));
 
@@ -163,14 +208,30 @@ export default function StudentEnrollmentsIndex({
         );
     }
 
-    function runBulk(endpoint: string, mode: 'assign' | 'move' | 'clear') {
-        if (selectedIds.length === 0) { alert('Pilih minimal satu santri.'); return; }
-        if (mode !== 'clear' && !form.data.class_id) { alert('Pilih kelas tujuan terlebih dahulu.'); return; }
+    function openBulkModal(endpoint: string, mode: 'assign' | 'move' | 'clear') {
+        if (selectedIds.length === 0) {
+            alert('Pilih minimal satu santri.');
+            return;
+        }
+        if (mode !== 'clear' && !form.data.class_id) {
+            alert('Pilih kelas tujuan terlebih dahulu.');
+            return;
+        }
+        setBulkConfirm({ endpoint, mode });
+    }
 
+    function executeConfirmedBulk() {
+        if (!bulkConfirm) return;
+        const { endpoint, mode } = bulkConfirm;
+        setBulkConfirm(null);
         form.transform((data) => ({ ...data, mode, student_ids: selectedIds }));
         form.post(endpoint, {
             preserveScroll: true,
-            onSuccess: () => { setSelectedIds([]); setPreview(null); },
+            onSuccess: () => {
+                setSelectedIds([]);
+                setPreview(null);
+                setLastPreviewForMode(null);
+            },
         });
     }
 
@@ -200,15 +261,19 @@ export default function StudentEnrollmentsIndex({
             updated: data.updated ?? 0,
             cleared: data.cleared ?? 0,
             skipped: data.skipped ?? 0,
-            failed:  data.failed  ?? 0,
+            failed: data.failed ?? 0,
         });
+        setLastPreviewForMode(mode);
     }
 
     function submitImport(e: React.FormEvent) {
         e.preventDefault();
         importForm.post('/admin/student-enrollments-import', {
             forceFormData: true,
-            onSuccess: () => importForm.reset('file'),
+            onSuccess: () => {
+                importForm.reset('file');
+                importForm.setData('default_period_id', form.data.period_id);
+            },
         });
     }
 
@@ -379,7 +444,7 @@ export default function StudentEnrollmentsIndex({
                                     type="button"
                                     size="sm"
                                     className="h-9 text-xs"
-                                    onClick={() => runBulk('/admin/student-enrollments/bulk-assign', 'assign')}
+                                    onClick={() => openBulkModal('/admin/student-enrollments/bulk-assign', 'assign')}
                                     disabled={form.processing}
                                 >
                                     {form.processing ? <Spinner className="mr-1.5 h-3.5 w-3.5" /> : (
@@ -387,33 +452,33 @@ export default function StudentEnrollmentsIndex({
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                                         </svg>
                                     )}
-                                    Assign
+                                    Tetapkan
                                 </Button>
                                 <Button
                                     type="button"
                                     size="sm"
                                     variant="secondary"
                                     className="h-9 text-xs"
-                                    onClick={() => runBulk('/admin/student-enrollments/bulk-move', 'move')}
+                                    onClick={() => openBulkModal('/admin/student-enrollments/bulk-move', 'move')}
                                     disabled={form.processing}
                                 >
                                     <svg className="mr-1.5 h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
                                     </svg>
-                                    Move
+                                    Pindah
                                 </Button>
                                 <Button
                                     type="button"
                                     size="sm"
                                     variant="destructive"
                                     className="h-9 text-xs"
-                                    onClick={() => runBulk('/admin/student-enrollments/bulk-clear', 'clear')}
+                                    onClick={() => openBulkModal('/admin/student-enrollments/bulk-clear', 'clear')}
                                     disabled={form.processing}
                                 >
                                     <svg className="mr-1.5 h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                     </svg>
-                                    Clear
+                                    Kosongkan
                                 </Button>
                                 {isSuperAdmin && (
                                     <Button
@@ -434,11 +499,11 @@ export default function StudentEnrollmentsIndex({
                             <div className="rounded-xl border bg-muted/30 p-4">
                                 <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Hasil Preview</p>
                                 <div className="grid grid-cols-5 gap-2">
-                                    <PreviewStat label="Created" value={preview.created} color="border-emerald-200 bg-emerald-50 text-emerald-700" />
-                                    <PreviewStat label="Updated" value={preview.updated} color="border-sky-200 bg-sky-50 text-sky-700" />
-                                    <PreviewStat label="Cleared" value={preview.cleared} color="border-amber-200 bg-amber-50 text-amber-700" />
-                                    <PreviewStat label="Skipped" value={preview.skipped} color="border-slate-200 bg-slate-50 text-slate-600" />
-                                    <PreviewStat label="Failed"  value={preview.failed}  color="border-rose-200 bg-rose-50 text-rose-700" />
+                                    <PreviewStat label="Baru" value={preview.created} color="border-emerald-200 bg-emerald-50 text-emerald-700" />
+                                    <PreviewStat label="Diperbarui" value={preview.updated} color="border-sky-200 bg-sky-50 text-sky-700" />
+                                    <PreviewStat label="Dikosongkan" value={preview.cleared} color="border-amber-200 bg-amber-50 text-amber-700" />
+                                    <PreviewStat label="Dilewati" value={preview.skipped} color="border-slate-200 bg-slate-50 text-slate-600" />
+                                    <PreviewStat label="Gagal" value={preview.failed} color="border-rose-200 bg-rose-50 text-rose-700" />
                                 </div>
                             </div>
                         )}
@@ -568,11 +633,11 @@ export default function StudentEnrollmentsIndex({
                                 <div>
                                     <CardTitle className="text-base">Import Enrollment</CardTitle>
                                     <CardDescription className="text-xs">
-                                        Upload massal via file XLSX atau CSV.
+                                        Unggah file XLSX/CSV: server hanya menyimpan berkas dan memasukkan tugas ke antrean. Baris enrollment ditulis setelah worker memproses file.
                                         {runningImports > 0 && (
                                             <span className="ml-2 inline-flex items-center gap-1 text-amber-600">
                                                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
-                                                {runningImports} proses berjalan
+                                                {runningImports} tugas dalam antrean atau sedang diproses
                                             </span>
                                         )}
                                     </CardDescription>
@@ -582,18 +647,24 @@ export default function StudentEnrollmentsIndex({
                     </CardHeader>
 
                     <CardContent className="space-y-5">
+                        <div className="rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-xs text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+                            <strong className="font-semibold">Antrean background:</strong> jika status impor lama bertahan di &quot;Antrian&quot;, jalankan worker di server (
+                            <code className="rounded bg-amber-100/80 px-1 py-0.5 text-[10px] dark:bg-amber-900/40">php artisan queue:work</code>
+                            ) atau set driver antrean ke <code className="rounded bg-amber-100/80 px-1 py-0.5 text-[10px] dark:bg-amber-900/40">sync</code> hanya untuk lingkungan pengembangan.
+                            Periode filter di atas dikirim sebagai fallback jika baris file tidak memuat <span className="font-mono">period_id</span> / <span className="font-mono">period_name</span>.
+                        </div>
+
                         {/* Upload form */}
                         <form onSubmit={submitImport} className="space-y-4">
                             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                                 {/* Drag-and-drop zone */}
                                 <div
-                                    className={`lg:col-span-2 relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors cursor-pointer ${
-                                        isDragOver
+                                    className={`lg:col-span-2 relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors cursor-pointer ${isDragOver
                                             ? 'border-primary bg-primary/5'
                                             : importForm.data.file
-                                            ? 'border-emerald-400 bg-emerald-50'
-                                            : 'border-border hover:border-primary/50 hover:bg-muted/30'
-                                    }`}
+                                                ? 'border-emerald-400 bg-emerald-50'
+                                                : 'border-border hover:border-primary/50 hover:bg-muted/30'
+                                        }`}
                                     onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
                                     onDragLeave={() => setIsDragOver(false)}
                                     onDrop={handleDrop}
@@ -632,8 +703,8 @@ export default function StudentEnrollmentsIndex({
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="skip">Skip existing</SelectItem>
-                                            <SelectItem value="update">Update existing</SelectItem>
+                                            <SelectItem value="skip">{IMPORT_STRATEGY_LABEL.skip}</SelectItem>
+                                            <SelectItem value="update">{IMPORT_STRATEGY_LABEL.update}</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -680,31 +751,93 @@ export default function StudentEnrollmentsIndex({
                                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Riwayat Import</p>
                                 <div className="space-y-2">
                                     {importRuns.map((run) => {
-                                        const cfg = IMPORT_STATUS_CONFIG[run.status] ?? { label: run.status, color: 'text-muted-foreground', dot: 'bg-gray-400' };
+                                        const cfg = IMPORT_STATUS_CONFIG[run.status] ?? {
+                                            label: run.status,
+                                            color: 'text-muted-foreground',
+                                            dot: 'bg-gray-400',
+                                        };
+                                        const strategyKey =
+                                            run.strategy === 'skip' || run.strategy === 'update' ? run.strategy : null;
+                                        const strategyLabel = strategyKey
+                                            ? IMPORT_STRATEGY_LABEL[strategyKey]
+                                            : run.strategy;
+                                        const duration = formatImportRunDuration(run.started_at, run.finished_at);
+                                        const countsReady =
+                                            run.status === 'completed' ||
+                                            run.status === 'failed' ||
+                                            (run.processed_rows ?? 0) > 0 ||
+                                            (run.total_rows ?? 0) > 0;
+                                        const countsLine = countsReady
+                                            ? `Total baris: ${run.total_rows} · Diproses: ${run.processed_rows} · Baru: ${run.created_count} · Diperbarui: ${run.updated_count} · Dilewati: ${run.skipped_count} · Gagal: ${run.failed_count}${duration ? ` · Durasi: ${duration}` : ''}`
+                                            : 'Menunggu worker memproses file…';
+                                        const warnRowIssues =
+                                            run.status === 'completed' &&
+                                            (run.failed_count > 0 ||
+                                                (run.processed_rows > 0 &&
+                                                    run.created_count === 0 &&
+                                                    run.updated_count === 0 &&
+                                                    run.failed_count === 0));
+
                                         return (
                                             <div
                                                 key={run.id}
-                                                className="flex items-center justify-between rounded-xl border bg-muted/20 px-4 py-3 transition-colors hover:bg-muted/40"
+                                                className="flex flex-col gap-2 rounded-xl border bg-muted/20 px-4 py-3 transition-colors hover:bg-muted/40 sm:flex-row sm:items-start sm:justify-between"
                                             >
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <span className={`h-2 w-2 flex-shrink-0 rounded-full ${cfg.dot}`} />
-                                                    <div className="min-w-0">
-                                                        <p className="truncate text-sm font-medium">{run.file_name}</p>
+                                                <div className="flex min-w-0 flex-1 gap-3">
+                                                    <span className={`mt-1.5 h-2 w-2 flex-shrink-0 rounded-full ${cfg.dot}`} />
+                                                    <div className="min-w-0 space-y-1">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <p className="truncate text-sm font-medium">{run.file_name}</p>
+                                                            {run.failed_count > 0 && (
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="border-rose-300 bg-rose-50 text-[10px] text-rose-800"
+                                                                >
+                                                                    Ada baris gagal
+                                                                </Badge>
+                                                            )}
+                                                            {warnRowIssues && (
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="border-amber-300 bg-amber-50 text-[10px] text-amber-900"
+                                                                >
+                                                                    Tidak ada baris baru/diperbarui
+                                                                </Badge>
+                                                            )}
+                                                        </div>
                                                         <p className={`text-xs ${cfg.color}`}>
-                                                            {cfg.label}
-                                                            <span className="ml-2 text-muted-foreground">·</span>
-                                                            <span className="ml-2 text-muted-foreground">{run.strategy}</span>
+                                                            <span className="font-medium">{cfg.label}</span>
+                                                            <span className="text-muted-foreground"> · {strategyLabel}</span>
                                                         </p>
+                                                        <p className="text-[11px] leading-relaxed text-muted-foreground">{countsLine}</p>
+                                                        {run.status === 'queued' && (
+                                                            <p className="text-[10px] text-muted-foreground">
+                                                                Jika status ini tidak berubah, periksa apakah queue worker berjalan di server.
+                                                            </p>
+                                                        )}
+                                                        {run.status === 'failed' && run.error_message && (
+                                                            <p className="text-[11px] text-rose-700 line-clamp-2">{run.error_message}</p>
+                                                        )}
                                                     </div>
                                                 </div>
-                                                <div className="ml-3 flex flex-shrink-0 gap-2">
-                                                    {run.error_report_path && (
+                                                <div className="flex flex-shrink-0 flex-wrap justify-end gap-2 sm:ml-3 sm:flex-col sm:items-end">
+                                                    {(run.error_report_path || run.failed_count > 0) && run.error_report_path && (
                                                         <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
                                                             <a href={`/admin/student-enrollments-import-errors/${run.uuid}`}>
-                                                                <svg className="mr-1 h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                                                                <svg
+                                                                    className="mr-1 h-3 w-3"
+                                                                    fill="none"
+                                                                    viewBox="0 0 24 24"
+                                                                    stroke="currentColor"
+                                                                    strokeWidth={2}
+                                                                >
+                                                                    <path
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
+                                                                    />
                                                                 </svg>
-                                                                Error CSV
+                                                                Unduh CSV error
                                                             </a>
                                                         </Button>
                                                     )}
@@ -713,12 +846,24 @@ export default function StudentEnrollmentsIndex({
                                                             variant="secondary"
                                                             size="sm"
                                                             className="h-7 text-xs"
-                                                            onClick={() => router.post(`/admin/student-enrollments-import-runs/${run.id}/retry`)}
+                                                            onClick={() =>
+                                                                router.post(`/admin/student-enrollments-import-runs/${run.id}/retry`)
+                                                            }
                                                         >
-                                                            <svg className="mr-1 h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                                            <svg
+                                                                className="mr-1 h-3 w-3"
+                                                                fill="none"
+                                                                viewBox="0 0 24 24"
+                                                                stroke="currentColor"
+                                                                strokeWidth={2}
+                                                            >
+                                                                <path
+                                                                    strokeLinecap="round"
+                                                                    strokeLinejoin="round"
+                                                                    d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+                                                                />
                                                             </svg>
-                                                            Retry
+                                                            Ulangi
                                                         </Button>
                                                     )}
                                                 </div>
@@ -738,6 +883,61 @@ export default function StudentEnrollmentsIndex({
                     </CardContent>
                 </Card>
             </div>
+
+            <Dialog
+                open={bulkConfirm !== null}
+                onOpenChange={(open) => {
+                    if (!open) setBulkConfirm(null);
+                }}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {bulkConfirm?.mode === 'assign' && 'Konfirmasi tetapkan ke kelas'}
+                            {bulkConfirm?.mode === 'move' && 'Konfirmasi pindah kelas'}
+                            {bulkConfirm?.mode === 'clear' && 'Konfirmasi kosongkan enrollment'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {selectedIds.length} santri terpilih
+                            {activePeriod &&
+                                ` · periode ${activePeriod.academic_year?.name ?? ''} — ${activePeriod.semester?.name ?? ''}`}
+                            {bulkConfirm && bulkConfirm.mode !== 'clear' &&
+                                ` · kelas tujuan: ${classes.find((c) => String(c.id) === form.data.class_id)?.name ?? '—'}`}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {bulkConfirm && lastPreviewForMode === bulkConfirm.mode && preview ? (
+                        <div className="rounded-xl border bg-muted/30 p-3">
+                            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                Ringkasan preview
+                            </p>
+                            <div className="grid grid-cols-5 gap-1.5">
+                                <PreviewStat label="Baru" value={preview.created} color="border-emerald-200 bg-emerald-50 text-emerald-700" />
+                                <PreviewStat label="Diperbarui" value={preview.updated} color="border-sky-200 bg-sky-50 text-sky-700" />
+                                <PreviewStat label="Dikosongkan" value={preview.cleared} color="border-amber-200 bg-amber-50 text-amber-700" />
+                                <PreviewStat label="Dilewati" value={preview.skipped} color="border-slate-200 bg-slate-50 text-slate-600" />
+                                <PreviewStat label="Gagal" value={preview.failed} color="border-rose-200 bg-rose-50 text-rose-700" />
+                            </div>
+                        </div>
+                    ) : (
+                        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                            Preview untuk mode ini belum dijalankan setelah pemilihan santri saat ini. Angka di bawah (jika ada) mungkin dari mode lain — disarankan klik &quot;Preview&quot; untuk aksi yang sama sebelum melanjutkan.
+                        </p>
+                    )}
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button type="button" variant="outline" onClick={() => setBulkConfirm(null)}>
+                            Batal
+                        </Button>
+                        <Button
+                            type="button"
+                            variant={bulkConfirm?.mode === 'clear' ? 'destructive' : 'default'}
+                            disabled={form.processing}
+                            onClick={executeConfirmedBulk}
+                        >
+                            {form.processing ? <Spinner className="h-4 w-4" /> : 'Ya, jalankan'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }

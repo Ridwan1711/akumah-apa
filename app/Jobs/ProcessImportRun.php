@@ -83,7 +83,9 @@ class ProcessImportRun implements ShouldBeUnique, ShouldQueue
                 'status' => ImportRun::STATUS_COMPLETED,
                 'finished_at' => now(),
                 'error_report_path' => $errorReportPath,
-                'meta' => ['error_count' => count($errors)],
+                'meta' => array_merge($importRun->meta ?? [], [
+                    'error_count' => count($errors),
+                ]),
             ]);
         } catch (Throwable $e) {
             $importRun->update([
@@ -153,7 +155,11 @@ class ProcessImportRun implements ShouldBeUnique, ShouldQueue
         }
 
         if ($importRun->type === ImportRun::TYPE_ENROLLMENTS) {
-            return $enrollmentProcessor->process($row, $importRun->strategy);
+            $defaultPeriodId = (int) (($importRun->meta['default_period_id'] ?? null) ?: 0);
+
+            return $enrollmentProcessor->process($row, $importRun->strategy, [
+                'default_period_id' => $defaultPeriodId,
+            ]);
         }
 
         if ($importRun->type === ImportRun::TYPE_INVOICES) {
