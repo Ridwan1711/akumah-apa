@@ -104,9 +104,27 @@ class DiniyahClassController extends Controller
     {
         $import = new DiniyahClassDataImport($request->string('strategy')->toString());
 
-        Excel::import($import, $request->file('file'));
+        try {
+            Excel::import($import, $request->file('file'));
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect()
+                ->route('admin.diniyah-classes.index')
+                ->with('error', 'Import gagal (database atau format file): '.$e->getMessage());
+        }
 
         $result = $import->result();
+
+        if ($result['processed'] === 0 && $result['skipped'] === 0 && $result['failed'] === 0) {
+            return redirect()
+                ->route('admin.diniyah-classes.index')
+                ->with(
+                    'warning',
+                    'Tidak ada baris data yang diproses. Pastikan sheet memiliki header persis seperti template (name, grade_level_id, grade_level_name, order, student_gender) dan minimal satu baris contoh/isi di bawahnya.'
+                );
+        }
+
         $summary = sprintf(
             'Import kelas selesai. Diproses: %d, dibuat: %d, diperbarui: %d, dilewati: %d, gagal: %d.',
             $result['processed'],
@@ -117,10 +135,14 @@ class DiniyahClassController extends Controller
         );
 
         if ($result['failed'] > 0) {
-            $firstError = $result['errors'][0]['message'] ?? 'Periksa format data import Anda.';
+            $lines = array_map(
+                static fn (array $e) => sprintf('Baris %s: %s', $e['row'] ?? '?', $e['message'] ?? ''),
+                array_slice($result['errors'], 0, 25)
+            );
+            $detail = implode("\n", $lines);
 
             return redirect()->route('admin.diniyah-classes.index')
-                ->with('error', $summary.' Error pertama: '.$firstError);
+                ->with('error', $summary."\n\n".$detail);
         }
 
         return redirect()->route('admin.diniyah-classes.index')

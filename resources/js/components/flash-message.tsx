@@ -98,7 +98,9 @@ export default function FlashMessage() {
                 <Alert variant="destructive">
                     <XCircle />
                     <AlertTitle>Error</AlertTitle>
-                    <AlertDescription>{flash.error}</AlertDescription>
+                    <AlertDescription>
+                        <span className="block whitespace-pre-wrap">{flash.error}</span>
+                    </AlertDescription>
                 </Alert>
             )}
         </div>

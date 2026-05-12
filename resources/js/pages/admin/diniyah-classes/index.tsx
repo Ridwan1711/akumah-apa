@@ -167,12 +167,20 @@ export default function DiniyahClassIndex({
         e.preventDefault();
         importForm.post('/admin/diniyah-classes-import', {
             forceFormData: true,
-            onSuccess: () => {
+            preserveScroll: true,
+            onSuccess: (page) => {
                 setImportOpen(false);
                 importForm.reset('file');
-                toast.success('Import kelas selesai diproses');
+                const f = page.props.flash as { success?: string; error?: string; warning?: string } | undefined;
+                if (f?.error) {
+                    toast.error('Import kelas: ada baris gagal (lihat pesan di atas)');
+                } else if (f?.warning) {
+                    toast.warning(f.warning);
+                } else {
+                    toast.success(f?.success ?? 'Import kelas selesai');
+                }
             },
-            onError: () => toast.error('Gagal mengimport kelas'),
+            onError: () => toast.error('Validasi file gagal — periksa format / ukuran file.'),
         });
     }
 
