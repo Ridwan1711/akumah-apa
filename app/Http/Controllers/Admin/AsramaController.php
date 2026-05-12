@@ -53,7 +53,7 @@ class AsramaController extends Controller
         $request->validate([
             'building_id' => 'required|exists:dorm_buildings,id',
             'room_number' => 'required|string|max:20',
-            'capacity' => 'required|integer|min:1|max:20',
+            'capacity' => 'required|integer|min:1|max:50',
             'floor' => 'nullable|integer|min:1',
         ]);
         DormRoom::create($request->only('building_id', 'room_number', 'capacity', 'floor'));

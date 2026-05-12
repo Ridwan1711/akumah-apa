@@ -272,7 +272,7 @@ export default function AsramaIndex({ buildings }: Props) {
                         </div>
                         <div className="mcr-form-group">
                             <label htmlFor="room-capacity">Kapasitas</label>
-                            <input id="room-capacity" type="number" min={1} max={20} className="mcr-input" value={roomForm.data.capacity} onChange={(e) => roomForm.setData('capacity', e.target.value)} />
+                            <input id="room-capacity" type="number" min={1} max={50} className="mcr-input" value={roomForm.data.capacity} onChange={(e) => roomForm.setData('capacity', e.target.value)} />
                             <InputError message={roomForm.errors.capacity} />
                         </div>
                         <div className="mcr-form-group">
