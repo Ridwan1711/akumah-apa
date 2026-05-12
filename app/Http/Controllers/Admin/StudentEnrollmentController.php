@@ -5,9 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\BulkStudentEnrollmentRequest;
 use App\Models\AcademicPeriod;
-use App\Models\Semester;
 use App\Models\Diniyyah\SchoolClass;
+use App\Models\Diniyyah\StudentClassEnrollment;
 use App\Models\ImportRun;
+use App\Models\Role;
 use App\Models\Student;
 use App\Services\Diniyyah\StudentEnrollmentService;
 use Illuminate\Http\JsonResponse;
@@ -46,6 +47,7 @@ class StudentEnrollmentController extends Controller
             'classes' => SchoolClass::query()->orderBy('order')->orderBy('name')->get(['id', 'name', 'grade_level_id']),
             'academicPeriods' => AcademicPeriod::query()->orderByDesc('id')->with('academicYear:id,name', 'semester:id,name')->get(['id', 'academic_year_id', 'semester_id', 'is_active']),
             'selectedPeriodId' => $selectedPeriodId,
+            'isSuperAdmin' => $request->user()?->hasRole(Role::SUPER_ADMIN) ?? false,
             'filters' => $request->only(['search', 'status', 'class_id']),
             'importRuns' => ImportRun::query()
                 ->with('requestedBy:id,name')
@@ -59,7 +61,7 @@ class StudentEnrollmentController extends Controller
     public function preview(BulkStudentEnrollmentRequest $request, StudentEnrollmentService $service): JsonResponse
     {
         $data = $request->validated();
-        $periodId = $data['semester_id'];
+        $periodId = (int) $data['period_id'];
         $summary = $service->preview(
             $data['student_ids'],
             isset($data['class_id']) ? (int) $data['class_id'] : null,
@@ -85,13 +87,48 @@ class StudentEnrollmentController extends Controller
         return $this->handleBulk($request, $service, StudentEnrollmentService::MODE_CLEAR);
     }
 
+    /**
+     * Hapus seluruh baris enrollment santri × kelas (semua periode). Hanya super admin.
+     */
+    public function clearAllEnrollments(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()?->hasRole(Role::SUPER_ADMIN), 403);
+
+        $request->validate([
+            'acknowledge' => ['required', 'in:1,true'],
+        ]);
+
+        $deleted = (int) DB::transaction(function (): int {
+            $studentIds = StudentClassEnrollment::query()
+                ->distinct()
+                ->pluck('student_id')
+                ->map(fn ($id) => (int) $id)
+                ->filter()
+                ->values()
+                ->all();
+
+            $count = StudentClassEnrollment::query()->count();
+            StudentClassEnrollment::query()->delete();
+
+            if ($studentIds !== []) {
+                Student::query()->whereIn('id', $studentIds)->update(['current_class_id' => null]);
+            }
+
+            return $count;
+        });
+
+        return redirect()
+            ->route('admin.student-enrollments.index')
+            ->with('success', "Semua enrollment kelas diniyah telah dikosongkan ({$deleted} baris). Kolom kelas saat ini santri yang terdaftar di enrollment tersebut diset kosong.");
+    }
+
     protected function handleBulk(
         BulkStudentEnrollmentRequest $request,
         StudentEnrollmentService $service,
         string $forcedMode
     ): RedirectResponse {
         $data = $request->validated();
-        $periodId = $this->resolvePeriodIdBySemesterId((int) $data['semester_id']);
+        $periodId = (int) $data['period_id'];
         $summary = $service->execute(
             $data['student_ids'],
             isset($data['class_id']) ? (int) $data['class_id'] : null,
@@ -100,7 +137,13 @@ class StudentEnrollmentController extends Controller
             true,
         );
 
-        return redirect()->route('admin.student-enrollments.index', ['semester_id' => (int) $data['semester_id']])
+        return redirect()
+            ->route('admin.student-enrollments.index', [
+                'period_id' => $periodId,
+                'search' => $request->input('search'),
+                'status' => $request->input('status'),
+                'class_id' => $request->input('class_id'),
+            ])
             ->with('success', "Bulk {$forcedMode} selesai. Created: {$summary['created']}, Updated: {$summary['updated']}, Cleared: {$summary['cleared']}, Skipped: {$summary['skipped']}, Failed: {$summary['failed']}");
     }
 

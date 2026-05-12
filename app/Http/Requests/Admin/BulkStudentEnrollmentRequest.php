@@ -13,6 +13,13 @@ class BulkStudentEnrollmentRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('mode') === StudentEnrollmentService::MODE_CLEAR) {
+            $this->merge(['class_id' => null]);
+        }
+    }
+
     public function rules(): array
     {
         return [
@@ -23,7 +30,7 @@ class BulkStudentEnrollmentRequest extends FormRequest
             ])],
             'student_ids' => ['required', 'array', 'min:1'],
             'student_ids.*' => ['integer', 'exists:students,id'],
-            'semester_id' => ['required', 'exists:semesters,id'],
+            'period_id' => ['required', 'integer', 'exists:academic_periods,id'],
             'class_id' => ['nullable', 'exists:classes,id', 'required_unless:mode,clear'],
         ];
     }

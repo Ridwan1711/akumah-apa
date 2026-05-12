@@ -113,6 +113,9 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::post('student-enrollments/bulk-assign', [StudentEnrollmentController::class, 'bulkAssign'])->name('student-enrollments.bulk-assign');
         Route::post('student-enrollments/bulk-move', [StudentEnrollmentController::class, 'bulkMove'])->name('student-enrollments.bulk-move');
         Route::post('student-enrollments/bulk-clear', [StudentEnrollmentController::class, 'bulkClear'])->name('student-enrollments.bulk-clear');
+        Route::post('student-enrollments/clear-all', [StudentEnrollmentController::class, 'clearAllEnrollments'])
+            ->middleware('role:'.Role::SUPER_ADMIN)
+            ->name('student-enrollments.clear-all');
         Route::get('student-enrollments-export', [StudentEnrollmentTransferController::class, 'export'])->name('student-enrollments.export');
         Route::get('student-enrollments-template', [StudentEnrollmentTransferController::class, 'template'])->name('student-enrollments.template');
         Route::post('student-enrollments-import', [StudentEnrollmentTransferController::class, 'import'])->name('student-enrollments.import');

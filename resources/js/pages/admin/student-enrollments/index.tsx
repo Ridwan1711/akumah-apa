@@ -43,6 +43,7 @@ type Props = {
     classes: Pick<SchoolClass, 'id' | 'name' | 'grade_level_id'>[];
     academicPeriods: AcademicPeriod[];
     selectedPeriodId: number;
+    isSuperAdmin: boolean;
     filters: {
         search?: string;
         status?: string;
@@ -93,6 +94,7 @@ export default function StudentEnrollmentsIndex({
     classes,
     academicPeriods,
     selectedPeriodId,
+    isSuperAdmin,
     filters,
     importRuns,
 }: Props) {
@@ -146,6 +148,19 @@ export default function StudentEnrollmentsIndex({
 
     function toggleSelectAllCurrentPage(checked: boolean) {
         setSelectedIds(checked ? students.data.map((s) => s.id) : []);
+    }
+
+    function handleClearAllEnrollments() {
+        if (!isSuperAdmin) return;
+        const msg =
+            'Ini akan menghapus SEMUA baris enrollment santri × kelas (semua periode) dan mengosongkan kelas saat ini bagi santri yang terdaftar di enrollment tersebut. Lanjutkan?';
+        if (!window.confirm(msg)) return;
+        if (!window.confirm('Konfirmasi terakhir: tindakan ini tidak dapat dibatalkan.')) return;
+        router.post(
+            '/admin/student-enrollments/clear-all',
+            { acknowledge: '1' },
+            { preserveScroll: true },
+        );
     }
 
     function runBulk(endpoint: string, mode: 'assign' | 'move' | 'clear') {
@@ -251,7 +266,7 @@ export default function StudentEnrollmentsIndex({
                                     value={form.data.period_id}
                                     onValueChange={(v) => {
                                         form.setData('period_id', v);
-                                        router.get('/admin/student-enrollments', { ...filters, search, semester_id: v }, { preserveScroll: true });
+                                        router.get('/admin/student-enrollments', { ...filters, search, period_id: v }, { preserveScroll: true });
                                     }}
                                 >
                                     <SelectTrigger className="h-9">
@@ -400,6 +415,17 @@ export default function StudentEnrollmentsIndex({
                                     </svg>
                                     Clear
                                 </Button>
+                                {isSuperAdmin && (
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-9 border-destructive/70 text-xs font-semibold text-destructive hover:bg-destructive/10"
+                                        onClick={handleClearAllEnrollments}
+                                    >
+                                        Kosongkan semua enrollment
+                                    </Button>
+                                )}
                             </div>
                         </div>
 

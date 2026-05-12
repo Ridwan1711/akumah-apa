@@ -20,10 +20,15 @@ class StudentEnrollmentTransferController extends Controller
 {
     public function export(Request $request)
     {
-        $semesterId = (int) $request->integer('semester_id');
-        abort_if($semesterId <= 0, 422, 'Semester wajib dipilih sebelum export enrollment.');
+        $periodId = (int) $request->integer('period_id');
+        if ($periodId <= 0) {
+            $semesterId = (int) $request->integer('semester_id');
+            abort_if($semesterId <= 0, 422, 'Pilih periode akademik (period_id) atau semester sebelum export enrollment.');
 
-        $periodId = $this->resolvePeriodIdBySemesterId($semesterId);
+            $periodId = $this->resolvePeriodIdBySemesterId($semesterId);
+        } else {
+            abort_unless(AcademicPeriod::query()->whereKey($periodId)->exists(), 422, 'Periode akademik tidak valid.');
+        }
         $format = $request->string('format')->toString() === 'csv' ? 'csv' : 'xlsx';
         $writerType = $format === 'csv'
             ? \Maatwebsite\Excel\Excel::CSV
