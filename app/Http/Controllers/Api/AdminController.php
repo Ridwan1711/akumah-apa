@@ -7,6 +7,7 @@ use App\Models\AcademicPeriod;
 use App\Models\AcademicYear;
 use App\Models\Diniyyah\AssessmentComponent;
 use App\Models\Diniyyah\ClassWali;
+use App\Models\Diniyyah\KitabGradeSession;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\Score;
 use App\Models\Diniyyah\StudentClassEnrollment;
@@ -19,7 +20,6 @@ use App\Models\EmProfile;
 use App\Models\Guardian;
 use App\Models\LeavePermission;
 use App\Models\LessonSession;
-use App\Models\Diniyyah\KitabGradeSession;
 use App\Models\Musyrif;
 use App\Models\Role;
 use App\Models\Semester;
@@ -1427,13 +1427,10 @@ class AdminController extends Controller
 
     private function upsertEmProfile(Student $student, array $incoming): void
     {
-        if (isset($incoming['santri']) && is_array($incoming['santri'])) {
-            unset($incoming['santri']['nism']);
-        }
-
         $student->loadMissing('emisProfile');
         $current = $student->emProfilePayload();
         $merged = array_replace_recursive($current, $incoming);
+        $merged = $student->withComputedNismInEmProfilePayload($merged);
         $attributes = EmProfile::fromPayload($merged);
         $student->emisProfile()->updateOrCreate([], $attributes);
         $student->forceFill(['em_profile' => $merged])->save();
@@ -1444,7 +1441,7 @@ class AdminController extends Controller
     private function studentPayload(Student $student): array
     {
         $payload = $student->toArray();
-        $payload['em_profile'] = $student->emProfilePayload() ?: [
+        $payload['em_profile'] = $student->emProfilePayloadForFrontend() ?: [
             'santri' => [],
             'alamat' => [],
         ];

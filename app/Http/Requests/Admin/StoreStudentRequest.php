@@ -17,6 +17,7 @@ class StoreStudentRequest extends FormRequest
             'user_id' => ['nullable', 'integer', 'exists:users,id', 'unique:students,user_id'],
             'full_name' => ['required', 'string', 'max:255'],
             'admission_year' => ['required', 'integer', 'min:2000', 'max:2099'],
+            'nis' => ['prohibited'],
         ];
     }
 }

@@ -8,6 +8,7 @@ use App\Models\PaymentType;
 use App\Models\Student;
 use App\Models\TingkatSekolah;
 use App\Services\Finance\InvoiceImportSupport;
+use App\Services\Finance\StudentInvoiceCoverPeriod;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Validator;
@@ -38,10 +39,6 @@ class InvoiceImportRowProcessor
             return ['status' => 'failed', 'message' => "Santri dengan NIS {$nis} tidak ditemukan."];
         }
 
-        if ($student->status !== Student::STATUS_ACTIVE) {
-            return ['status' => 'failed', 'message' => "Santri {$nis} tidak aktif."];
-        }
-
         $code = strtoupper(trim((string) $data['payment_type_code']));
         $paymentType = PaymentType::query()->whereRaw('UPPER(TRIM(code)) = ?', [$code])->first();
         if (! $paymentType) {
@@ -63,6 +60,10 @@ class InvoiceImportRowProcessor
         }
         if (! $paymentType->is_recurring) {
             $month = null;
+        }
+
+        if (StudentInvoiceCoverPeriod::isPeriodAfterInactive($student, $academicYear, $month)) {
+            return ['status' => 'failed', 'message' => StudentInvoiceCoverPeriod::userFacingMessage()];
         }
 
         $amount = $this->parseDecimal($data['amount'] ?? null);

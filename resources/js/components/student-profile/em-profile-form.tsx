@@ -73,9 +73,11 @@ type Props = {
     onChange: (field: keyof EmProfileFormData, value: string) => void;
     /** Tampilkan field catatan_khusus — hanya untuk admin */
     showCatatan?: boolean;
+    /** NISM diisi sistem dari NIS; tidak boleh diedit manual */
+    nismReadOnly?: boolean;
 };
 
-export function EmProfileForm({ data, errors = {}, onChange, showCatatan = false }: Props) {
+export function EmProfileForm({ data, errors = {}, onChange, showCatatan = false, nismReadOnly = false }: Props) {
     const inp = (field: keyof EmProfileFormData) => ({
         value: data[field] as string,
         onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -96,7 +98,21 @@ export function EmProfileForm({ data, errors = {}, onChange, showCatatan = false
                 </Field>
 
                 <Field label="NISM" error={errors.nism}>
-                    <Input {...inp('nism')} placeholder="Nomor Induk Siswa Madrasah" className={`${inp('nism').className} font-mono`} />
+                    {nismReadOnly ? (
+                        <>
+                            <Input
+                                value={data.nism}
+                                readOnly
+                                tabIndex={-1}
+                                className={`${inp('nism').className} font-mono cursor-default bg-muted/40`}
+                            />
+                            <p className="text-muted-foreground text-xs">
+                                Diisi otomatis dari NIS dan tahun masuk (format madrasah).
+                            </p>
+                        </>
+                    ) : (
+                        <Input {...inp('nism')} placeholder="Nomor Induk Siswa Madrasah" className={`${inp('nism').className} font-mono`} />
+                    )}
                 </Field>
 
                 <Field label="Agama" error={errors.agama}>

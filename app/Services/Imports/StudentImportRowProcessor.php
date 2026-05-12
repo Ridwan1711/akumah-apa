@@ -9,26 +9,32 @@ class StudentImportRowProcessor
 {
     public function process(array $data, string $strategy): array
     {
-        // $data['gender'] = $this->resolveGender($data);
-
         $validator = Validator::make($data, [
-            'nis' => ['required', 'string', 'max:20'],
             'full_name' => ['required', 'string', 'max:255'],
             'admission_year' => ['required', 'integer', 'min:2000', 'max:2099'],
             'gender' => ['nullable'],
+            'nis' => ['nullable', 'string', 'max:20'],
+            'nik' => ['nullable', 'string', 'max:16'],
         ]);
 
         if ($validator->fails()) {
             return ['status' => 'failed', 'message' => $validator->errors()->first()];
         }
 
-        $existing = Student::query()->where('nis', $data['nis'])->first();
+        $gender = $this->resolveGender($data) ?? Student::GENDER_MALE;
+
+        ['student' => $existing, 'error' => $resolveError] = Student::resolveImportDuplicateStudent($data);
+        if ($resolveError !== null) {
+            return ['status' => 'failed', 'message' => $resolveError];
+        }
+
+        $nikFromRow = isset($data['nik']) ? trim((string) $data['nik']) : '';
 
         if ($existing && $strategy === 'skip') {
-            if (($existing->gender ?? null) !== $data['gender']) {
+            if (($existing->gender ?? null) !== $gender) {
                 return [
                     'status' => 'failed',
-                    'message' => "NIS {$data['nis']} sudah ada dengan gender {$existing->gender}. Ubah strategi ke update untuk sinkronkan gender.",
+                    'message' => "Santri teridentifikasi ({$existing->nis}) sudah ada dengan gender {$existing->gender}. Ubah strategi ke update untuk sinkronkan gender.",
                 ];
             }
 
@@ -36,14 +42,15 @@ class StudentImportRowProcessor
         }
 
         $payload = [
-            'nis' => $data['nis'],
-            'full_name' => $data['full_name'],
+            'full_name' => trim((string) $data['full_name']),
             'admission_year' => (int) $data['admission_year'],
-            'gender' => $data['gender'],
+            'gender' => $gender,
             'status' => Student::STATUS_ACTIVE,
         ];
-        // debug
-        \Log::info('payload', [$payload]);
+        if ($nikFromRow !== '') {
+            $payload['nik'] = $nikFromRow;
+        }
+
         if ($existing) {
             $existing->update($payload);
 

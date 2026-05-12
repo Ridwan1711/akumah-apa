@@ -37,10 +37,11 @@ class StudentDataImport implements ToCollection, WithHeadingRow
             $this->processed++;
 
             $validator = Validator::make($data, [
-                'nis' => ['required', 'string', 'max:20'],
                 'full_name' => ['required', 'string', 'max:255'],
                 'admission_year' => ['required', 'integer', 'min:2000', 'max:2099'],
                 'gender' => ['required', 'in:'.Student::GENDER_MALE.','.Student::GENDER_FEMALE],
+                'nis' => ['nullable', 'string', 'max:20'],
+                'nik' => ['nullable', 'string', 'max:16'],
             ]);
 
             if ($validator->fails()) {
@@ -48,21 +49,35 @@ class StudentDataImport implements ToCollection, WithHeadingRow
                     'row' => $rowNumber,
                     'message' => $validator->errors()->first(),
                 ];
+
                 continue;
             }
 
+            ['student' => $existing, 'error' => $resolveError] = Student::resolveImportDuplicateStudent($data);
+            if ($resolveError !== null) {
+                $this->errors[] = [
+                    'row' => $rowNumber,
+                    'message' => $resolveError,
+                ];
+
+                continue;
+            }
+
+            $nikFromRow = isset($data['nik']) ? trim((string) $data['nik']) : '';
+
             $payload = [
-                'nis' => $data['nis'],
                 'full_name' => $data['full_name'],
                 'admission_year' => (int) $data['admission_year'],
                 'gender' => $data['gender'],
                 'status' => Student::STATUS_ACTIVE,
             ];
-            \Log::info('payload', [$payload]);
-            $existing = Student::query()->where('nis', $data['nis'])->first();
+            if ($nikFromRow !== '') {
+                $payload['nik'] = $nikFromRow;
+            }
 
             if ($existing && $this->strategy === 'skip') {
                 $this->skipped++;
+
                 continue;
             }
 
@@ -92,10 +107,23 @@ class StudentDataImport implements ToCollection, WithHeadingRow
     {
         return [
             'nis' => $this->string($row['nis'] ?? null),
+            'nik' => $this->string($row['nik'] ?? null),
             'full_name' => $this->string($row['full_name'] ?? null),
-            'admission_year' => $this->string($row['admission_year'] ?? null),
+            'admission_year' => $this->intOrNull($row['admission_year'] ?? null),
             'gender' => $this->normalizeGender($row['gender'] ?? null),
         ];
+    }
+
+    protected function intOrNull(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (is_numeric($value)) {
+            return (int) round((float) $value);
+        }
+
+        return null;
     }
 
     protected function normalizeGender(mixed $value): ?string

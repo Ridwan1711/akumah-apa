@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\AcademicPeriod;
+use App\Models\AcademicYear;
 use App\Models\Diniyyah\ClassPromotion;
 use App\Models\Diniyyah\SchoolClass;
 use App\Models\Diniyyah\StudentClassEnrollment;
@@ -16,6 +17,7 @@ use App\Models\User;
 use App\Notifications\BulkRunFinishedNotification;
 use App\Services\Finance\FinanceInvoicePricingResolver;
 use App\Services\Finance\InvoiceImportSupport;
+use App\Services\Finance\StudentInvoiceCoverPeriod;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\QueryException;
@@ -106,6 +108,7 @@ class ProcessBulkRun implements ShouldBeUnique, ShouldQueue
         $retryMode = (string) ($meta['retry_mode'] ?? '');
         $resendOnly = $retryMode === 'resend_existing_only';
         $paymentType = PaymentType::findOrFail($paymentTypeId);
+        $academicYear = AcademicYear::query()->findOrFail($academicYearId);
         $tingkatIds = collect($meta['tingkat_sekolah_ids'] ?? [])
             ->map(fn ($id) => (int) $id)
             ->filter(fn ($id) => $id > 0)
@@ -149,6 +152,13 @@ class ProcessBulkRun implements ShouldBeUnique, ShouldQueue
                 if ($resendNotificationOnExisting && $existingInvoice) {
                     InvoiceImportSupport::notifyInvoiceCreatedTargets($existingInvoice);
                 }
+                $this->incrementRunCounters($run, 'skipped');
+
+                continue;
+            }
+
+            $monthForPeriod = is_numeric($month) ? (int) $month : null;
+            if (StudentInvoiceCoverPeriod::isPeriodAfterInactive($student, $academicYear, $monthForPeriod)) {
                 $this->incrementRunCounters($run, 'skipped');
 
                 continue;

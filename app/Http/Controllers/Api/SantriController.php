@@ -179,13 +179,10 @@ class SantriController extends Controller
 
     private function upsertEmProfile(Student $student, array $incoming): void
     {
-        if (isset($incoming['santri']) && is_array($incoming['santri'])) {
-            unset($incoming['santri']['nism']);
-        }
-
         $student->loadMissing('emisProfile');
         $current = $student->emProfilePayload();
         $merged = array_replace_recursive($current, $incoming);
+        $merged = $student->withComputedNismInEmProfilePayload($merged);
         $attributes = EmProfile::fromPayload($merged);
         $student->emisProfile()->updateOrCreate([], $attributes);
         $student->forceFill(['em_profile' => $merged])->save();
@@ -196,7 +193,7 @@ class SantriController extends Controller
     private function studentPayload(Student $student): array
     {
         $payload = $student->toArray();
-        $payload['em_profile'] = $student->emProfilePayload() ?: [
+        $payload['em_profile'] = $student->emProfilePayloadForFrontend() ?: [
             'santri' => [],
             'alamat' => [],
         ];

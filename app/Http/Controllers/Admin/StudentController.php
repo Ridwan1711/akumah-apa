@@ -115,6 +115,7 @@ class StudentController extends Controller
     public function show(Student $student): Response
     {
         $student->load(['currentClass.gradeLevel', 'guardians.user', 'user', 'emisProfile']);
+        $student->setAttribute('em_profile', $student->emProfilePayloadForFrontend());
 
         return Inertia::render('admin/students/show', [
             'student' => $student,
@@ -125,8 +126,11 @@ class StudentController extends Controller
     {
         abort_unless($request->user()->isSuperAdmin(), 403, 'Hanya Super Admin yang dapat mengedit data santri.');
 
+        $student->load(['user', 'emisProfile']);
+        $student->setAttribute('em_profile', $student->emProfilePayloadForFrontend());
+
         return Inertia::render('admin/students/edit', [
-            'student' => $student->load(['user', 'emisProfile']),
+            'student' => $student,
             'classes' => SchoolClass::with('gradeLevel')
                 ->orderBy('name')
                 ->get(['id', 'name', 'grade_level_id']),
@@ -157,13 +161,10 @@ class StudentController extends Controller
         $student->update($validated);
 
         if (is_array($emProfileData) && count($emProfileData) > 0) {
-            if (isset($emProfileData['santri']) && is_array($emProfileData['santri'])) {
-                unset($emProfileData['santri']['nism']);
-            }
-
             $student->loadMissing('emisProfile');
             $current = $student->emProfilePayload();
             $merged = array_replace_recursive($current, $emProfileData);
+            $merged = $student->withComputedNismInEmProfilePayload($merged);
             $attributes = EmProfile::fromPayload($merged);
             $student->emisProfile()->updateOrCreate([], $attributes);
             $student->forceFill(['em_profile' => $merged])->save();

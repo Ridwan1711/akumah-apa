@@ -248,6 +248,7 @@ export default function WaliChildEdit({ student }: Props) {
                             }
                             onChange={handleEmProfileChange}
                             showCatatan={false}
+                            nismReadOnly
                         />
 
                         {/* Submit */}

@@ -20,11 +20,12 @@ use App\Notifications\InvoiceCreatedNotification;
 use App\Notifications\PaymentVerifiedNotification;
 use App\Services\Authorization\InvoiceVisibilityScope;
 use App\Services\Finance\DispatchInvoiceRemindersAction;
-use App\Services\Finance\FinanceWhatsappOutbound;
 use App\Services\Finance\FinanceFormalTingkatSummary;
+use App\Services\Finance\FinanceWhatsappOutbound;
 use App\Services\Finance\FinanceWhatsappPhone;
 use App\Services\Finance\FinanceWhatsappRecipient;
 use App\Services\Finance\InstallmentService;
+use App\Services\Finance\StudentInvoiceCoverPeriod;
 use App\Support\Authorization\Permissions;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -185,6 +186,14 @@ class AdminKeuanganController extends Controller
         $discount = $this->resolveDiscount($validated['student_id'], $validated['payment_type_id'], $validated['academic_year_id'], $validated['amount']);
 
         $student = Student::query()->findOrFail((int) $validated['student_id']);
+        $academicYear = AcademicYear::query()->findOrFail((int) $validated['academic_year_id']);
+        $invoiceMonth = isset($validated['month']) ? (int) $validated['month'] : null;
+        if (StudentInvoiceCoverPeriod::isPeriodAfterInactive($student, $academicYear, $invoiceMonth)) {
+            throw ValidationException::withMessages([
+                'academic_year_id' => StudentInvoiceCoverPeriod::userFacingMessage(),
+            ]);
+        }
+
         $tingkatSnapshot = $student->formalTingkatEnrollmentForYear((int) $validated['academic_year_id'])?->tingkat_sekolah_id;
         if ($tingkatSnapshot === null && $student->is_kuliah) {
             $tingkatSnapshot = TingkatSekolah::query()

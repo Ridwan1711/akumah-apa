@@ -32,6 +32,7 @@ class Student extends Model
         'photo',
         'address',
         'status',
+        'inactive_at',
         'is_kuliah',
         'admission_year',
         'current_class_id',
@@ -45,6 +46,7 @@ class Student extends Model
     {
         return [
             'birth_date' => 'date',
+            'inactive_at' => 'date',
             'is_kuliah' => 'boolean',
             'admission_year' => 'integer',
             'em_profile' => 'array',
@@ -74,7 +76,9 @@ class Student extends Model
     public const SEX_MALE = self::GENDER_MALE;
 
     public const SEX_FEMALE = self::GENDER_FEMALE;
+
     public const NIS_PREFIX = 'MH';
+
     public const NSM_CODE = '510032060393';
 
     protected static function booted(): void
@@ -91,6 +95,23 @@ class Student extends Model
                     (string) $student->full_name,
                     $allocatedSequence
                 );
+            }
+        });
+
+        static::updating(function (Student $student): void {
+            if (! $student->isDirty('status')) {
+                return;
+            }
+
+            if ($student->status === self::STATUS_ACTIVE) {
+                $student->inactive_at = null;
+
+                return;
+            }
+
+            $original = $student->getOriginal('status');
+            if ($original === self::STATUS_ACTIVE && $student->inactive_at === null) {
+                $student->inactive_at = now()->toDateString();
             }
         });
     }
@@ -267,6 +288,80 @@ class Student extends Model
         return (int) $numberPart;
     }
 
+    /**
+     * NISM madrasah dari NIS + tahun masuk (sinkron dengan generate saat pendaftaran API).
+     */
+    public function computedNism(): ?string
+    {
+        if (! is_string($this->nis) || trim($this->nis) === '') {
+            return null;
+        }
+        $seq = self::extractSequenceFromNis($this->nis);
+        if ($seq <= 0) {
+            return null;
+        }
+
+        return self::generateNism((int) $this->admission_year, $seq);
+    }
+
+    /**
+     * @param  array<string, mixed>  $emPayload
+     * @return array<string, mixed>
+     */
+    public function withComputedNismInEmProfilePayload(array $emPayload): array
+    {
+        $nism = $this->computedNism();
+        if ($nism === null) {
+            return $emPayload;
+        }
+        if (! isset($emPayload['santri']) || ! is_array($emPayload['santri'])) {
+            $emPayload['santri'] = [];
+        }
+        $emPayload['santri']['nism'] = $nism;
+
+        return $emPayload;
+    }
+
+    /**
+     * Import santri: cari baris yang sudah ada. NIS/NIK opsional untuk mengunci baris (NIS tidak pernah ditulis dari file).
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{student: ?Student, error: ?string}
+     */
+    public static function resolveImportDuplicateStudent(array $data): array
+    {
+        $nis = isset($data['nis']) ? trim((string) $data['nis']) : '';
+        if ($nis !== '') {
+            return ['student' => self::query()->where('nis', $nis)->first(), 'error' => null];
+        }
+
+        $nik = isset($data['nik']) ? trim((string) $data['nik']) : '';
+        if ($nik !== '') {
+            return ['student' => self::query()->where('nik', $nik)->first(), 'error' => null];
+        }
+
+        $name = isset($data['full_name']) ? trim((string) $data['full_name']) : '';
+        $year = isset($data['admission_year']) ? (int) $data['admission_year'] : 0;
+        if ($name === '' || $year < 2000) {
+            return ['student' => null, 'error' => null];
+        }
+
+        $normalized = mb_strtolower($name);
+        $candidates = self::query()
+            ->where('admission_year', $year)
+            ->whereRaw('LOWER(TRIM(full_name)) = ?', [$normalized])
+            ->get();
+
+        if ($candidates->count() > 1) {
+            return [
+                'student' => null,
+                'error' => 'Beberapa santri memiliki nama dan tahun masuk sama — isi kolom NIK atau NIS (opsional) pada baris ini untuk mengunci data.',
+            ];
+        }
+
+        return ['student' => $candidates->first(), 'error' => null];
+    }
+
     private static function allocateYearlySequence(int $admissionYear): int
     {
         return DB::transaction(function () use ($admissionYear): int {
@@ -324,6 +419,7 @@ class Student extends Model
 
         if ($parts->count() === 1) {
             $word = strtoupper((string) $parts->first());
+
             return str_pad(Str::substr($word, 0, 2), 2, 'X');
         }
 
@@ -357,6 +453,16 @@ class Student extends Model
         }
 
         return is_array($this->em_profile) ? $this->em_profile : [];
+    }
+
+    /**
+     * Profil EM untuk tampilan/API: sisipkan NISM otomatis dari NIS bila belum tersimpan.
+     *
+     * @return array<string, mixed>
+     */
+    public function emProfilePayloadForFrontend(): array
+    {
+        return $this->withComputedNismInEmProfilePayload($this->emProfilePayload());
     }
 
     /**

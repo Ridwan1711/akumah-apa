@@ -325,6 +325,7 @@ export default function SantriProfileEdit({ student, account }: Props) {
                             data={form.data.em_profile}
                             onChange={handleEmProfileChange}
                             showCatatan={false}
+                            nismReadOnly
                         />
 
                         {/* Pengaturan Akun */}

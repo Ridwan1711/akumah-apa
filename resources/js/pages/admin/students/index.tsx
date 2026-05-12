@@ -709,6 +709,10 @@ export default function StudentIndex({
                     <div className="mcr-form-grid">
                         <div className="mcr-form-group full">
                             <label htmlFor="import-file">File Import</label>
+                            <p className="text-xs text-muted-foreground" style={{ marginBottom: 8 }}>
+                                Kolom wajib: <strong>full_name</strong>, <strong>admission_year</strong>, <strong>gender</strong> (L/P). NIS dan NISM dibuat otomatis oleh sistem.
+                                Kolom opsional <strong>nik</strong> atau <strong>nis</strong> hanya untuk mencocokkan baris yang sudah ada (strategi update/skip), bukan untuk mengatur nomor baru.
+                            </p>
                             <input
                                 id="import-file"
                                 className="mcr-input"
@@ -721,7 +725,7 @@ export default function StudentIndex({
                             <InputError message={importForm.errors.file} />
                         </div>
                         <div className="mcr-form-group full">
-                            <label htmlFor="import-strategy">Strategi Duplikat (NIS)</label>
+                            <label htmlFor="import-strategy">Strategi baris yang sudah ada</label>
                             <select
                                 id="import-strategy"
                                 className="mcr-form-select"

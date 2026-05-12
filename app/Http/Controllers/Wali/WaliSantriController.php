@@ -113,6 +113,7 @@ class WaliSantriController extends Controller
             $student->loadMissing('emisProfile');
             $current = $student->emProfilePayload();
             $merged = array_replace_recursive($current, ['santri' => $emProfileData]);
+            $merged = $student->withComputedNismInEmProfilePayload($merged);
             $attributes = EmProfile::fromPayload($merged);
             $student->emisProfile()->updateOrCreate([], $attributes);
             $student->forceFill(['em_profile' => $merged])->save();

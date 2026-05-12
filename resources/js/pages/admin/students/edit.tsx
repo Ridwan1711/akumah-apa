@@ -47,6 +47,7 @@ export default function StudentEdit({ student, classes }: Props) {
         status: 'active' | 'alumni' | 'keluar' | 'wafat';
         admission_year: string;
         current_class_id: string;
+        inactive_at: string;
         em_profile: EmProfileFormData;
     }>({
         user_id: student.user_id ? String(student.user_id) : '',
@@ -59,6 +60,7 @@ export default function StudentEdit({ student, classes }: Props) {
         status: student.status,
         admission_year: String(student.admission_year),
         current_class_id: student.current_class_id ? String(student.current_class_id) : '',
+        inactive_at: student.inactive_at ? String(student.inactive_at).slice(0, 10) : '',
         em_profile: emProfileDefaults(ep),
     });
 
@@ -193,7 +195,15 @@ export default function StudentEdit({ student, classes }: Props) {
                                 <div className="grid gap-4 sm:grid-cols-2">
                                     <div className="grid gap-2">
                                         <Label>Status *</Label>
-                                        <Select value={data.status} onValueChange={(v: 'active' | 'alumni' | 'keluar' | 'wafat') => setData('status', v)}>
+                                        <Select
+                                            value={data.status}
+                                            onValueChange={(v: 'active' | 'alumni' | 'keluar' | 'wafat') => {
+                                                setData('status', v);
+                                                if (v === 'active') {
+                                                    setData('inactive_at', '');
+                                                }
+                                            }}
+                                        >
                                             <SelectTrigger className="w-full">
                                                 <SelectValue placeholder="Pilih" />
                                             </SelectTrigger>
@@ -224,6 +234,23 @@ export default function StudentEdit({ student, classes }: Props) {
                                     </div>
                                 </div>
 
+                                {data.status !== 'active' ? (
+                                    <div className="grid max-w-md gap-2">
+                                        <Label htmlFor="inactive_at">Tanggal tidak aktif</Label>
+                                        <Input
+                                            id="inactive_at"
+                                            type="date"
+                                            value={data.inactive_at}
+                                            onChange={(e) => setData('inactive_at', e.target.value)}
+                                        />
+                                        <p className="text-muted-foreground text-xs">
+                                            Digunakan agar tagihan tidak dibuat untuk periode setelah tanggal ini. Jika dikosongkan saat pertama kali menonaktifkan,
+                                            sistem mengisi tanggal hari ini.
+                                        </p>
+                                        <InputError message={errors.inactive_at} />
+                                    </div>
+                                ) : null}
+
                                 <div className="grid gap-2">
                                     <Label htmlFor="address">Alamat</Label>
                                     <textarea
@@ -242,6 +269,7 @@ export default function StudentEdit({ student, classes }: Props) {
                             data={data.em_profile}
                             onChange={handleEmProfileChange}
                             showCatatan
+                            nismReadOnly
                         />
 
                         <div className="flex items-center gap-3 pt-2">

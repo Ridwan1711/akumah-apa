@@ -117,6 +117,8 @@ export type Student = {
     address: string | null;
     address_line?: string | null;
     status: 'active' | 'alumni' | 'keluar' | 'wafat';
+    /** Tanggal efektif tidak aktif (lulus/keluar/wafat); dipakai untuk batas periode tagihan. */
+    inactive_at?: string | null;
     is_kuliah?: boolean;
     admission_year: number;
     current_class_id: number | null;

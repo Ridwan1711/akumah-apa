@@ -24,8 +24,17 @@ class UpdateStudentRequest extends FormRequest
             'gender' => ['required', Rule::in([Student::GENDER_MALE, Student::GENDER_FEMALE])],
             'address' => ['nullable', 'string'],
             'status' => ['required', Rule::in(Student::STATUSES)],
+            'inactive_at' => ['nullable', 'date'],
             'admission_year' => ['required', 'integer', 'min:2000', 'max:2099'],
             'current_class_id' => ['nullable', 'exists:classes,id'],
+            'nis' => ['prohibited'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('inactive_at') === '') {
+            $this->merge(['inactive_at' => null]);
+        }
     }
 }

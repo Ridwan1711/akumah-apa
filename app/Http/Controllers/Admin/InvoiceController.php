@@ -18,6 +18,7 @@ use App\Services\Authorization\InvoiceVisibilityScope;
 use App\Services\Finance\DispatchInvoiceRemindersAction;
 use App\Services\Finance\FinanceInvoicePricingResolver;
 use App\Services\Finance\InvoiceImportSupport;
+use App\Services\Finance\StudentInvoiceCoverPeriod;
 use App\Support\Authorization\Permissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -403,6 +404,14 @@ class InvoiceController extends Controller
         );
 
         $student = Student::query()->findOrFail((int) $validated['student_id']);
+        $academicYear = AcademicYear::query()->findOrFail((int) $validated['academic_year_id']);
+        $invoiceMonth = isset($validated['month']) ? (int) $validated['month'] : null;
+        if (StudentInvoiceCoverPeriod::isPeriodAfterInactive($student, $academicYear, $invoiceMonth)) {
+            throw ValidationException::withMessages([
+                'academic_year_id' => StudentInvoiceCoverPeriod::userFacingMessage(),
+            ]);
+        }
+
         $tingkatSnapshot = $student->formalTingkatEnrollmentForYear((int) $validated['academic_year_id'])?->tingkat_sekolah_id;
         if ($tingkatSnapshot === null && $student->is_kuliah) {
             $tingkatSnapshot = TingkatSekolah::query()
