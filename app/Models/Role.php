@@ -18,6 +18,10 @@ class Role extends Model
     public const SUPER_ADMIN = 'super_admin';
     public const ADMIN_AKADEMIK = 'admin_akademik';
     public const ADMIN_KEUANGAN = 'admin_keuangan';
+
+    /** Baca tagihan terbatas (invoice.view_limited); tanpa pembayaran/laporan penuh. */
+    public const ADMIN_KEUANGAN_OBSERVER = 'admin_keuangan_observer';
+
     public const MUSYRIF = 'musyrif';
     public const GURU = 'guru';
     public const SANTRI = 'santri';
@@ -27,6 +31,7 @@ class Role extends Model
         self::SUPER_ADMIN,
         self::ADMIN_AKADEMIK,
         self::ADMIN_KEUANGAN,
+        self::ADMIN_KEUANGAN_OBSERVER,
     ];
 
     public const SANTRI_ROLES = [

@@ -305,7 +305,20 @@ Route::middleware(['auth', 'verified', 'password.changed', 'permission:audit_log
         Route::get('audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
     });
 
-// Keuangan routes (super_admin + admin_keuangan)
+// Keuangan: baca tagihan (termasuk admin_keuangan_observer + invoice.view)
+Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', [
+    Role::SUPER_ADMIN,
+    Role::ADMIN_KEUANGAN,
+    Role::ADMIN_KEUANGAN_OBSERVER,
+]), 'permission:'.Permissions::INVOICE_VIEW])
+    ->prefix('admin')
+    ->name('admin.')
+    ->group(function () {
+        Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
+        Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
+    });
+
+// Keuangan penuh (tanpa observer): jenis bayar, pembayaran, impor, dll.
 Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', [
     Role::SUPER_ADMIN,
     Role::ADMIN_KEUANGAN,
@@ -319,7 +332,6 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::post('student-discounts', [StudentDiscountController::class, 'store'])->name('student-discounts.store');
         Route::delete('student-discounts/{studentDiscount}', [StudentDiscountController::class, 'destroy'])->name('student-discounts.destroy');
 
-        Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
         Route::get('invoices-template', [InvoiceDataTransferController::class, 'template'])->name('invoices.template');
         Route::get('invoices-export', [InvoiceDataTransferController::class, 'export'])->name('invoices.export');
         Route::post('invoices-import', [InvoiceDataTransferController::class, 'import'])
@@ -334,7 +346,6 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::post('invoices/bulk-generate', [InvoiceController::class, 'bulkGenerate'])->name('invoices.bulk-generate');
         Route::post('invoices/bulk-runs/{importRun}/retry', [InvoiceController::class, 'retryBulkRun'])->name('invoices.bulk-runs.retry');
         Route::post('invoices', [InvoiceController::class, 'store'])->name('invoices.store');
-        Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
         Route::put('invoices/{invoice}/breakdown', [InvoiceController::class, 'updateBreakdown'])->name('invoices.breakdown.update');
         Route::post('invoices/{invoice}/cancel', [InvoiceController::class, 'cancel'])->name('invoices.cancel');
         Route::post('invoices/{invoice}/send-reminder', [InvoiceController::class, 'sendReminder'])

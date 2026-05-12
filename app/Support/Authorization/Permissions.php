@@ -22,6 +22,9 @@ final class Permissions
 
     public const INVOICE_VIEW_PENGURUS_DIVISION = 'invoice.view_pengurus_division';
 
+    /** Tagihan: per santri maks. 3 baris paling baru (baca saja; dipakai observer). */
+    public const INVOICE_VIEW_LIMITED = 'invoice.view_limited';
+
     public const INVOICE_CREATE = 'invoice.create';
 
     public const INVOICE_CANCEL = 'invoice.cancel';

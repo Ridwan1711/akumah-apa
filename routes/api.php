@@ -181,13 +181,17 @@ Route::prefix('v1')->group(function () {
             Route::get('/notifications/token-diagnostics', [AdminUserManagementController::class, 'notificationTokenDiagnostics']);
         });
 
-        // Admin Keuangan (super_admin, admin_keuangan)
-        Route::middleware(['role:super_admin,admin_keuangan', 'permission:invoice.view,payment.view,payment.report.view'])->prefix('admin')->group(function () {
+        // Admin Keuangan — baca tagihan (termasuk admin_keuangan_observer)
+        Route::middleware(['role:super_admin,admin_keuangan,admin_keuangan_observer', 'permission:invoice.view'])->prefix('admin')->group(function () {
             Route::get('/invoices', [AdminKeuanganController::class, 'indexInvoices']);
             Route::get('/invoices/generate-meta', [AdminKeuanganController::class, 'generateMeta']);
+            Route::get('/invoices/{invoice}', [AdminKeuanganController::class, 'showInvoice']);
+        });
+
+        // Admin Keuangan penuh (tanpa observer)
+        Route::middleware(['role:super_admin,admin_keuangan', 'permission:invoice.view,payment.view,payment.report.view'])->prefix('admin')->group(function () {
             Route::post('/invoices/bulk-generate', [AdminKeuanganController::class, 'bulkGenerate']);
             Route::post('/invoices', [AdminKeuanganController::class, 'storeInvoice']);
-            Route::get('/invoices/{invoice}', [AdminKeuanganController::class, 'showInvoice']);
             Route::put('/invoices/{invoice}/breakdown', [AdminKeuanganController::class, 'updateInvoiceBreakdown']);
             Route::post('/invoices/{invoice}/cancel', [AdminKeuanganController::class, 'cancelInvoice']);
             Route::post('/invoices/{invoice}/payments', [AdminKeuanganController::class, 'storePayment']);

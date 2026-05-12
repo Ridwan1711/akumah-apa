@@ -13,6 +13,7 @@ class RoleSeeder extends Seeder
             Role::SUPER_ADMIN,
             Role::ADMIN_AKADEMIK,
             Role::ADMIN_KEUANGAN,
+            Role::ADMIN_KEUANGAN_OBSERVER,
             Role::MUSYRIF,
             Role::GURU,
             Role::SANTRI,

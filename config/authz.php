@@ -36,6 +36,11 @@ return [
             Permissions::INVOICE_VIEW_NON_PENGURUS,
         ],
 
+        Role::ADMIN_KEUANGAN_OBSERVER => [
+            Permissions::INVOICE_VIEW,
+            Permissions::INVOICE_VIEW_LIMITED,
+        ],
+
         Role::GURU => [
             Permissions::DASHBOARD_GURU,
         ],
