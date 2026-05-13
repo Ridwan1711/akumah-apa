@@ -15,10 +15,10 @@ use App\Models\Role;
 use App\Models\Student;
 use App\Models\User;
 use App\Notifications\BulkRunFinishedNotification;
-use App\Support\AccountGeneratorCredentialsFormatter;
 use App\Services\Finance\FinanceInvoicePricingResolver;
 use App\Services\Finance\InvoiceImportSupport;
 use App\Services\Finance\StudentInvoiceCoverPeriod;
+use App\Support\AccountGeneratorCredentialsFormatter;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\QueryException;
@@ -304,6 +304,11 @@ class ProcessBulkRun implements ShouldBeUnique, ShouldQueue
     protected function processAccountGenerateStudents(ImportRun $run): void
     {
         $studentIds = array_values($run->meta['student_ids'] ?? []);
+        if (count($studentIds) > ImportRun::ACCOUNT_BATCH_MAX_STUDENTS) {
+            throw new \RuntimeException(
+                'Maksimal '.ImportRun::ACCOUNT_BATCH_MAX_STUDENTS.' santri per job generate akun; pecah menjadi beberapa batch.'
+            );
+        }
         $includeWali = filter_var($run->meta['include_wali_accounts'] ?? true, FILTER_VALIDATE_BOOLEAN);
         $role = Role::query()->where('name', Role::SANTRI)->firstOrFail();
         $students = Student::query()->whereIn('id', $studentIds)->whereNull('user_id')->get();
@@ -437,6 +442,11 @@ class ProcessBulkRun implements ShouldBeUnique, ShouldQueue
     protected function processAccountGenerateGuardians(ImportRun $run): void
     {
         $guardianIds = array_values($run->meta['guardian_ids'] ?? []);
+        if (count($guardianIds) > ImportRun::ACCOUNT_BATCH_MAX_GUARDIANS) {
+            throw new \RuntimeException(
+                'Maksimal '.ImportRun::ACCOUNT_BATCH_MAX_GUARDIANS.' wali per job generate akun; pecah menjadi beberapa batch.'
+            );
+        }
         $guardians = Guardian::query()->whereIn('id', $guardianIds)->whereNull('user_id')->with('students:id,nis')->get();
         $results = [];
 

@@ -9,6 +9,7 @@ use App\Models\Guardian;
 use App\Models\ImportRun;
 use App\Models\Student;
 use App\Models\User;
+use App\Services\AccountGenerator\AccountGenerateRollbackService;
 use App\Services\AccountGenerator\MasterCredentialsAggregator;
 use App\Support\AccountGeneratorCredentialsFormatter;
 use Illuminate\Http\JsonResponse;
@@ -23,7 +24,7 @@ class AccountGeneratorController extends Controller
 {
     public function index(Request $request): Response
     {
-        $perPageOptions = [25, 50, 75, 100, 1000];
+        $perPageOptions = [25, 50, 75, 100, 150];
         $perPage = (int) $request->input('per_page', 25);
         if (! in_array($perPage, $perPageOptions, true)) {
             $perPage = 25;
@@ -76,13 +77,17 @@ class AccountGeneratorController extends Controller
             'runFilters' => $request->only(['run_uploader_id', 'per_page']),
             'perPageOptions' => $perPageOptions,
             'isSuperAdmin' => $request->user()?->isSuperAdmin() ?? false,
+            'accountGenerateBatchLimits' => [
+                'maxStudentsPerRun' => ImportRun::ACCOUNT_BATCH_MAX_STUDENTS,
+                'maxGuardiansPerRun' => ImportRun::ACCOUNT_BATCH_MAX_GUARDIANS,
+            ],
         ]);
     }
 
     public function generateStudentAccounts(Request $request)
     {
         $validated = $request->validate([
-            'student_ids' => ['required', 'array', 'min:1'],
+            'student_ids' => ['required', 'array', 'min:1', 'max:'.ImportRun::ACCOUNT_BATCH_MAX_STUDENTS],
             'student_ids.*' => ['exists:students,id'],
             'include_wali_accounts' => ['sometimes', 'boolean'],
         ]);
@@ -111,7 +116,7 @@ class AccountGeneratorController extends Controller
     public function previewWaliImpact(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'student_ids' => ['required', 'array', 'min:1'],
+            'student_ids' => ['required', 'array', 'min:1', 'max:'.ImportRun::ACCOUNT_BATCH_MAX_STUDENTS],
             'student_ids.*' => ['exists:students,id'],
         ]);
 
@@ -201,7 +206,7 @@ class AccountGeneratorController extends Controller
     public function generateGuardianAccounts(Request $request)
     {
         $request->validate([
-            'guardian_ids' => ['required', 'array', 'min:1'],
+            'guardian_ids' => ['required', 'array', 'min:1', 'max:'.ImportRun::ACCOUNT_BATCH_MAX_GUARDIANS],
             'guardian_ids.*' => ['exists:guardians,id'],
         ]);
 
@@ -245,6 +250,36 @@ class AccountGeneratorController extends Controller
         ProcessBulkRun::dispatch($retryRun->id);
 
         return back()->with('success', 'Retry generate akun diproses di background.');
+    }
+
+    public function rollbackAccountGenerateRun(Request $request, ImportRun $importRun, AccountGenerateRollbackService $rollbackService)
+    {
+        abort_unless($request->user()?->isSuperAdmin(), 403);
+        abort_unless(in_array($importRun->job_type, [
+            ImportRun::JOB_ACCOUNT_GENERATE_STUDENTS,
+            ImportRun::JOB_ACCOUNT_GENERATE_GUARDIANS,
+        ], true), 404);
+
+        $request->validate([
+            'confirm' => ['required', 'string', 'in:ROLLBACK'],
+        ]);
+
+        try {
+            $summary = $rollbackService->rollback($importRun);
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        $msg = sprintf(
+            'Rollback selesai: %d akun santri dan %d akun wali dihapus (user + link ke santri/wali).',
+            $summary['santri_removed'],
+            $summary['wali_removed']
+        );
+        if ($summary['warnings'] !== []) {
+            $msg .= ' '.implode(' ', $summary['warnings']);
+        }
+
+        return back()->with('success', $msg);
     }
 
     /**

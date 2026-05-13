@@ -36,6 +36,12 @@ class ImportRun extends Model
 
     public const JOB_ACCOUNT_GENERATE_GUARDIANS = 'account_generate_guardians';
 
+    /** Maks santri per job generate akun (kurangi risiko `result_payload` JSON terpotong; ±300 akun jika +wali). */
+    public const ACCOUNT_BATCH_MAX_STUDENTS = 150;
+
+    /** Maks wali per job generate akun wali. */
+    public const ACCOUNT_BATCH_MAX_GUARDIANS = 150;
+
     public const STATUS_QUEUED = 'queued';
 
     public const STATUS_PROCESSING = 'processing';

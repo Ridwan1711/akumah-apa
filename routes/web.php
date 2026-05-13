@@ -140,6 +140,9 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::get('account-generator/credentials-master.xlsx', [AccountGeneratorController::class, 'downloadMasterCredentialsXlsx'])
             ->middleware('role:'.Role::SUPER_ADMIN)
             ->name('account-generator.credentials-master');
+        Route::post('account-generator/runs/{importRun}/rollback', [AccountGeneratorController::class, 'rollbackAccountGenerateRun'])
+            ->middleware('role:'.Role::SUPER_ADMIN)
+            ->name('account-generator.runs.rollback');
         Route::post('account-generator/runs/{importRun}/retry', [AccountGeneratorController::class, 'retryBulkRun'])->name('account-generator.runs.retry');
 
         // Academic Years & Semesters

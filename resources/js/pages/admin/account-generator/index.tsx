@@ -1,5 +1,5 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { CheckCircle2, Copy, Download, Eye, RefreshCw, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { CheckCircle2, Copy, Download, Eye, RefreshCw, ShieldCheck, Undo2, UserPlus, Users } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import FlashMessage from '@/components/flash-message';
@@ -31,6 +31,10 @@ type Props = {
     runFilters: { run_uploader_id?: string; per_page?: string };
     perPageOptions: number[];
     isSuperAdmin: boolean;
+    accountGenerateBatchLimits: {
+        maxStudentsPerRun: number;
+        maxGuardiansPerRun: number;
+    };
 };
 
 type GeneratedCredential = {
@@ -89,6 +93,29 @@ function credentialDownloadFilename(run: ImportRun | null): string {
 
 function isAccountGenerateJob(run: ImportRun): boolean {
     return run.job_type === 'account_generate_students' || run.job_type === 'account_generate_guardians';
+}
+
+function isAccountGenerateRunRolledBack(run: ImportRun): boolean {
+    const p = run.result_payload;
+    if (!p || typeof p !== 'object') return false;
+    return Boolean((p as Record<string, unknown>).rolled_back_at);
+}
+
+/** Ada sumber kredensial (preview/JSON/file) sehingga rollback otomatis bisa dijalankan. */
+function hasRollbackableCredentialSource(run: ImportRun): boolean {
+    if (!isAccountGenerateJob(run) || run.status !== 'completed') return false;
+    if (isAccountGenerateRunRolledBack(run)) return false;
+    const p = run.result_payload;
+    if (!p || typeof p !== 'object') return false;
+    if (normalizeGeneratedCredentials(run).length > 0) return true;
+    const path = (p as Record<string, unknown>).credentials_full_export_path;
+    if (typeof path === 'string' && path.length > 0) return true;
+    const rc = (p as Record<string, unknown>).credentials_full_row_count;
+    return typeof rc === 'number' && rc > 0;
+}
+
+function canShowAccountRollback(run: ImportRun, isSuperAdminUser: boolean): boolean {
+    return isSuperAdminUser && hasRollbackableCredentialSource(run);
 }
 
 function credentialFullRowCount(run: ImportRun | null): number | null {
@@ -223,11 +250,15 @@ export default function AccountGeneratorIndex({
     runFilters,
     perPageOptions,
     isSuperAdmin,
+    accountGenerateBatchLimits,
 }: Props) {
     const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
     const [selectedGuardians, setSelectedGuardians] = useState<number[]>([]);
     const [includeWaliOnStudentRun, setIncludeWaliOnStudentRun] = useState(true);
     const [resultRunId, setResultRunId] = useState<number | null>(null);
+    const [rollbackRun, setRollbackRun] = useState<ImportRun | null>(null);
+    const [rollbackPhrase, setRollbackPhrase] = useState('');
+    const [rollbackSubmitting, setRollbackSubmitting] = useState(false);
 
     const studentForm = useForm<{ student_ids: number[]; include_wali_accounts: boolean }>({
         student_ids: [],
@@ -316,28 +347,70 @@ export default function AccountGeneratorIndex({
     }
 
     function toggleStudent(id: number) {
-        setSelectedStudents((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+        const maxS = accountGenerateBatchLimits.maxStudentsPerRun;
+        setSelectedStudents((prev) => {
+            if (prev.includes(id)) return prev.filter((x) => x !== id);
+            if (prev.length >= maxS) {
+                toast.error(`Maksimal ${maxS} santri per batch generate`);
+                return prev;
+            }
+            return [...prev, id];
+        });
     }
 
     function toggleGuardian(id: number) {
-        setSelectedGuardians((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+        const maxG = accountGenerateBatchLimits.maxGuardiansPerRun;
+        setSelectedGuardians((prev) => {
+            if (prev.includes(id)) return prev.filter((x) => x !== id);
+            if (prev.length >= maxG) {
+                toast.error(`Maksimal ${maxG} wali per batch generate`);
+                return prev;
+            }
+            return [...prev, id];
+        });
     }
 
     function toggleAllStudents() {
+        const maxS = accountGenerateBatchLimits.maxStudentsPerRun;
         const allIds = studentsWithoutAccount.data.map((row) => row.id);
         const allChecked = allIds.length > 0 && allIds.every((id) => selectedStudents.includes(id));
-        setSelectedStudents(allChecked ? [] : allIds);
+        if (allChecked) {
+            setSelectedStudents((prev) => prev.filter((id) => !allIds.includes(id)));
+            return;
+        }
+        const merged = [...new Set([...selectedStudents, ...allIds])];
+        if (merged.length > maxS) {
+            toast.error(`Maksimal ${maxS} santri per batch. Memotong seleksi ke ${maxS} ID pertama.`);
+            setSelectedStudents(merged.slice(0, maxS));
+            return;
+        }
+        setSelectedStudents(merged);
     }
 
     function toggleAllGuardians() {
+        const maxG = accountGenerateBatchLimits.maxGuardiansPerRun;
         const allIds = guardiansWithoutAccount.data.map((row) => row.id);
         const allChecked = allIds.length > 0 && allIds.every((id) => selectedGuardians.includes(id));
-        setSelectedGuardians(allChecked ? [] : allIds);
+        if (allChecked) {
+            setSelectedGuardians((prev) => prev.filter((id) => !allIds.includes(id)));
+            return;
+        }
+        const merged = [...new Set([...selectedGuardians, ...allIds])];
+        if (merged.length > maxG) {
+            toast.error(`Maksimal ${maxG} wali per batch. Memotong seleksi ke ${maxG} ID pertama.`);
+            setSelectedGuardians(merged.slice(0, maxG));
+            return;
+        }
+        setSelectedGuardians(merged);
     }
 
     function submitGenerateStudents() {
         if (selectedStudents.length === 0) {
             toast.error('Pilih minimal satu santri');
+            return;
+        }
+        if (selectedStudents.length > accountGenerateBatchLimits.maxStudentsPerRun) {
+            toast.error(`Maksimal ${accountGenerateBatchLimits.maxStudentsPerRun} santri per batch`);
             return;
         }
         studentForm.setData({
@@ -358,6 +431,10 @@ export default function AccountGeneratorIndex({
             toast.error('Pilih minimal satu wali');
             return;
         }
+        if (selectedGuardians.length > accountGenerateBatchLimits.maxGuardiansPerRun) {
+            toast.error(`Maksimal ${accountGenerateBatchLimits.maxGuardiansPerRun} wali per batch`);
+            return;
+        }
         guardianForm.setData({ guardian_ids: selectedGuardians });
         guardianForm.post('/admin/account-generator/guardians', {
             onSuccess: () => {
@@ -375,13 +452,36 @@ export default function AccountGeneratorIndex({
         });
     }
 
+    function submitAccountRollback() {
+        if (!rollbackRun) return;
+        if (rollbackPhrase !== 'ROLLBACK') {
+            toast.error('Ketik persis: ROLLBACK');
+            return;
+        }
+        setRollbackSubmitting(true);
+        router.post(
+            `/admin/account-generator/runs/${rollbackRun.id}/rollback`,
+            { confirm: 'ROLLBACK' },
+            {
+                preserveScroll: true,
+                onFinish: () => setRollbackSubmitting(false),
+                onSuccess: () => {
+                    setRollbackRun(null);
+                    setRollbackPhrase('');
+                    toast.success('Rollback job selesai');
+                },
+                onError: () => toast.error('Rollback gagal — cek pesan error di atas'),
+            },
+        );
+    }
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Generate Akun" />
             <div>
                 <CrudPageHeader
                     title="Generate Akun Santri & Wali"
-                    description="Buat akun secara massal untuk data yang belum memiliki user login."
+                    description={`Buat akun secara massal untuk data yang belum memiliki user login. Maksimal ${accountGenerateBatchLimits.maxStudentsPerRun} santri per job (hingga ~${accountGenerateBatchLimits.maxStudentsPerRun * 2} akun jika sekaligus buat wali). Pagination tabel maksimal ${Math.max(...perPageOptions)} baris per halaman.`}
                 />
 
                 <CrudStatStrip
@@ -398,7 +498,7 @@ export default function AccountGeneratorIndex({
                 {isSuperAdmin ? (
                     <CrudCard
                         title="Master kredensial (Super Admin)"
-                        subtitle="Satu berkas XLSX berisi gabungan semua job generate akun selesai: membaca file TSV di server (jika ada) lalu fallback ke data di database. Job lebih baru mengganti baris dengan NIS yang sama. Baris sedikit (mis. ~314) di modal biasanya karena payload JSON job lama terpotong—password plaintext tidak pernah bisa dipulihkan dari tabel users."
+                        subtitle="Satu berkas XLSX berisi gabungan semua job generate akun selesai: membaca file TSV di server (jika ada) lalu fallback ke data di database. Job lebih baru mengganti baris dengan NIS yang sama. Baris sedikit (mis. ~314) di modal biasanya karena payload JSON job lama terpotong—password plaintext tidak pernah bisa dipulihkan dari tabel users. Salah batch besar: gunakan Rollback per job di riwayat (Super Admin)."
                     >
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
                             <button
@@ -429,7 +529,7 @@ export default function AccountGeneratorIndex({
                     }
                 />
 
-                <CrudCard title="Santri Belum Memiliki Akun" subtitle="Pilih santri lalu generate akun santri.">
+                <CrudCard title="Santri Belum Memiliki Akun" subtitle={`Pilih santri lalu generate. Maksimal ${accountGenerateBatchLimits.maxStudentsPerRun} santri per batch; bisa pilih lintas halaman sampai batas tersebut.`}>
                     <CrudTableShell>
                         <table className="mcr-table">
                             <thead>
@@ -469,7 +569,7 @@ export default function AccountGeneratorIndex({
                     </CrudBulkActionBar>
                 </CrudCard>
 
-                <CrudCard title="Wali Belum Memiliki Akun" subtitle="Pilih wali lalu generate akun wali.">
+                <CrudCard title="Wali Belum Memiliki Akun" subtitle={`Pilih wali lalu generate. Maksimal ${accountGenerateBatchLimits.maxGuardiansPerRun} wali per batch.`}>
                     <CrudTableShell>
                         <table className="mcr-table">
                             <thead>
@@ -509,7 +609,7 @@ export default function AccountGeneratorIndex({
 
                 <CrudCard
                     title="Riwayat Job Generate Akun"
-                    subtitle="Pantau status job background untuk generate akun."
+                    subtitle={isSuperAdmin ? 'Pantau job; job selesai bisa di-rollback (hapus user generate otomatis) oleh Super Admin.' : 'Pantau status job background untuk generate akun.'}
                     right={hasRunningJobs ? <span className="mcr-dot-badge active">Berjalan...</span> : undefined}
                 >
                     <div style={{ marginBottom: 10 }}>
@@ -544,6 +644,19 @@ export default function AccountGeneratorIndex({
                                                 Retry
                                             </button>
                                         ) : null}
+                                        {canShowAccountRollback(run, isSuperAdmin) ? (
+                                            <button
+                                                type="button"
+                                                className="mcr-btn danger"
+                                                onClick={() => {
+                                                    setRollbackRun(run);
+                                                    setRollbackPhrase('');
+                                                }}
+                                            >
+                                                <Undo2 size={14} />
+                                                Rollback
+                                            </button>
+                                        ) : null}
                                     </div>
                                 </div>
                                 <div className="mcr-run-stats">
@@ -575,6 +688,43 @@ export default function AccountGeneratorIndex({
                         ))
                     )}
                 </CrudCard>
+
+                <CrudModal
+                    open={rollbackRun !== null}
+                    title="Rollback job generate akun"
+                    subtitle="Menghapus user login hasil job ini (email *@santri.siakad.test / *@wali.siakad.test, satu role) dan melepas link ke santri/wali. Tidak menghapus data santri/wali. Job ditandai dibatalkan. Ketik ROLLBACK untuk konfirmasi."
+                    onClose={() => {
+                        if (!rollbackSubmitting) {
+                            setRollbackRun(null);
+                            setRollbackPhrase('');
+                        }
+                    }}
+                    footer={
+                        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', gap: 8, flexWrap: 'wrap' }}>
+                            <button type="button" className="mcr-btn ghost" disabled={rollbackSubmitting} onClick={() => { setRollbackRun(null); setRollbackPhrase(''); }}>
+                                Batal
+                            </button>
+                            <button type="button" className="mcr-btn danger" disabled={rollbackSubmitting || rollbackPhrase !== 'ROLLBACK'} onClick={submitAccountRollback}>
+                                <Undo2 size={14} />
+                                {rollbackSubmitting ? 'Memproses…' : 'Jalankan rollback'}
+                            </button>
+                        </div>
+                    }
+                >
+                    <div className="mcr-form-group" style={{ maxWidth: 360 }}>
+                        <label htmlFor="rollback-confirm">Ketik ROLLBACK</label>
+                        <input
+                            id="rollback-confirm"
+                            className="mcr-filter-select"
+                            style={{ width: '100%' }}
+                            value={rollbackPhrase}
+                            onChange={(e) => setRollbackPhrase(e.target.value)}
+                            placeholder="ROLLBACK"
+                            autoComplete="off"
+                            disabled={rollbackSubmitting}
+                        />
+                    </div>
+                </CrudModal>
 
                 <CrudModal
                     open={resultRunId !== null}
