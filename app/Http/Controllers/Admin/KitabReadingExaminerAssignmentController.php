@@ -79,7 +79,6 @@ class KitabReadingExaminerAssignmentController extends Controller
         abort_unless($period !== null, 422, 'Periode akademik untuk semester ini belum tersedia.');
 
         $examiner = User::query()->findOrFail((int) $validated['examiner_id']);
-        abort_if($examiner->hasAnyRole(Role::SANTRI_ROLES), 422, 'Akun santri, wali santri, atau alumni tidak bisa menjadi penguji.');
 
         KitabReadingExaminerAssignment::query()->firstOrCreate([
             'examiner_id' => (int) $validated['examiner_id'],
