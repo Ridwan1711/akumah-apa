@@ -110,10 +110,10 @@ export default function KitabReadingAssessmentIndex({ classes, semesters, studen
                     <div className="grid gap-1">
                         <Label className="text-xs">Kelas</Label>
                         <Select
-                            value={classId}
+                            value={form.data.class_id}
                             onValueChange={(value) => {
                                 form.setData('class_id', value);
-                                loadRows(value, semesterId);
+                                loadRows(value, form.data.semester_id);
                             }}
                         >
                             <SelectTrigger className="w-56">
@@ -131,10 +131,10 @@ export default function KitabReadingAssessmentIndex({ classes, semesters, studen
                     <div className="grid gap-1">
                         <Label className="text-xs">Semester</Label>
                         <Select
-                            value={semesterId}
+                            value={form.data.semester_id}
                             onValueChange={(value) => {
                                 form.setData('semester_id', value);
-                                loadRows(classId, value);
+                                loadRows(form.data.class_id, value);
                             }}
                         >
                             <SelectTrigger className="w-56">

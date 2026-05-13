@@ -1,5 +1,6 @@
 import { Head, router, useForm } from '@inertiajs/react';
 import { BookOpenCheck, Trash2, UserCheck } from 'lucide-react';
+import { useEffect } from 'react';
 import FlashMessage from '@/components/flash-message';
 import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +48,12 @@ export default function KitabReadingExaminerIndex({ assignments, examiners, clas
         class_id: '',
         semester_id: selectedSemester,
     });
+
+    useEffect(() => {
+        form.setData('semester_id', selectedSemester);
+        // keep user/class selection as-is for UX
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedSemester]);
 
     function changeSemester(value: string) {
         form.setData('semester_id', value);
