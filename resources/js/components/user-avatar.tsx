@@ -1,10 +1,12 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useInitials } from '@/hooks/use-initials';
+import { getProfilePhotoUrl, resolvePublicProfilePhotoUrl } from '@/lib/profile-photo';
 import { cn } from '@/lib/utils';
 
 export type UserAvatarUser = {
     name: string;
     profile_photo_url?: string | null;
+    profilePhotoUrl?: string | null;
 };
 
 type Props = {
@@ -21,7 +23,8 @@ type Props = {
  */
 export function UserAvatar({ user, className, rootClassName, fallbackClassName }: Props) {
     const getInitials = useInitials();
-    const src = user.profile_photo_url?.trim() || undefined;
+    const raw = getProfilePhotoUrl(user);
+    const src = raw ? resolvePublicProfilePhotoUrl(raw) : undefined;
 
     return (
         <Avatar className={cn('size-8 overflow-hidden rounded-lg', rootClassName, className)}>

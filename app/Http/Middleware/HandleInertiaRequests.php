@@ -36,6 +36,9 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = $request->user();
+        if ($user instanceof \App\Models\User) {
+            $user->refresh();
+        }
         if ($user) {
             $user->loadMissing('roles', 'permissionScopes');
         }

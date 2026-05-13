@@ -3,7 +3,6 @@ import type { LucideIcon } from 'lucide-react';
 import { useMemo } from 'react';
 
 import { useCurrentUrl } from '@/hooks/use-current-url';
-import { useInitials } from '@/hooks/use-initials';
 import { toUrl } from '@/lib/utils';
 import type { Auth } from '@/types';
 
@@ -12,6 +11,7 @@ import {
     formatRoleLabel,
     getUserRoleNames,
 } from './sidebar-build-sections';
+import { ShellUserAvatar } from './shell-user-avatar';
 
 type Props = {
     collapsed: boolean;
@@ -20,32 +20,46 @@ type Props = {
 };
 
 export function ShellSidebar({ collapsed, mobileOpen, onClose }: Props) {
-    const { auth, hasGuruRecord = false, hasWaliKelasRecord = false, hasKitabReadingExaminerRecord = false } =
-        usePage<{
-            auth: Auth;
-            hasGuruRecord?: boolean;
-            hasWaliKelasRecord?: boolean;
-            hasKitabReadingExaminerRecord?: boolean;
-        }>().props;
+    const {
+        auth,
+        hasGuruRecord = false,
+        hasWaliKelasRecord = false,
+        hasKitabReadingExaminerRecord = false,
+    } = usePage<{
+        auth: Auth;
+        hasGuruRecord?: boolean;
+        hasWaliKelasRecord?: boolean;
+        hasKitabReadingExaminerRecord?: boolean;
+    }>().props;
 
     const { isCurrentUrl, isCurrentOrParentUrl } = useCurrentUrl();
-    const getInitials = useInitials();
 
     const user = auth.user;
-    const initials = getInitials(user.name ?? '');
     const userRoleNames = useMemo(() => getUserRoleNames(user), [user]);
     const sections = useMemo(
-        () => buildSidebarSections(auth, userRoleNames, !!hasGuruRecord, !!hasWaliKelasRecord, !!hasKitabReadingExaminerRecord),
+        () =>
+            buildSidebarSections(
+                auth,
+                userRoleNames,
+                !!hasGuruRecord,
+                !!hasWaliKelasRecord,
+                !!hasKitabReadingExaminerRecord,
+            ),
         [auth, userRoleNames, hasGuruRecord, hasWaliKelasRecord, hasKitabReadingExaminerRecord],
     );
     const roleLabel = useMemo(() => formatRoleLabel(userRoleNames), [userRoleNames]);
 
-    const sidebarClass = ['mhs-sidebar', collapsed ? 'mhs-collapsed' : '', mobileOpen ? 'mhs-mobile-open' : '']
+    const sidebarClass = [
+        'mhs-sidebar',
+        collapsed ? 'mhs-collapsed' : '',
+        mobileOpen ? 'mhs-mobile-open' : '',
+    ]
         .filter(Boolean)
         .join(' ');
 
     return (
         <aside className={sidebarClass} aria-label="Sidebar navigasi">
+            {/* ── Logo ── */}
             <Link href="/dashboard" className="mhs-sidebar-logo" prefetch>
                 <span className="mhs-logo-icon" aria-hidden="true">
                     <svg
@@ -67,14 +81,24 @@ export function ShellSidebar({ collapsed, mobileOpen, onClose }: Props) {
                 </span>
             </Link>
 
+            {/* ── Nav ── */}
             <nav className="mhs-sidebar-nav" aria-label="Menu utama">
                 {sections.map((section) => (
                     <div className="mhs-nav-section" key={section.label}>
-                        <div className="mhs-nav-section-label">{section.label}</div>
+                        <div
+                            className="mhs-nav-section-label"
+                            aria-hidden={collapsed ? 'true' : undefined}
+                        >
+                            {section.label}
+                        </div>
+
                         {section.items.map((item) => {
                             const Icon = item.icon as LucideIcon | undefined;
                             const active =
-                                item.href === '/dashboard' ? isCurrentUrl(item.href) : isCurrentOrParentUrl(item.href);
+                                item.href === '/dashboard'
+                                    ? isCurrentUrl(item.href)
+                                    : isCurrentOrParentUrl(item.href);
+
                             return (
                                 <Link
                                     key={`${section.label}-${item.title}`}
@@ -82,12 +106,26 @@ export function ShellSidebar({ collapsed, mobileOpen, onClose }: Props) {
                                     prefetch
                                     onClick={onClose}
                                     className={`mhs-nav-item${active ? ' mhs-active' : ''}`}
-                                    title={item.title}
+                                    /* ↓ used by the CSS ::after tooltip when collapsed */
+                                    data-tooltip={item.title}
+                                    aria-label={item.title}
+                                    aria-current={active ? 'page' : undefined}
                                 >
                                     {Icon ? (
-                                        <Icon size={18} strokeWidth={2} aria-hidden="true" />
+                                        <Icon
+                                            size={17}
+                                            strokeWidth={2}
+                                            aria-hidden="true"
+                                        />
                                     ) : (
-                                        <span style={{ width: 18, height: 18, display: 'inline-block' }} />
+                                        <span
+                                            style={{
+                                                width: 17,
+                                                height: 17,
+                                                display: 'inline-block',
+                                                flexShrink: 0,
+                                            }}
+                                        />
                                     )}
                                     <span className="mhs-nav-item-label">{item.title}</span>
                                 </Link>
@@ -97,17 +135,20 @@ export function ShellSidebar({ collapsed, mobileOpen, onClose }: Props) {
                 ))}
             </nav>
 
+            {/* ── Footer / User card ── */}
             <div className="mhs-sidebar-footer">
-                <Link href={toUrl('/settings/profile')} className="mhs-user-card" prefetch>
-                    {user.profile_photo_url ? (
-                        <span className="mhs-user-avatar mhs-user-avatar--photo" aria-hidden="true">
-                            <img src={user.profile_photo_url} alt="" />
-                        </span>
-                    ) : (
-                        <span className="mhs-user-avatar" aria-hidden="true">
-                            {initials || 'US'}
-                        </span>
-                    )}
+                <Link
+                    href={toUrl('/settings/profile')}
+                    className="mhs-user-card"
+                    prefetch
+                    aria-label={`Pengaturan profil, ${user.name}`}
+                >
+                    {/* Avatar wrapped with online dot */}
+                    <span className="mhs-user-avatar-wrap">
+                        <ShellUserAvatar user={user} variant="sidebar" />
+                        <span className="mhs-online-dot" aria-hidden="true" title="Online" />
+                    </span>
+
                     <span className="mhs-user-info">
                         <span className="mhs-name">{user.name}</span>
                         <span className="mhs-role">{roleLabel}</span>

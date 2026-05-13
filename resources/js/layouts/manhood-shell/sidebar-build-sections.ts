@@ -61,9 +61,17 @@ export function getUserRoleNames(user: Auth['user']): string[] {
 }
 
 export function formatRoleLabel(roleNames: string[]): string {
-    if (roleNames.length === 0) return 'User';
+    if (roleNames.length === 0) return 'Pengguna';
 
-    return roleNames.map((roleName) => roleName.replace(/_/g, ' ')).join(', ');
+    const titleCaseRole = (roleName: string) =>
+        roleName
+            .replace(/_/g, ' ')
+            .split(' ')
+            .filter(Boolean)
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+            .join(' ');
+
+    return roleNames.map(titleCaseRole).join(' · ');
 }
 
 const dataMasterNav: NavItem[] = [

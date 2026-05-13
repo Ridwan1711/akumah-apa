@@ -17,11 +17,12 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppearance } from '@/hooks/use-appearance';
-import { useInitials } from '@/hooks/use-initials';
 import { useQueueRunsPoll } from '@/hooks/use-queue-runs-poll';
 import { logout } from '@/routes';
 import { edit as editProfile } from '@/routes/profile';
 import type { Auth, BreadcrumbItem } from '@/types';
+
+import { ShellUserAvatar } from './shell-user-avatar';
 
 type NotificationItem = {
     id: string;
@@ -67,8 +68,6 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
     const { auth, unreadNotificationsCount } =
         usePage<{ auth: Auth; unreadNotificationsCount?: number }>().props;
     const user = auth?.user;
-    const getInitials = useInitials();
-    const initials = user?.name ? getInitials(user.name) : 'US';
 
     const { resolvedAppearance, updateAppearance } = useAppearance();
 
@@ -84,7 +83,13 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
         setQueueScope(next);
     }, []);
 
-    const { runs: queueRuns, activeCount: activeQueueCount, canViewAll: queueCanViewAll, queueLoading, refetch: refetchQueueRuns } = useQueueRunsPoll({
+    const {
+        runs: queueRuns,
+        activeCount: activeQueueCount,
+        canViewAll: queueCanViewAll,
+        queueLoading,
+        refetch: refetchQueueRuns,
+    } = useQueueRunsPoll({
         enabled: Boolean(user),
         scope: queueScope,
         panelOpen: queueOpen,
@@ -104,7 +109,9 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
     const fetchNotifications = useCallback(async () => {
         setNotifLoading(true);
         try {
-            const { data } = await axios.get<NotificationListResponse | NotificationItem[]>('/notifications');
+            const { data } = await axios.get<NotificationListResponse | NotificationItem[]>(
+                '/notifications',
+            );
             const items = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
             setNotifications(items);
         } catch {
@@ -123,15 +130,12 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
     useEffect(() => {
         function onClick(e: MouseEvent) {
             const target = e.target as Node;
-            if (userOpen && userRef.current && !userRef.current.contains(target)) {
+            if (userOpen && userRef.current && !userRef.current.contains(target))
                 setUserOpen(false);
-            }
-            if (notifOpen && notifRef.current && !notifRef.current.contains(target)) {
+            if (notifOpen && notifRef.current && !notifRef.current.contains(target))
                 setNotifOpen(false);
-            }
-            if (queueOpen && queueRef.current && !queueRef.current.contains(target)) {
+            if (queueOpen && queueRef.current && !queueRef.current.contains(target))
                 setQueueOpen(false);
-            }
         }
         function onKey(e: KeyboardEvent) {
             if (e.key === 'Escape') {
@@ -154,11 +158,8 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
             .catch(() => undefined)
             .finally(() => {
                 setNotifOpen(false);
-                if (item.url) {
-                    router.visit(item.url);
-                } else {
-                    router.reload();
-                }
+                if (item.url) router.visit(item.url);
+                else router.reload();
             });
     }
 
@@ -167,6 +168,7 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
             .post('/notifications/read-all')
             .then(() => {
                 router.reload({ only: ['unreadNotificationsCount'] });
+                setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
             })
             .catch(() => undefined);
     }
@@ -190,70 +192,109 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
 
     return (
         <header className="mhs-navbar" role="banner">
+            {/* Toggle */}
             <button
                 type="button"
                 className="mhs-navbar-toggle"
                 onClick={onToggleSidebar}
                 aria-label="Toggle sidebar"
             >
-                <Menu size={20} strokeWidth={2} />
+                <Menu size={19} strokeWidth={2} />
             </button>
 
+            {/* Search */}
             <div className="mhs-search-bar">
-                <Search size={16} aria-hidden="true" />
-                <input type="text" placeholder="Cari santri, ustadz, kelas..." />
+                <Search size={15} aria-hidden="true" />
+                <input
+                    type="text"
+                    placeholder="Cari santri, ustadz, kelas…"
+                    aria-label="Pencarian global"
+                />
             </div>
 
             <div className="mhs-navbar-actions">
+                {/* Theme toggle */}
                 <button
                     type="button"
                     className="mhs-theme-toggle"
                     onClick={handleToggleTheme}
-                    title={resolvedAppearance === 'dark' ? 'Aktifkan mode terang' : 'Aktifkan mode gelap'}
-                    aria-label="Toggle theme"
+                    title={
+                        resolvedAppearance === 'dark'
+                            ? 'Aktifkan mode terang'
+                            : 'Aktifkan mode gelap'
+                    }
+                    aria-label="Toggle tema"
                 >
                     <span className="mhs-theme-toggle-thumb" aria-hidden="true">
-                        {resolvedAppearance === 'dark' ? <Moon size={11} /> : <Sun size={11} />}
+                        {resolvedAppearance === 'dark' ? (
+                            <Moon size={10} />
+                        ) : (
+                            <Sun size={10} />
+                        )}
                     </span>
                 </button>
 
+                {/* ── Notification panel ── */}
                 <div className="mhs-user-dropdown-wrap" ref={notifRef}>
                     <button
                         type="button"
                         className="mhs-icon-btn"
                         onClick={() => {
                             setUserOpen(false);
+                            setQueueOpen(false);
                             setNotifOpen((v) => !v);
                         }}
-                        aria-label="Notifikasi"
+                        aria-label={`Notifikasi${unread > 0 ? `, ${unread} belum dibaca` : ''}`}
                         aria-expanded={notifOpen}
+                        aria-haspopup="menu"
                     >
-                        <Bell size={17} />
-                        {unread > 0 ? (
-                            <span className="mhs-notif-count-badge">{unread > 9 ? '9+' : unread}</span>
-                        ) : null}
+                        <Bell size={16} />
+                        {unread > 0 && (
+                            <span className="mhs-notif-count-badge" aria-hidden="true">
+                                {unread > 9 ? '9+' : unread}
+                            </span>
+                        )}
                     </button>
-                    <div className={`mhs-notif-panel${notifOpen ? ' mhs-open' : ''}`} role="menu">
+
+                    <div
+                        className={`mhs-notif-panel${notifOpen ? ' mhs-open' : ''}`}
+                        role="menu"
+                        aria-label="Panel notifikasi"
+                    >
                         <div className="mhs-notif-header">
                             <h4>
                                 Notifikasi
-                                {unread > 0 ? <span className="mhs-notif-count">{unread > 9 ? '9+' : unread}</span> : null}
+                                {unread > 0 && (
+                                    <span className="mhs-notif-count" aria-label={`${unread} belum dibaca`}>
+                                        {unread > 9 ? '9+' : unread}
+                                    </span>
+                                )}
                             </h4>
-                            {notifications.length > 0 ? (
-                                <button type="button" className="mhs-notif-clear" onClick={handleClearAll}>
-                                    <Check size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                            {notifications.length > 0 && (
+                                <button
+                                    type="button"
+                                    className="mhs-notif-clear"
+                                    onClick={handleClearAll}
+                                >
+                                    <Check size={11} aria-hidden="true" />
                                     Tandai semua
                                 </button>
-                            ) : null}
+                            )}
                         </div>
+
                         <div className="mhs-notif-list">
                             {notifLoading ? (
                                 <div className="mhs-notif-loading">
-                                    <Loader2 size={20} className="mhs-spin" />
-                                    <div style={{ marginTop: 8 }}>Memuat notifikasi…</div>
+                                    <Loader2 size={20} className="mhs-spin" aria-hidden="true" />
+                                    <div>Memuat notifikasi…</div>
                                 </div>
                             ) : notifications.length === 0 ? (
-                                <div className="mhs-notif-empty">Tidak ada notifikasi baru</div>
+                                <div className="mhs-notif-empty">
+                                    <span className="mhs-notif-empty-icon" aria-hidden="true">
+                                        <Bell size={18} />
+                                    </span>
+                                    Tidak ada notifikasi baru
+                                </div>
                             ) : (
                                 notifications.map((item) => (
                                     <button
@@ -261,14 +302,21 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
                                         type="button"
                                         className="mhs-notif-item"
                                         onClick={() => handleNotifClick(item)}
+                                        /* unread accent via CSS attr selector */
+                                        data-unread={item.is_read === false ? 'true' : undefined}
+                                        role="menuitem"
                                     >
                                         <span className="mhs-notif-icon" aria-hidden="true">
-                                            <Bell size={16} />
+                                            <Bell size={15} />
                                         </span>
                                         <span className="mhs-notif-content">
                                             <span className="mhs-notif-title">{item.title}</span>
-                                            <span className="mhs-notif-msg">{item.message || item.body || ''}</span>
-                                            <span className="mhs-notif-time">{formatRelativeTime(item.created_at)}</span>
+                                            <span className="mhs-notif-msg">
+                                                {item.message || item.body || ''}
+                                            </span>
+                                            <span className="mhs-notif-time">
+                                                {formatRelativeTime(item.created_at)}
+                                            </span>
                                         </span>
                                     </button>
                                 ))
@@ -277,6 +325,7 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
                     </div>
                 </div>
 
+                {/* ── Queue panel ── */}
                 <div className="mhs-user-dropdown-wrap" ref={queueRef}>
                     <button
                         type="button"
@@ -286,132 +335,180 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
                             setNotifOpen(false);
                             setQueueOpen((v) => !v);
                         }}
-                        aria-label="Aktivitas Queue"
+                        aria-label={`Aktivitas Queue${activeQueueCount > 0 ? `, ${activeQueueCount} aktif` : ''}`}
                         aria-expanded={queueOpen}
+                        aria-haspopup="menu"
                     >
-                        <Clock3 size={17} />
-                        {activeQueueCount > 0 ? (
-                            <span className="mhs-notif-count-badge">{activeQueueCount > 9 ? '9+' : activeQueueCount}</span>
-                        ) : null}
+                        <Clock3 size={16} />
+                        {activeQueueCount > 0 && (
+                            <span className="mhs-notif-count-badge" aria-hidden="true">
+                                {activeQueueCount > 9 ? '9+' : activeQueueCount}
+                            </span>
+                        )}
                     </button>
-                    <div className={`mhs-notif-panel${queueOpen ? ' mhs-open' : ''}`} role="menu">
+
+                    <div
+                        className={`mhs-notif-panel${queueOpen ? ' mhs-open' : ''}`}
+                        role="menu"
+                        aria-label="Panel queue"
+                    >
                         <div className="mhs-notif-header">
                             <h4>Aktivitas Queue</h4>
-                            {queueCanViewAll ? (
-                                <div style={{ display: 'inline-flex', gap: 6 }}>
-                                    <button
-                                        type="button"
-                                        className="mhs-notif-clear"
-                                        style={{
-                                            opacity: queueScope === 'my' ? 1 : 0.65,
-                                            textDecoration: queueScope === 'my' ? 'underline' : 'none',
-                                        }}
-                                        onClick={() => setQueueScope('my')}
-                                    >
-                                        My Runs
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="mhs-notif-clear"
-                                        style={{
-                                            opacity: queueScope === 'all' ? 1 : 0.65,
-                                            textDecoration: queueScope === 'all' ? 'underline' : 'none',
-                                        }}
-                                        onClick={() => setQueueScope('all')}
-                                    >
-                                        All Runs
-                                    </button>
+                            {queueCanViewAll && (
+                                <div style={{ display: 'inline-flex', gap: 8 }}>
+                                    {(['my', 'all'] as const).map((scope) => (
+                                        <button
+                                            key={scope}
+                                            type="button"
+                                            className="mhs-notif-clear"
+                                            style={{
+                                                opacity: queueScope === scope ? 1 : 0.55,
+                                                textDecoration:
+                                                    queueScope === scope ? 'underline' : 'none',
+                                            }}
+                                            onClick={() => setQueueScope(scope)}
+                                        >
+                                            {scope === 'my' ? 'My Runs' : 'All Runs'}
+                                        </button>
+                                    ))}
                                 </div>
-                            ) : null}
+                            )}
                         </div>
+
                         <div className="mhs-notif-list">
                             {queueLoading ? (
                                 <div className="mhs-notif-loading">
-                                    <Loader2 size={20} className="mhs-spin" />
-                                    <div style={{ marginTop: 8 }}>Memuat proses queue…</div>
+                                    <Loader2 size={20} className="mhs-spin" aria-hidden="true" />
+                                    <div>Memuat proses queue…</div>
                                 </div>
                             ) : queueRuns.length === 0 ? (
-                                <div className="mhs-notif-empty">Belum ada proses queue</div>
+                                <div className="mhs-notif-empty">
+                                    <span className="mhs-notif-empty-icon" aria-hidden="true">
+                                        <Clock3 size={18} />
+                                    </span>
+                                    Belum ada proses queue
+                                </div>
                             ) : (
-                                queueRuns.map((run) => (
-                                    <div key={run.id} className="mhs-notif-item" style={{ cursor: 'default' }}>
-                                        <span className="mhs-notif-icon" aria-hidden="true">
-                                            <Clock3 size={16} />
-                                        </span>
-                                        <span className="mhs-notif-content">
-                                            <span className="mhs-notif-title">{run.title}</span>
-                                            <span className="mhs-notif-msg">
-                                                {run.processed_rows}/{run.total_rows || '?'} baris - {run.status}
+                                queueRuns.map((run) => {
+                                    const isActive =
+                                        run.status !== 'failed' && run.progress_percent < 100;
+                                    const isFailed = run.status === 'failed';
+
+                                    return (
+                                        <div
+                                            key={run.id}
+                                            className="mhs-notif-item"
+                                            style={{ cursor: 'default' }}
+                                            role="menuitem"
+                                        >
+                                            <span className="mhs-notif-icon" aria-hidden="true">
+                                                <Clock3 size={15} />
                                             </span>
-                                            {queueScope === 'all' && run.requested_by ? (
-                                                <span className="mhs-notif-time">By: {run.requested_by}</span>
-                                            ) : null}
-                                            <span className="mhs-notif-time">{run.created_at || '-'}</span>
-                                            <span style={{ marginTop: 6, display: 'block', height: 5, borderRadius: 999, background: 'var(--mhs-bg-2)' }}>
-                                                <span
-                                                    style={{
-                                                        display: 'block',
-                                                        height: '100%',
-                                                        width: `${Math.max(0, Math.min(100, run.progress_percent))}%`,
-                                                        borderRadius: 999,
-                                                        background: run.status === 'failed' ? '#ef4444' : 'var(--mhs-accent)',
-                                                    }}
-                                                />
-                                            </span>
-                                            {run.error_message ? (
-                                                <span className="mhs-notif-time" style={{ color: '#ef4444' }}>
-                                                    {run.error_message}
+                                            <span className="mhs-notif-content">
+                                                <span className="mhs-notif-title">
+                                                    {run.title}
                                                 </span>
-                                            ) : null}
-                                            {run.can_retry ? (
-                                                <span style={{ marginTop: 8, display: 'inline-flex' }}>
-                                                    <button
-                                                        type="button"
-                                                        className="mhs-notif-clear"
-                                                        disabled={retryingRunId === run.id}
-                                                        onClick={() => handleRetryQueueRun(run.id)}
+                                                <span className="mhs-notif-msg">
+                                                    {run.processed_rows}/{run.total_rows || '?'}{' '}
+                                                    baris — {run.status}
+                                                </span>
+                                                {queueScope === 'all' && run.requested_by && (
+                                                    <span className="mhs-notif-time">
+                                                        By: {run.requested_by}
+                                                    </span>
+                                                )}
+                                                <span className="mhs-notif-time">
+                                                    {run.created_at || '–'}
+                                                </span>
+
+                                                {/* Progress bar with shimmer */}
+                                                <span className="mhs-queue-progress-track">
+                                                    <span
+                                                        className="mhs-queue-progress-fill"
+                                                        data-active={isActive ? 'true' : undefined}
+                                                        data-failed={isFailed ? 'true' : undefined}
+                                                        style={{
+                                                            width: `${Math.max(0, Math.min(100, run.progress_percent))}%`,
+                                                        }}
+                                                    />
+                                                </span>
+
+                                                {run.error_message && (
+                                                    <span
+                                                        className="mhs-notif-time"
+                                                        style={{ color: 'var(--mhs-danger)' }}
                                                     >
-                                                        {retryingRunId === run.id ? 'Retrying...' : 'Retry'}
-                                                    </button>
-                                                </span>
-                                            ) : null}
-                                        </span>
-                                    </div>
-                                ))
+                                                        {run.error_message}
+                                                    </span>
+                                                )}
+                                                {run.can_retry && (
+                                                    <span
+                                                        style={{
+                                                            marginTop: 8,
+                                                            display: 'inline-flex',
+                                                        }}
+                                                    >
+                                                        <button
+                                                            type="button"
+                                                            className="mhs-notif-clear"
+                                                            disabled={retryingRunId === run.id}
+                                                            onClick={() =>
+                                                                handleRetryQueueRun(run.id)
+                                                            }
+                                                            style={{
+                                                                opacity:
+                                                                    retryingRunId === run.id
+                                                                        ? 0.6
+                                                                        : 1,
+                                                            }}
+                                                        >
+                                                            {retryingRunId === run.id
+                                                                ? 'Retrying…'
+                                                                : 'Retry'}
+                                                        </button>
+                                                    </span>
+                                                )}
+                                            </span>
+                                        </div>
+                                    );
+                                })
                             )}
                         </div>
                     </div>
                 </div>
 
+                {/* ── User dropdown ── */}
                 <div className="mhs-user-dropdown-wrap" ref={userRef}>
                     <button
                         type="button"
                         className="mhs-user-btn"
                         onClick={() => {
                             setNotifOpen(false);
+                            setQueueOpen(false);
                             setUserOpen((v) => !v);
                         }}
                         aria-haspopup="menu"
                         aria-expanded={userOpen}
+                        aria-label={user ? `Menu akun, ${user.name}` : 'Menu akun'}
                     >
-                        <span
-                            className={
-                                user?.profile_photo_url
-                                    ? 'mhs-user-btn-avatar mhs-user-btn-avatar--photo'
-                                    : 'mhs-user-btn-avatar'
-                            }
-                            aria-hidden="true"
-                        >
-                            {user?.profile_photo_url ? (
-                                <img src={user.profile_photo_url} alt="" />
-                            ) : (
-                                initials
-                            )}
+                        {user ? (
+                            <ShellUserAvatar user={user} variant="navbar" />
+                        ) : (
+                            <span className="mhs-user-btn-avatar" aria-hidden="true">
+                                ?
+                            </span>
+                        )}
+                        <span className="mhs-user-btn-name">
+                            {user?.name?.split(' ').slice(0, 2).join(' ') ?? 'User'}
                         </span>
-                        <span className="mhs-user-btn-name">{user?.name?.split(' ').slice(0, 2).join(' ') ?? 'User'}</span>
-                        <ChevronDown size={14} />
+                        <ChevronDown size={13} aria-hidden="true" />
                     </button>
-                    <div className={`mhs-dropdown-menu${userOpen ? ' mhs-open' : ''}`} role="menu">
+
+                    <div
+                        className={`mhs-dropdown-menu${userOpen ? ' mhs-open' : ''}`}
+                        role="menu"
+                        aria-label="Menu akun"
+                    >
                         <div className="mhs-dropdown-header">
                             <div className="mhs-dh-name">{user?.name ?? 'Pengguna'}</div>
                             <div className="mhs-dh-email">{user?.email ?? ''}</div>
@@ -421,8 +518,9 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
                             href={editProfile()}
                             prefetch
                             onClick={() => setUserOpen(false)}
+                            role="menuitem"
                         >
-                            <UserCircle size={15} />
+                            <UserCircle size={14} aria-hidden="true" />
                             Profil Saya
                         </Link>
                         <Link
@@ -430,16 +528,18 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
                             href="/settings/profile"
                             prefetch
                             onClick={() => setUserOpen(false)}
+                            role="menuitem"
                         >
-                            <Settings size={15} />
+                            <Settings size={14} aria-hidden="true" />
                             Pengaturan
                         </Link>
                         <button
                             type="button"
                             className="mhs-dropdown-item"
                             onClick={() => setUserOpen(false)}
+                            role="menuitem"
                         >
-                            <HelpCircle size={15} />
+                            <HelpCircle size={14} aria-hidden="true" />
                             Bantuan
                         </button>
                         <div className="mhs-dropdown-divider" />
@@ -449,8 +549,9 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
                             className="mhs-dropdown-item mhs-danger"
                             onClick={handleLogout}
                             data-test="logout-button"
+                            role="menuitem"
                         >
-                            <LogOut size={15} />
+                            <LogOut size={14} aria-hidden="true" />
                             Keluar
                         </Link>
                     </div>
@@ -468,10 +569,17 @@ export function ShellBreadcrumbs({ breadcrumbs }: { breadcrumbs?: BreadcrumbItem
                 {breadcrumbs.map((bc, idx) => {
                     const isLast = idx === breadcrumbs.length - 1;
                     return (
-                        <span key={`${bc.title}-${idx}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            {idx > 0 ? <span className="mhs-bc-sep">›</span> : null}
+                        <span
+                            key={`${bc.title}-${idx}`}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                        >
+                            {idx > 0 && (
+                                <span className="mhs-bc-sep" aria-hidden="true">›</span>
+                            )}
                             {isLast ? (
-                                <span className="mhs-bc-current">{bc.title}</span>
+                                <span className="mhs-bc-current" aria-current="page">
+                                    {bc.title}
+                                </span>
                             ) : (
                                 <Link href={bc.href} prefetch>
                                     {bc.title}
