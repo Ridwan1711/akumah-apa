@@ -12,36 +12,33 @@ type Props = {
 /**
  * ManhoodShell — Custom layout (sidebar + navbar) for the Manhood Panel.
  *
- * Intentionally built from raw HTML with `mhs-*` class names backed by
- * `resources/css/manhood-shell.css`. Does NOT depend on shadcn/ui, AppShell,
- * or Tailwind utilities — so shell styling cannot be overridden by page bodies.
+ * This shell is intentionally built from raw HTML elements with `mhs-*`
+ * class names backed by `resources/css/manhood-shell.css`. It does NOT
+ * depend on any shadcn/ui primitive, the AppShell/AppSidebar components,
+ * or Tailwind utility classes — so its styling cannot be overridden by
+ * Tailwind utilities used inside individual page bodies.
  */
 export function ManhoodShell({ children, breadcrumbs = [] }: Props) {
     const { collapsed, mobileOpen, toggleSidebar, closeMobile } = useShellState();
 
     return (
         <div className="mhs-app">
-            <ShellSidebar
-                collapsed={collapsed}
-                mobileOpen={mobileOpen}
-                onClose={closeMobile}
-            />
+            <ShellSidebar collapsed={collapsed} mobileOpen={mobileOpen} onClose={closeMobile} />
 
-            {/* Mobile overlay — rendered as a button for a11y */}
-            {mobileOpen && (
+            {mobileOpen ? (
                 <button
                     type="button"
-                    aria-label="Tutup sidebar"
+                    aria-label="Close sidebar"
                     className="mhs-sidebar-overlay mhs-visible"
                     onClick={closeMobile}
                     style={{ border: 'none', padding: 0 }}
                 />
-            )}
+            ) : null}
 
             <div className={`mhs-main${collapsed ? ' mhs-sidebar-collapsed' : ''}`}>
                 <ShellNavbar onToggleSidebar={toggleSidebar} />
                 <ShellBreadcrumbs breadcrumbs={breadcrumbs} />
-                <main className="mhs-content" id="main-content" role="main" tabIndex={-1}>
+                <main className="mhs-content" role="main">
                     {children}
                 </main>
             </div>
