@@ -30,6 +30,7 @@ type Props = {
     bulkUploaders: Pick<User, 'id' | 'name'>[];
     runFilters: { run_uploader_id?: string; per_page?: string };
     perPageOptions: number[];
+    isSuperAdmin: boolean;
 };
 
 type GeneratedCredential = {
@@ -221,6 +222,7 @@ export default function AccountGeneratorIndex({
     bulkUploaders,
     runFilters,
     perPageOptions,
+    isSuperAdmin,
 }: Props) {
     const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
     const [selectedGuardians, setSelectedGuardians] = useState<number[]>([]);
@@ -392,6 +394,27 @@ export default function AccountGeneratorIndex({
                 />
 
                 <FlashMessage />
+
+                {isSuperAdmin ? (
+                    <CrudCard
+                        title="Master kredensial (Super Admin)"
+                        subtitle="Satu berkas XLSX berisi gabungan semua job generate akun selesai: membaca file TSV di server (jika ada) lalu fallback ke data di database. Job lebih baru mengganti baris dengan NIS yang sama. Baris sedikit (mis. ~314) di modal biasanya karena payload JSON job lama terpotong—password plaintext tidak pernah bisa dipulihkan dari tabel users."
+                    >
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                            <button
+                                type="button"
+                                className="mcr-btn primary"
+                                onClick={() => {
+                                    window.location.href = '/admin/account-generator/credentials-master.xlsx';
+                                }}
+                            >
+                                <Download size={14} />
+                                Unduh master kredensial (XLSX)
+                            </button>
+                            <span className="text-xs text-muted-foreground">Hanya untuk distribusi privat. Jangan bagikan lewat kanal publik.</span>
+                        </div>
+                    </CrudCard>
+                ) : null}
 
                 <CrudToolbar
                     left={

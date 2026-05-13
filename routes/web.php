@@ -137,6 +137,9 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::post('account-generator/students', [AccountGeneratorController::class, 'generateStudentAccounts'])->name('account-generator.students');
         Route::post('account-generator/guardians', [AccountGeneratorController::class, 'generateGuardianAccounts'])->name('account-generator.guardians');
         Route::get('account-generator/runs/{importRun}/credentials-download', [AccountGeneratorController::class, 'downloadCredentialsExport'])->name('account-generator.runs.credentials-download');
+        Route::get('account-generator/credentials-master.xlsx', [AccountGeneratorController::class, 'downloadMasterCredentialsXlsx'])
+            ->middleware('role:'.Role::SUPER_ADMIN)
+            ->name('account-generator.credentials-master');
         Route::post('account-generator/runs/{importRun}/retry', [AccountGeneratorController::class, 'retryBulkRun'])->name('account-generator.runs.retry');
 
         // Academic Years & Semesters

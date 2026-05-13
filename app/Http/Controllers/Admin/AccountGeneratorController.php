@@ -2,21 +2,22 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\MasterAccountCredentialsExport;
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessBulkRun;
 use App\Models\Guardian;
 use App\Models\ImportRun;
-use App\Models\Role;
 use App\Models\Student;
 use App\Models\User;
+use App\Services\AccountGenerator\MasterCredentialsAggregator;
 use App\Support\AccountGeneratorCredentialsFormatter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Maatwebsite\Excel\Facades\Excel;
 
 class AccountGeneratorController extends Controller
 {
@@ -74,6 +75,7 @@ class AccountGeneratorController extends Controller
             'bulkUploaders' => User::query()->whereIn('id', $uploaderIds)->orderBy('name')->get(['id', 'name']),
             'runFilters' => $request->only(['run_uploader_id', 'per_page']),
             'perPageOptions' => $perPageOptions,
+            'isSuperAdmin' => $request->user()?->isSuperAdmin() ?? false,
         ]);
     }
 
@@ -286,5 +288,26 @@ class AccountGeneratorController extends Controller
             'Content-Type' => 'text/tab-separated-values; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
+    }
+
+    /**
+     * Gabungan semua kredensial plaintext dari job generate akun (file + payload). Hanya Super Admin.
+     */
+    public function downloadMasterCredentialsXlsx(Request $request)
+    {
+        abort_unless($request->user()?->isSuperAdmin(), 403);
+
+        $rows = MasterCredentialsAggregator::aggregate();
+        if ($rows === []) {
+            abort(404, 'Belum ada kredensial hasil generate akun yang tersimpan untuk digabung. Jalankan generate akun setelah update ini agar file export tersimpan di server.');
+        }
+
+        $filename = 'master-kredensial-generate-akun-'.now()->format('Y-m-d_His').'.xlsx';
+
+        return Excel::download(
+            new MasterAccountCredentialsExport($rows),
+            $filename,
+            \Maatwebsite\Excel\Excel::XLSX
+        );
     }
 }
