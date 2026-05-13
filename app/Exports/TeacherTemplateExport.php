@@ -10,6 +10,8 @@ class TeacherTemplateExport implements FromArray, WithHeadings
     public function headings(): array
     {
         return [
+            'user_id',
+            'student_nis',
             'name',
             'username',
             'email',
@@ -20,7 +22,14 @@ class TeacherTemplateExport implements FromArray, WithHeadings
     public function array(): array
     {
         return [
-            ['Ustadz Abdullah', 'abdullah.guru', 'abdullah.guru@example.com', '1'],
+            // Mode 1 (recommended): assign existing user as teacher (by student NIS)
+            ['', 'MH24001AB', '', '', '', '1'],
+
+            // Mode 2: assign existing user as teacher (by user_id)
+            ['123', '', '', '', '', '1'],
+
+            // Mode 3 (legacy): create/update teacher by email
+            ['', '', 'Ustadz Abdullah', 'abdullah.guru', 'abdullah.guru@example.com', '1'],
         ];
     }
 }
