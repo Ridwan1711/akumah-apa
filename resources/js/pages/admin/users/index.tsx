@@ -59,6 +59,7 @@ type UserRow = {
     roles?: Pick<Role, 'id' | 'name'>[];
     permissions?: PermissionLite[];
     has_official_photo?: boolean;
+    profile_photo_url?: string | null;
 };
 
 type Props = {
@@ -556,8 +557,23 @@ export default function UserIndex({
                                     <tr key={user.id}>
                                         <td>
                                             <div className="mcr-student-cell">
-                                                <span className="mcr-avatar">
-                                                    {user.name.split(' ').slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase()}
+                                                <span
+                                                    className={
+                                                        user.profile_photo_url
+                                                            ? 'mcr-avatar mcr-avatar--photo'
+                                                            : 'mcr-avatar'
+                                                    }
+                                                >
+                                                    {user.profile_photo_url ? (
+                                                        <img src={user.profile_photo_url} alt="" />
+                                                    ) : (
+                                                        user.name
+                                                            .split(' ')
+                                                            .slice(0, 2)
+                                                            .map((w) => w[0] ?? '')
+                                                            .join('')
+                                                            .toUpperCase()
+                                                    )}
                                                 </span>
                                                 <div>
                                                     <div className="name">{user.name}</div>

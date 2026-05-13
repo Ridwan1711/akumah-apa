@@ -1,6 +1,7 @@
 import { Transition } from '@headlessui/react';
 import { Form, Head, Link, usePage } from '@inertiajs/react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
+import { UserAvatar } from '@/components/user-avatar';
 import DeleteUser from '@/components/delete-user';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
@@ -49,17 +50,13 @@ export default function Profile({
                             title="Foto Profil"
                             description="Foto aktif memakai fallback: kustom -> resmi."
                         />
-                        {auth.user.profile_photo_url ? (
-                            <img
-                                src={auth.user.profile_photo_url}
-                                alt="Foto profil aktif"
-                                className="h-24 w-24 rounded-full border object-cover"
+                        <div className="flex justify-start">
+                            <UserAvatar
+                                user={auth.user}
+                                rootClassName="h-24 w-24 rounded-full border shadow-sm"
+                                fallbackClassName="rounded-full text-2xl font-semibold"
                             />
-                        ) : (
-                            <div className="flex h-24 w-24 items-center justify-center rounded-full border text-xs text-muted-foreground">
-                                No Photo
-                            </div>
-                        )}
+                        </div>
                         <Form
                             action="/settings/profile/photo"
                             method="post"

@@ -326,6 +326,18 @@ html.dark .mhs-app {
     flex-shrink: 0;
 }
 
+.mhs-user-avatar--photo {
+    padding: 0;
+    overflow: hidden;
+    background: var(--mhs-surface);
+}
+
+.mhs-user-avatar--photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
 .mhs-user-info { overflow: hidden; }
 .mhs-user-info .mhs-name { font-size: 13px; font-weight: 600; color: var(--mhs-text); }
 .mhs-user-info .mhs-role { font-size: 11px; color: var(--mhs-text-3); text-transform: capitalize; }
@@ -559,6 +571,18 @@ html.dark .mhs-app .mhs-theme-toggle-thumb {
     color: #fff;
     font-weight: 700;
     font-size: 12px;
+}
+
+.mhs-user-btn-avatar--photo {
+    padding: 0;
+    overflow: hidden;
+    background: var(--mhs-surface);
+}
+
+.mhs-user-btn-avatar--photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .mhs-user-btn-name {

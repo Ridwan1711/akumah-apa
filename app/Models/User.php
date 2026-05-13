@@ -75,7 +75,7 @@ class User extends Authenticatable
             return null;
         }
 
-        return Storage::url($path);
+        return Storage::disk('public')->url($path);
     }
 
     public function getHasOfficialPhotoAttribute(): bool

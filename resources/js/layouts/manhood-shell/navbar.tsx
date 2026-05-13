@@ -394,8 +394,19 @@ export function ShellNavbar({ onToggleSidebar }: Props) {
                         aria-haspopup="menu"
                         aria-expanded={userOpen}
                     >
-                        <span className="mhs-user-btn-avatar" aria-hidden="true">
-                            {initials}
+                        <span
+                            className={
+                                user?.profile_photo_url
+                                    ? 'mhs-user-btn-avatar mhs-user-btn-avatar--photo'
+                                    : 'mhs-user-btn-avatar'
+                            }
+                            aria-hidden="true"
+                        >
+                            {user?.profile_photo_url ? (
+                                <img src={user.profile_photo_url} alt="" />
+                            ) : (
+                                initials
+                            )}
                         </span>
                         <span className="mhs-user-btn-name">{user?.name?.split(' ').slice(0, 2).join(' ') ?? 'User'}</span>
                         <ChevronDown size={14} />

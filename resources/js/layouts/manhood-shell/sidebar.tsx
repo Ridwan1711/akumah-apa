@@ -99,9 +99,15 @@ export function ShellSidebar({ collapsed, mobileOpen, onClose }: Props) {
 
             <div className="mhs-sidebar-footer">
                 <Link href={toUrl('/settings/profile')} className="mhs-user-card" prefetch>
-                    <span className="mhs-user-avatar" aria-hidden="true">
-                        {initials || 'US'}
-                    </span>
+                    {user.profile_photo_url ? (
+                        <span className="mhs-user-avatar mhs-user-avatar--photo" aria-hidden="true">
+                            <img src={user.profile_photo_url} alt="" />
+                        </span>
+                    ) : (
+                        <span className="mhs-user-avatar" aria-hidden="true">
+                            {initials || 'US'}
+                        </span>
+                    )}
                     <span className="mhs-user-info">
                         <span className="mhs-name">{user.name}</span>
                         <span className="mhs-role">{roleLabel}</span>
