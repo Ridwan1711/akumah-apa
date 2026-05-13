@@ -39,7 +39,7 @@ class KitabReadingExaminerAssignmentController extends Controller
                 ->get(),
             'examiners' => User::query()
                 ->where('is_active', true)
-                ->whereDoesntHave('roles', fn ($query) => $query->whereIn('name', Role::SANTRI_ROLES))
+                ->whereHas('roles', fn ($query) => $query->where('name', Role::GURU))
                 ->orderBy('name')
                 ->get(['id', 'name']),
             'classes' => SchoolClass::query()
