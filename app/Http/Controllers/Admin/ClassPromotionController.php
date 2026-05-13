@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Diniyyah\ClassPromotionRecap;
+use App\Models\Diniyyah\ClassPromotionRecapItem;
 use App\Services\Diniyyah\ClassPromotionPlacementService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,6 +30,14 @@ class ClassPromotionController extends Controller
                 'reviewer:id,name',
             ])
             ->withCount('items')
+            ->withCount([
+                'items as placement_pending_count' => fn ($query) => $query->where('placement_status', ClassPromotionRecapItem::PLACEMENT_PENDING),
+                'items as placement_applied_count' => fn ($query) => $query->where('placement_status', ClassPromotionRecapItem::PLACEMENT_APPLIED),
+                'items as placement_blocked_count' => fn ($query) => $query->where('placement_status', ClassPromotionRecapItem::PLACEMENT_BLOCKED),
+                'items as automatic_target_count' => fn ($query) => $query
+                    ->whereNull('target_class_id')
+                    ->where('final_decision', '!=', ClassPromotionRecapItem::DECISION_GRADUATE),
+            ])
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->latest('id')
             ->paginate(15)
@@ -47,6 +56,14 @@ class ClassPromotionController extends Controller
                     'items.student:id,nis,full_name,gender',
                     'items.targetClass:id,name',
                     'items.appliedClass:id,name',
+                ])
+                ->withCount([
+                    'items as placement_pending_count' => fn ($query) => $query->where('placement_status', ClassPromotionRecapItem::PLACEMENT_PENDING),
+                    'items as placement_applied_count' => fn ($query) => $query->where('placement_status', ClassPromotionRecapItem::PLACEMENT_APPLIED),
+                    'items as placement_blocked_count' => fn ($query) => $query->where('placement_status', ClassPromotionRecapItem::PLACEMENT_BLOCKED),
+                    'items as automatic_target_count' => fn ($query) => $query
+                        ->whereNull('target_class_id')
+                        ->where('final_decision', '!=', ClassPromotionRecapItem::DECISION_GRADUATE),
                 ])
                 ->find((int) $request->integer('recap_id'));
         }
