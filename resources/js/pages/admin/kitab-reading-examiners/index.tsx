@@ -1,12 +1,18 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { BookOpenCheck, Trash2, UserCheck } from 'lucide-react';
-import { useEffect } from 'react';
+import { BookOpenCheck, Layers, Trash2, UserCheck, Users } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
 import FlashMessage from '@/components/flash-message';
-import Heading from '@/components/heading';
+import {
+    AppSelect,
+    CrudCard,
+    CrudPageHeader,
+    CrudStatStrip,
+    CrudTableShell,
+    type SelectOption,
+} from '@/components/manhood';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem, SchoolClass, User } from '@/types';
 
@@ -51,13 +57,51 @@ export default function KitabReadingExaminerIndex({ assignments, examiners, clas
 
     useEffect(() => {
         form.setData('semester_id', selectedSemester);
-        // keep user/class selection as-is for UX
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedSemester]);
 
-    function changeSemester(value: string) {
+    const semesterOptions = useMemo<SelectOption[]>(
+        () =>
+            semesters.map((s) => ({
+                value: s.id,
+                label: `${s.academic_year_name ?? '—'} — ${s.name}${s.is_active ? ' (Aktif)' : ''}`,
+            })),
+        [semesters],
+    );
+
+    const classOptions = useMemo<SelectOption[]>(
+        () => classes.map((c) => ({ value: c.id, label: c.name })),
+        [classes],
+    );
+
+    const examinerOptions = useMemo<SelectOption[]>(
+        () => examiners.map((u) => ({ value: u.id, label: u.name })),
+        [examiners],
+    );
+
+    const selectedSemesterOption = useMemo(
+        () => semesterOptions.find((o) => String(o.value) === form.data.semester_id) ?? null,
+        [semesterOptions, form.data.semester_id],
+    );
+
+    const selectedClassOption = useMemo(
+        () => classOptions.find((o) => String(o.value) === form.data.class_id) ?? null,
+        [classOptions, form.data.class_id],
+    );
+
+    const selectedExaminerOption = useMemo(
+        () => examinerOptions.find((o) => String(o.value) === form.data.examiner_id) ?? null,
+        [examinerOptions, form.data.examiner_id],
+    );
+
+    function changeSemester(option: SelectOption | null) {
+        const value = option ? String(option.value) : '';
         form.setData('semester_id', value);
-        router.get('/admin/kitab-reading-examiners', { semester_id: value }, { preserveState: true, preserveScroll: true });
+        if (!value) {
+            router.get('/admin/kitab-reading-examiners', {}, { preserveState: true, preserveScroll: true, replace: true });
+            return;
+        }
+        router.get('/admin/kitab-reading-examiners', { semester_id: value }, { preserveState: true, preserveScroll: true, replace: true });
     }
 
     function submit(e: React.FormEvent) {
@@ -81,116 +125,168 @@ export default function KitabReadingExaminerIndex({ assignments, examiners, clas
         });
     }
 
+    const canSubmit = Boolean(form.data.semester_id && form.data.class_id && form.data.examiner_id);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Penguji Baca Kitab" />
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
-                <Heading
+                <CrudPageHeader
                     title="Penguji Baca Kitab"
-                    description="Tetapkan user penguji khusus untuk mengisi nilai kemahiran membaca kitab per kelas dan semester."
+                    description="Tetapkan penguji per kelas & semester. Gunakan kotak pencarian di dropdown untuk memfilter daftar panjang."
                 />
                 <FlashMessage />
 
-                <form onSubmit={submit} className="grid gap-4 rounded-lg border bg-card p-4">
-                    <div className="flex flex-wrap items-end gap-3">
-                        <div className="grid gap-1">
-                            <Label className="text-xs">Semester</Label>
-                            <Select value={form.data.semester_id} onValueChange={changeSemester}>
-                                <SelectTrigger className="w-60">
-                                    <SelectValue placeholder="Pilih semester" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {semesters.map((semester) => (
-                                        <SelectItem key={semester.id} value={String(semester.id)}>
-                                            {semester.academic_year_name} - {semester.name}
-                                            {semester.is_active ? ' (Aktif)' : ''}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid gap-1">
-                            <Label className="text-xs">Kelas</Label>
-                            <Select value={form.data.class_id} onValueChange={(value) => form.setData('class_id', value)}>
-                                <SelectTrigger className="w-60">
-                                    <SelectValue placeholder="Pilih kelas" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {classes.map((schoolClass) => (
-                                        <SelectItem key={schoolClass.id} value={String(schoolClass.id)}>
-                                            {schoolClass.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid gap-1">
-                            <Label className="text-xs">Penguji</Label>
-                            <Select value={form.data.examiner_id} onValueChange={(value) => form.setData('examiner_id', value)}>
-                                <SelectTrigger className="w-64">
-                                    <SelectValue placeholder="Pilih user penguji" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {examiners.map((examiner) => (
-                                        <SelectItem key={examiner.id} value={String(examiner.id)}>
-                                            {examiner.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <Button type="submit" disabled={form.processing || !form.data.semester_id || !form.data.class_id || !form.data.examiner_id}>
-                            <UserCheck className="mr-1 size-4" />
-                            Tugaskan
-                        </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                        Penguji yang ditugaskan di sini tidak harus guru mapel. Akun santri, wali santri, dan alumni tidak bisa dipilih.
-                    </p>
-                </form>
+                <CrudStatStrip
+                    items={[
+                        {
+                            key: 'sem',
+                            label: 'Semester dipilih',
+                            value: selectedSemesterOption?.label ?? '—',
+                            icon: <BookOpenCheck size={18} />,
+                            tone: 'blue',
+                        },
+                        {
+                            key: 'assign',
+                            label: 'Penugasan (filter)',
+                            value: assignments.length,
+                            icon: <UserCheck size={18} />,
+                            tone: 'green',
+                        },
+                        {
+                            key: 'avail',
+                            label: 'Kelas belum ditugaskan',
+                            value: classes.length,
+                            icon: <Layers size={18} />,
+                            tone: 'amber',
+                        },
+                        {
+                            key: 'exam',
+                            label: 'Kandidat penguji',
+                            value: examiners.length,
+                            icon: <Users size={18} />,
+                            tone: 'purple',
+                        },
+                    ]}
+                />
 
-                <div className="overflow-x-auto rounded-lg border">
-                    <table className="w-full text-sm">
-                        <thead className="border-b bg-muted/50">
-                            <tr>
-                                <th className="w-12 px-3 py-3 text-left">No</th>
-                                <th className="px-3 py-3 text-left">Penguji</th>
-                                <th className="px-3 py-3 text-left">Kelas</th>
-                                <th className="px-3 py-3 text-left">Periode</th>
-                                <th className="px-3 py-3 text-right">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {assignments.length === 0 ? (
+                <CrudCard
+                    title="1. Pilih semester"
+                    subtitle="Ini mem-filter tabel penugasan di bawah. Ketik di dropdown untuk mencari tahun ajaran atau nama semester."
+                    right={
+                        selectedSemesterOption ? (
+                            <Badge variant="outline" className="shrink-0">
+                                Filter aktif
+                            </Badge>
+                        ) : null
+                    }
+                >
+                    <div className="mcr-form-grid">
+                        <div className="mcr-form-group full" style={{ maxWidth: 520 }}>
+                            <Label htmlFor="kre-semester">Semester</Label>
+                            <AppSelect
+                                inputId="kre-semester"
+                                placeholder="Cari semester…"
+                                options={semesterOptions}
+                                value={selectedSemesterOption}
+                                onChange={(opt) => changeSemester(opt)}
+                                isClearable
+                            />
+                        </div>
+                    </div>
+                </CrudCard>
+
+                <CrudCard
+                    title="2. Tambah penugasan"
+                    subtitle="Pilih kelas yang masih tersedia lalu penguji. Dropdown mendukung pencarian."
+                >
+                    <form onSubmit={submit} className="mcr-form-grid">
+                        <div className="mcr-form-group">
+                            <Label htmlFor="kre-class">Kelas</Label>
+                            <AppSelect
+                                inputId="kre-class"
+                                placeholder="Cari kelas…"
+                                options={classOptions}
+                                value={selectedClassOption}
+                                onChange={(opt) => form.setData('class_id', opt ? String(opt.value) : '')}
+                                isDisabled={classOptions.length === 0}
+                                noOptionsMessage={() => 'Tidak ada kelas tersedia (semua sudah punya penugasan global).'}
+                            />
+                        </div>
+                        <div className="mcr-form-group">
+                            <Label htmlFor="kre-examiner">Penguji</Label>
+                            <AppSelect
+                                inputId="kre-examiner"
+                                placeholder="Cari nama penguji…"
+                                options={examinerOptions}
+                                value={selectedExaminerOption}
+                                onChange={(opt) => form.setData('examiner_id', opt ? String(opt.value) : '')}
+                                isDisabled={examinerOptions.length === 0}
+                            />
+                        </div>
+                        <div className="mcr-form-group full" style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+                            <Button type="submit" disabled={form.processing || !canSubmit} className="mcr-btn primary">
+                                <UserCheck className="mr-1 size-4" />
+                                {form.processing ? 'Menyimpan…' : 'Tugaskan'}
+                            </Button>
+                            {!canSubmit ? (
+                                <span className="text-xs text-muted-foreground">Lengkapi semester, kelas, dan penguji untuk mengaktifkan tombol.</span>
+                            ) : null}
+                        </div>
+                        <p className="mcr-form-group full text-xs text-muted-foreground" style={{ marginBottom: 0 }}>
+                            Penguji tidak harus guru mapel. Akun santri, wali santri, dan alumni tidak bisa dipilih.
+                        </p>
+                    </form>
+                </CrudCard>
+
+                <CrudCard title="Daftar penugasan" subtitle="Menampilkan penugasan untuk semester yang dipilih di atas.">
+                    <CrudTableShell>
+                        <table className="mcr-table">
+                            <thead>
                                 <tr>
-                                    <td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">
-                                        <BookOpenCheck className="mx-auto mb-2 size-8" />
-                                        Belum ada penguji baca kitab pada semester ini.
-                                    </td>
+                                    <th style={{ width: 48 }}>No</th>
+                                    <th>Penguji</th>
+                                    <th>Kelas</th>
+                                    <th>Periode</th>
+                                    <th style={{ textAlign: 'right' }}>Aksi</th>
                                 </tr>
-                            ) : (
-                                assignments.map((assignment, index) => (
-                                    <tr key={assignment.id} className="border-b last:border-0">
-                                        <td className="px-3 py-2 text-muted-foreground">{index + 1}</td>
-                                        <td className="px-3 py-2 font-medium">{assignment.examiner?.name}</td>
-                                        <td className="px-3 py-2">{assignment.school_class?.name}</td>
-                                        <td className="px-3 py-2">
-                                            <Badge variant="outline">
-                                                {assignment.period?.academic_year?.name} - {assignment.period?.semester?.name}
-                                            </Badge>
-                                        </td>
-                                        <td className="px-3 py-2 text-right">
-                                            <Button type="button" variant="destructive" size="sm" onClick={() => destroyAssignment(assignment.id)}>
-                                                <Trash2 className="mr-1 size-3" />
-                                                Hapus
-                                            </Button>
+                            </thead>
+                            <tbody>
+                                {assignments.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} className="px-3 py-10 text-center text-muted-foreground">
+                                            <BookOpenCheck className="mx-auto mb-2 size-8 opacity-60" />
+                                            Belum ada penguji baca kitab pada semester ini.
                                         </td>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                                ) : (
+                                    assignments.map((assignment, index) => (
+                                        <tr key={assignment.id}>
+                                            <td className="text-muted-foreground">{index + 1}</td>
+                                            <td className="font-medium">{assignment.examiner?.name}</td>
+                                            <td>{assignment.school_class?.name}</td>
+                                            <td>
+                                                <Badge variant="outline">
+                                                    {assignment.period?.academic_year?.name} — {assignment.period?.semester?.name}
+                                                </Badge>
+                                            </td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                <button
+                                                    type="button"
+                                                    className="mcr-btn danger"
+                                                    onClick={() => destroyAssignment(assignment.id)}
+                                                >
+                                                    <Trash2 size={14} />
+                                                    Hapus
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </CrudTableShell>
+                </CrudCard>
             </div>
         </AppLayout>
     );
