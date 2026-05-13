@@ -15,6 +15,7 @@ use App\Models\Role;
 use App\Models\Student;
 use App\Models\User;
 use App\Notifications\BulkRunFinishedNotification;
+use App\Support\AccountGeneratorCredentialsFormatter;
 use App\Services\Finance\FinanceInvoicePricingResolver;
 use App\Services\Finance\InvoiceImportSupport;
 use App\Services\Finance\StudentInvoiceCoverPeriod;
@@ -23,6 +24,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -344,11 +346,31 @@ class ProcessBulkRun implements ShouldBeUnique, ShouldQueue
             ]);
         }
 
+        $merged = AccountGeneratorCredentialsFormatter::mergeFromPayload([
+            'generated_accounts' => $results,
+            'generated_wali_accounts' => $waliResults,
+        ]);
+
+        $payload = [
+            'generated_accounts' => $results,
+            'generated_wali_accounts' => $waliResults,
+        ];
+
+        if (count($merged) >= 50) {
+            $tsv = AccountGeneratorCredentialsFormatter::toTsv($merged);
+            $relPath = 'account-generator-exports/'.$run->uuid.'.tsv';
+            Storage::disk('local')->put($relPath, "\xEF\xBB\xBF".$tsv);
+            $payload = [
+                'generated_accounts' => [],
+                'generated_wali_accounts' => [],
+                'merged_credentials_preview' => array_slice($merged, 0, 80),
+                'credentials_full_export_path' => $relPath,
+                'credentials_full_row_count' => count($merged),
+            ];
+        }
+
         $run->update([
-            'result_payload' => [
-                'generated_accounts' => $results,
-                'generated_wali_accounts' => $waliResults,
-            ],
+            'result_payload' => $payload,
         ]);
     }
 
@@ -370,7 +392,7 @@ class ProcessBulkRun implements ShouldBeUnique, ShouldQueue
             $row = $this->createWaliUserForGuardian($guardian, requireProfileCompletion: true);
             if ($row !== null) {
                 $waliResults[] = $row;
-                $this->incrementRunCounters($run, 'created');
+                $this->incrementRunCounters($run, 'created', incrementProcessed: false);
             }
         }
     }
@@ -438,13 +460,36 @@ class ProcessBulkRun implements ShouldBeUnique, ShouldQueue
             ]);
         }
 
-        $run->update(['result_payload' => ['generated_accounts' => $results]]);
+        $merged = AccountGeneratorCredentialsFormatter::mergeFromPayload([
+            'generated_accounts' => $results,
+            'generated_wali_accounts' => [],
+        ]);
+
+        $payload = ['generated_accounts' => $results];
+
+        if (count($merged) >= 50) {
+            $tsv = AccountGeneratorCredentialsFormatter::toTsv($merged);
+            $relPath = 'account-generator-exports/'.$run->uuid.'.tsv';
+            Storage::disk('local')->put($relPath, "\xEF\xBB\xBF".$tsv);
+            $payload = [
+                'generated_accounts' => [],
+                'generated_wali_accounts' => [],
+                'merged_credentials_preview' => array_slice($merged, 0, 80),
+                'credentials_full_export_path' => $relPath,
+                'credentials_full_row_count' => count($merged),
+            ];
+        }
+
+        $run->update(['result_payload' => $payload]);
     }
 
-    protected function incrementRunCounters(ImportRun $run, string $type): void
+    protected function incrementRunCounters(ImportRun $run, string $type, bool $incrementProcessed = true): void
     {
         $run->refresh();
-        $updates = ['processed_rows' => $run->processed_rows + 1];
+        $updates = [];
+        if ($incrementProcessed) {
+            $updates['processed_rows'] = $run->processed_rows + 1;
+        }
         if ($type === 'created') {
             $updates['created_count'] = $run->created_count + 1;
         } elseif ($type === 'updated') {

@@ -136,6 +136,7 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::post('account-generator/wali-preview', [AccountGeneratorController::class, 'previewWaliImpact'])->name('account-generator.wali-preview');
         Route::post('account-generator/students', [AccountGeneratorController::class, 'generateStudentAccounts'])->name('account-generator.students');
         Route::post('account-generator/guardians', [AccountGeneratorController::class, 'generateGuardianAccounts'])->name('account-generator.guardians');
+        Route::get('account-generator/runs/{importRun}/credentials-download', [AccountGeneratorController::class, 'downloadCredentialsExport'])->name('account-generator.runs.credentials-download');
         Route::post('account-generator/runs/{importRun}/retry', [AccountGeneratorController::class, 'retryBulkRun'])->name('account-generator.runs.retry');
 
         // Academic Years & Semesters

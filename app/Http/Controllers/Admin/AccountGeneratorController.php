@@ -9,9 +9,11 @@ use App\Models\ImportRun;
 use App\Models\Role;
 use App\Models\Student;
 use App\Models\User;
+use App\Support\AccountGeneratorCredentialsFormatter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -241,5 +243,48 @@ class AccountGeneratorController extends Controller
         ProcessBulkRun::dispatch($retryRun->id);
 
         return back()->with('success', 'Retry generate akun diproses di background.');
+    }
+
+    /**
+     * Unduh TSV lengkap kredensial hasil generate (menghindari batas clipboard & JSON).
+     */
+    public function downloadCredentialsExport(ImportRun $importRun)
+    {
+        abort_unless(in_array($importRun->job_type, [
+            ImportRun::JOB_ACCOUNT_GENERATE_STUDENTS,
+            ImportRun::JOB_ACCOUNT_GENERATE_GUARDIANS,
+        ], true), 404);
+
+        abort_unless($importRun->status === ImportRun::STATUS_COMPLETED, 422, 'Job belum selesai.');
+
+        $payload = $importRun->result_payload;
+        if (! is_array($payload)) {
+            abort(404, 'Tidak ada data kredensial.');
+        }
+
+        $relPath = isset($payload['credentials_full_export_path']) && is_string($payload['credentials_full_export_path'])
+            ? $payload['credentials_full_export_path']
+            : null;
+
+        if ($relPath !== null && $relPath !== '' && Storage::disk('local')->exists($relPath)) {
+            return Storage::disk('local')->download(
+                $relPath,
+                'kredensial-generate-'.$importRun->id.'.tsv',
+                ['Content-Type' => 'text/tab-separated-values; charset=UTF-8']
+            );
+        }
+
+        $merged = AccountGeneratorCredentialsFormatter::mergeFromPayload($payload);
+        if ($merged === []) {
+            abort(404, 'Tidak ada kredensial untuk diunduh.');
+        }
+
+        $tsv = AccountGeneratorCredentialsFormatter::toTsv($merged);
+        $filename = 'kredensial-generate-'.$importRun->id.'.tsv';
+
+        return response("\xEF\xBB\xBF".$tsv, 200, [
+            'Content-Type' => 'text/tab-separated-values; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
     }
 }

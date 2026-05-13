@@ -86,6 +86,134 @@ function credentialDownloadFilename(run: ImportRun | null): string {
     return `${safeName || 'kredensial-akun'}.tsv`;
 }
 
+function isAccountGenerateJob(run: ImportRun): boolean {
+    return run.job_type === 'account_generate_students' || run.job_type === 'account_generate_guardians';
+}
+
+function credentialFullRowCount(run: ImportRun | null): number | null {
+    if (!run?.result_payload || typeof run.result_payload !== 'object') return null;
+    const n = (run.result_payload as Record<string, unknown>).credentials_full_row_count;
+    return typeof n === 'number' && n > 0 ? n : null;
+}
+
+function normalizeGeneratedCredentials(run: ImportRun): GeneratedCredential[] {
+    const payload = run.result_payload;
+    if (!payload || typeof payload !== 'object') return [];
+
+    const preview = (payload as Record<string, unknown>).merged_credentials_preview;
+    if (Array.isArray(preview) && preview.length > 0) {
+        return preview
+            .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+            .map((o) => ({
+                nis: typeof o.nis === 'string' ? o.nis : '',
+                studentName: typeof o.studentName === 'string' ? o.studentName : '',
+                username: typeof o.username === 'string' ? o.username : '',
+                password: typeof o.password === 'string' ? o.password : '',
+                waliUsername: typeof o.waliUsername === 'string' ? o.waliUsername : '',
+                waliPassword: typeof o.waliPassword === 'string' ? o.waliPassword : '',
+            }));
+    }
+
+    const accounts = Array.isArray(payload.generated_accounts) ? payload.generated_accounts : [];
+    const waliAccounts = Array.isArray(payload.generated_wali_accounts) ? payload.generated_wali_accounts : [];
+
+    const waliRows: GeneratedWaliCredential[] = [];
+    const studentRows = accounts
+        .map((item) => {
+            if (!item || typeof item !== 'object') return null;
+            const data = item as Record<string, unknown>;
+            const username = getStringField(data, 'username');
+            const password = getStringField(data, 'password');
+            if (!username || !password) return null;
+
+            if (getStringField(data, 'guardian_name') || getStringField(data, 'student_nis')) {
+                const nis = getStringField(data, 'student_nis');
+                waliRows.push({
+                    nis: nis === '-' ? '' : nis,
+                    studentName: getStringField(data, 'student_name'),
+                    username,
+                    password,
+                });
+
+                return null;
+            }
+
+            return {
+                nis: getStringField(data, 'nis'),
+                studentName: getStringField(data, 'name'),
+                username,
+                password,
+                waliUsername: '',
+                waliPassword: '',
+            } satisfies GeneratedCredential;
+        })
+        .filter((row): row is GeneratedCredential => row !== null);
+
+    waliAccounts.forEach((item) => {
+        if (!item || typeof item !== 'object') return;
+        const data = item as Record<string, unknown>;
+        const username = getStringField(data, 'username');
+        const password = getStringField(data, 'password');
+        if (!username || !password) return;
+
+        const nis = getStringField(data, 'student_nis');
+        waliRows.push({
+            nis: nis === '-' ? '' : nis,
+            studentName: getStringField(data, 'student_name'),
+            username,
+            password,
+        });
+    });
+
+    if (studentRows.length === 0) {
+        return waliRows.map((wali) => ({
+            nis: wali.nis,
+            studentName: wali.studentName,
+            username: '',
+            password: '',
+            waliUsername: wali.username,
+            waliPassword: wali.password,
+        }));
+    }
+
+    const usedWaliRows = new Set<number>();
+    const mergedRows = studentRows.flatMap((studentRow) => {
+        const matchingWaliRows = waliRows
+            .map((wali, index) => ({ wali, index }))
+            .filter(({ wali }) => Boolean(wali.nis && studentRow.nis && wali.nis === studentRow.nis));
+
+        if (matchingWaliRows.length === 0) {
+            return [studentRow];
+        }
+
+        return matchingWaliRows.map(({ wali, index }) => {
+            usedWaliRows.add(index);
+
+            return {
+                ...studentRow,
+                studentName: studentRow.studentName || wali.studentName,
+                waliUsername: wali.username,
+                waliPassword: wali.password,
+            };
+        });
+    });
+
+    waliRows.forEach((wali, index) => {
+        if (usedWaliRows.has(index)) return;
+
+        mergedRows.push({
+            nis: wali.nis,
+            studentName: wali.studentName,
+            username: '',
+            password: '',
+            waliUsername: wali.username,
+            waliPassword: wali.password,
+        });
+    });
+
+    return mergedRows;
+}
+
 export default function AccountGeneratorIndex({
     studentsWithoutAccount,
     guardiansWithoutAccount,
@@ -111,114 +239,11 @@ export default function AccountGeneratorIndex({
     );
     const selectedResultRun = useMemo(() => bulkRuns.find((run) => run.id === resultRunId) ?? null, [bulkRuns, resultRunId]);
 
-    function normalizeGeneratedCredentials(run: ImportRun): GeneratedCredential[] {
-        const payload = run.result_payload;
-        if (!payload || typeof payload !== 'object') return [];
-
-        const accounts = Array.isArray(payload.generated_accounts) ? payload.generated_accounts : [];
-        const waliAccounts = Array.isArray(payload.generated_wali_accounts) ? payload.generated_wali_accounts : [];
-
-        const waliRows: GeneratedWaliCredential[] = [];
-        const studentRows = accounts
-            .map((item) => {
-                if (!item || typeof item !== 'object') return null;
-                const data = item as Record<string, unknown>;
-                const username = getStringField(data, 'username');
-                const password = getStringField(data, 'password');
-                if (!username || !password) return null;
-
-                if (getStringField(data, 'guardian_name') || getStringField(data, 'student_nis')) {
-                    const nis = getStringField(data, 'student_nis');
-                    waliRows.push({
-                        nis: nis === '-' ? '' : nis,
-                        studentName: getStringField(data, 'student_name'),
-                        username,
-                        password,
-                    });
-
-                    return null;
-                }
-
-                return {
-                    nis: getStringField(data, 'nis'),
-                    studentName: getStringField(data, 'name'),
-                    username,
-                    password,
-                    waliUsername: '',
-                    waliPassword: '',
-                } satisfies GeneratedCredential;
-            })
-            .filter((row): row is GeneratedCredential => row !== null);
-
-        waliAccounts.forEach((item) => {
-            if (!item || typeof item !== 'object') return;
-            const data = item as Record<string, unknown>;
-            const username = getStringField(data, 'username');
-            const password = getStringField(data, 'password');
-            if (!username || !password) return;
-
-            const nis = getStringField(data, 'student_nis');
-            waliRows.push({
-                nis: nis === '-' ? '' : nis,
-                studentName: getStringField(data, 'student_name'),
-                username,
-                password,
-            });
-        });
-
-        if (studentRows.length === 0) {
-            return waliRows.map((wali) => ({
-                nis: wali.nis,
-                studentName: wali.studentName,
-                username: '',
-                password: '',
-                waliUsername: wali.username,
-                waliPassword: wali.password,
-            }));
-        }
-
-        const usedWaliRows = new Set<number>();
-        const mergedRows = studentRows.flatMap((studentRow) => {
-            const matchingWaliRows = waliRows
-                .map((wali, index) => ({ wali, index }))
-                .filter(({ wali }) => Boolean(wali.nis && studentRow.nis && wali.nis === studentRow.nis));
-
-            if (matchingWaliRows.length === 0) {
-                return [studentRow];
-            }
-
-            return matchingWaliRows.map(({ wali, index }) => {
-                usedWaliRows.add(index);
-
-                return {
-                    ...studentRow,
-                    studentName: studentRow.studentName || wali.studentName,
-                    waliUsername: wali.username,
-                    waliPassword: wali.password,
-                };
-            });
-        });
-
-        waliRows.forEach((wali, index) => {
-            if (usedWaliRows.has(index)) return;
-
-            mergedRows.push({
-                nis: wali.nis,
-                studentName: wali.studentName,
-                username: '',
-                password: '',
-                waliUsername: wali.username,
-                waliPassword: wali.password,
-            });
-        });
-
-        return mergedRows;
-    }
-
     const selectedResultRows = useMemo(
         () => (selectedResultRun ? normalizeGeneratedCredentials(selectedResultRun) : []),
         [selectedResultRun],
     );
+    const selectedResultFullCount = credentialFullRowCount(selectedResultRun) ?? selectedResultRows.length;
     const shouldAutoRefreshRuns = hasRunningJobs || resultRunId !== null;
 
     useEffect(() => {
@@ -244,12 +269,24 @@ export default function AccountGeneratorIndex({
 
     async function copyAllCredentials(rows: GeneratedCredential[]) {
         if (rows.length === 0) return;
+        const full = credentialFullRowCount(selectedResultRun);
+        if (full !== null && full > rows.length) {
+            toast.warning(
+                `Hanya ${rows.length} baris preview di UI. ${full} baris lengkap ada di server — gunakan tombol unduh agar tidak terpotong.`,
+            );
+        } else if (rows.length > 120) {
+            toast.warning('Salin banyak baris ke clipboard sering terpotong oleh browser/OS. Disarankan pakai unduh file.');
+        }
         try {
             await navigator.clipboard.writeText(credentialsToTsv(rows));
             toast.success(`Berhasil salin ${rows.length} baris kredensial sebagai tabel`);
         } catch {
             toast.error('Gagal menyalin seluruh kredensial');
         }
+    }
+
+    function downloadCredentialsFromServer(run: ImportRun) {
+        window.location.href = `/admin/account-generator/runs/${run.id}/credentials-download`;
     }
 
     function downloadCredentials(rows: GeneratedCredential[]) {
@@ -492,10 +529,23 @@ export default function AccountGeneratorIndex({
                                     <span>S:{run.skipped_count}</span>
                                     <span>F:{run.failed_count}</span>
                                     <span>
-                                        Progress:{' '}
-                                        {run.total_rows > 0
-                                            ? `${Math.min(100, Math.round((run.processed_rows / run.total_rows) * 100))}% (${run.processed_rows}/${run.total_rows})`
-                                            : '-'}
+                                        {isAccountGenerateJob(run) ? (
+                                            <>
+                                                Progress:{' '}
+                                                {run.total_rows > 0
+                                                    ? `${Math.min(100, Math.round((run.processed_rows / run.total_rows) * 100))}% (${run.processed_rows}/${run.total_rows} permintaan)`
+                                                    : '-'}
+                                                {' '}
+                                                · Akun: C:{run.created_count} U:{run.updated_count} S:{run.skipped_count} F:{run.failed_count}
+                                            </>
+                                        ) : (
+                                            <>
+                                                Progress:{' '}
+                                                {run.total_rows > 0
+                                                    ? `${Math.min(100, Math.round((run.processed_rows / run.total_rows) * 100))}% (${run.processed_rows}/${run.total_rows})`
+                                                    : '-'}
+                                            </>
+                                        )}
                                     </span>
                                 </div>
                             </div>
@@ -506,7 +556,15 @@ export default function AccountGeneratorIndex({
                 <CrudModal
                     open={resultRunId !== null}
                     title="Hasil Generate Akun"
-                    subtitle={selectedResultRun ? `${selectedResultRun.file_name} • ${selectedResultRows.length} kredensial` : undefined}
+                    subtitle={
+                        selectedResultRun
+                            ? `${selectedResultRun.file_name} · ${selectedResultFullCount} baris kredensial${
+                                  selectedResultRows.length < selectedResultFullCount
+                                      ? ` (preview ${selectedResultRows.length} baris)`
+                                      : ''
+                              }`
+                            : undefined
+                    }
                     onClose={() => setResultRunId(null)}
                     wide
                     footer={
@@ -514,7 +572,17 @@ export default function AccountGeneratorIndex({
                             <button type="button" className="mcr-btn ghost" onClick={() => setResultRunId(null)}>
                                 Tutup
                             </button>
-                            <div style={{ display: 'flex', gap: 8 }}>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                {selectedResultRun ? (
+                                    <button
+                                        type="button"
+                                        className="mcr-btn primary"
+                                        onClick={() => downloadCredentialsFromServer(selectedResultRun)}
+                                    >
+                                        <Download size={14} />
+                                        Unduh semua (TSV)
+                                    </button>
+                                ) : null}
                                 <button
                                     type="button"
                                     className="mcr-btn secondary"
@@ -522,21 +590,27 @@ export default function AccountGeneratorIndex({
                                     disabled={selectedResultRows.length === 0}
                                 >
                                     <Download size={14} />
-                                    Download TSV
+                                    Download preview (TSV)
                                 </button>
                                 <button
                                     type="button"
-                                    className="mcr-btn primary"
+                                    className="mcr-btn secondary"
                                     onClick={() => copyAllCredentials(selectedResultRows)}
                                     disabled={selectedResultRows.length === 0}
                                 >
                                     <Copy size={14} />
-                                    Salin Semua Kredensial
+                                    Salin preview
                                 </button>
                             </div>
                         </div>
                     }
                 >
+                    {selectedResultRun && selectedResultRows.length < selectedResultFullCount ? (
+                        <p className="text-sm text-amber-700 dark:text-amber-400" style={{ marginBottom: 12 }}>
+                            Tabel di bawah hanya preview. Untuk salinan lengkap semua password, pakai <strong>Unduh semua (TSV)</strong> — clipboard
+                            tidak dapat diandalkan untuk ribuan baris.
+                        </p>
+                    ) : null}
                     {selectedResultRows.length === 0 ? (
                         <CrudEmptyState title="Belum ada hasil" description="Kredensial hanya tersedia untuk job generate akun yang sudah selesai." />
                     ) : (
