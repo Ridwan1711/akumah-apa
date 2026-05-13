@@ -1,5 +1,5 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { CheckCircle2, Copy, Eye, RefreshCw, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { CheckCircle2, Copy, Download, Eye, RefreshCw, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import FlashMessage from '@/components/flash-message';
@@ -33,16 +33,58 @@ type Props = {
 };
 
 type GeneratedCredential = {
-    label: string;
-    secondaryLabel: string;
+    nis: string;
+    studentName: string;
+    username: string;
+    password: string;
+    waliUsername: string;
+    waliPassword: string;
+};
+
+type GeneratedWaliCredential = {
+    nis: string;
+    studentName: string;
     username: string;
     password: string;
 };
+
+const CREDENTIAL_EXPORT_HEADERS = ['NIS', 'Santri', 'Username', 'Password', 'Username Wali', 'Password Wali'];
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/dashboard' },
     { title: 'Generate Akun', href: '/admin/account-generator' },
 ];
+
+function getStringField(data: Record<string, unknown>, key: string): string {
+    const value = data[key];
+    return typeof value === 'string' ? value : '';
+}
+
+function cleanCredentialCell(value: string): string {
+    return value.replace(/\t/g, ' ').replace(/\r?\n/g, ' ').trim();
+}
+
+function credentialRowToTsv(row: GeneratedCredential): string {
+    return [
+        row.nis,
+        row.studentName,
+        row.username,
+        row.password,
+        row.waliUsername,
+        row.waliPassword,
+    ].map(cleanCredentialCell).join('\t');
+}
+
+function credentialsToTsv(rows: GeneratedCredential[]): string {
+    return [CREDENTIAL_EXPORT_HEADERS.join('\t'), ...rows.map(credentialRowToTsv)].join('\n');
+}
+
+function credentialDownloadFilename(run: ImportRun | null): string {
+    const sourceName = run?.file_name ? run.file_name.replace(/\.[^.]+$/, '') : 'kredensial-akun';
+    const safeName = sourceName.toLowerCase().replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '');
+
+    return `${safeName || 'kredensial-akun'}.tsv`;
+}
 
 export default function AccountGeneratorIndex({
     studentsWithoutAccount,
@@ -76,39 +118,101 @@ export default function AccountGeneratorIndex({
         const accounts = Array.isArray(payload.generated_accounts) ? payload.generated_accounts : [];
         const waliAccounts = Array.isArray(payload.generated_wali_accounts) ? payload.generated_wali_accounts : [];
 
+        const waliRows: GeneratedWaliCredential[] = [];
         const studentRows = accounts
             .map((item) => {
                 if (!item || typeof item !== 'object') return null;
                 const data = item as Record<string, unknown>;
-                const username = typeof data.username === 'string' ? data.username : '';
-                const password = typeof data.password === 'string' ? data.password : '';
+                const username = getStringField(data, 'username');
+                const password = getStringField(data, 'password');
                 if (!username || !password) return null;
+
+                if (getStringField(data, 'guardian_name') || getStringField(data, 'student_nis')) {
+                    const nis = getStringField(data, 'student_nis');
+                    waliRows.push({
+                        nis: nis === '-' ? '' : nis,
+                        studentName: getStringField(data, 'student_name'),
+                        username,
+                        password,
+                    });
+
+                    return null;
+                }
+
                 return {
-                    label: typeof data.name === 'string' ? data.name : 'Santri',
-                    secondaryLabel: typeof data.nis === 'string' ? `NIS: ${data.nis}` : 'Akun santri',
+                    nis: getStringField(data, 'nis'),
+                    studentName: getStringField(data, 'name'),
                     username,
                     password,
+                    waliUsername: '',
+                    waliPassword: '',
                 } satisfies GeneratedCredential;
             })
             .filter((row): row is GeneratedCredential => row !== null);
 
-        const waliRows = waliAccounts
-            .map((item) => {
-                if (!item || typeof item !== 'object') return null;
-                const data = item as Record<string, unknown>;
-                const username = typeof data.username === 'string' ? data.username : '';
-                const password = typeof data.password === 'string' ? data.password : '';
-                if (!username || !password) return null;
-                return {
-                    label: typeof data.guardian_name === 'string' ? data.guardian_name : 'Wali',
-                    secondaryLabel: typeof data.student_nis === 'string' ? `NIS Santri: ${data.student_nis}` : 'Akun wali',
-                    username,
-                    password,
-                } satisfies GeneratedCredential;
-            })
-            .filter((row): row is GeneratedCredential => row !== null);
+        waliAccounts.forEach((item) => {
+            if (!item || typeof item !== 'object') return;
+            const data = item as Record<string, unknown>;
+            const username = getStringField(data, 'username');
+            const password = getStringField(data, 'password');
+            if (!username || !password) return;
 
-        return [...studentRows, ...waliRows];
+            const nis = getStringField(data, 'student_nis');
+            waliRows.push({
+                nis: nis === '-' ? '' : nis,
+                studentName: getStringField(data, 'student_name'),
+                username,
+                password,
+            });
+        });
+
+        if (studentRows.length === 0) {
+            return waliRows.map((wali) => ({
+                nis: wali.nis,
+                studentName: wali.studentName,
+                username: '',
+                password: '',
+                waliUsername: wali.username,
+                waliPassword: wali.password,
+            }));
+        }
+
+        const usedWaliRows = new Set<number>();
+        const mergedRows = studentRows.flatMap((studentRow) => {
+            const matchingWaliRows = waliRows
+                .map((wali, index) => ({ wali, index }))
+                .filter(({ wali }) => Boolean(wali.nis && studentRow.nis && wali.nis === studentRow.nis));
+
+            if (matchingWaliRows.length === 0) {
+                return [studentRow];
+            }
+
+            return matchingWaliRows.map(({ wali, index }) => {
+                usedWaliRows.add(index);
+
+                return {
+                    ...studentRow,
+                    studentName: studentRow.studentName || wali.studentName,
+                    waliUsername: wali.username,
+                    waliPassword: wali.password,
+                };
+            });
+        });
+
+        waliRows.forEach((wali, index) => {
+            if (usedWaliRows.has(index)) return;
+
+            mergedRows.push({
+                nis: wali.nis,
+                studentName: wali.studentName,
+                username: '',
+                password: '',
+                waliUsername: wali.username,
+                waliPassword: wali.password,
+            });
+        });
+
+        return mergedRows;
     }
 
     const selectedResultRows = useMemo(
@@ -131,8 +235,8 @@ export default function AccountGeneratorIndex({
 
     async function copyCredential(row: GeneratedCredential) {
         try {
-            await navigator.clipboard.writeText(`Username: ${row.username}\nPassword: ${row.password}`);
-            toast.success(`Kredensial "${row.label}" berhasil disalin`);
+            await navigator.clipboard.writeText(credentialsToTsv([row]));
+            toast.success('Kredensial berhasil disalin sebagai tabel');
         } catch {
             toast.error('Gagal menyalin kredensial');
         }
@@ -140,15 +244,28 @@ export default function AccountGeneratorIndex({
 
     async function copyAllCredentials(rows: GeneratedCredential[]) {
         if (rows.length === 0) return;
-        const text = rows
-            .map((row) => `${row.label} (${row.secondaryLabel})\nUsername: ${row.username}\nPassword: ${row.password}`)
-            .join('\n\n');
         try {
-            await navigator.clipboard.writeText(text);
-            toast.success(`Berhasil salin ${rows.length} kredensial`);
+            await navigator.clipboard.writeText(credentialsToTsv(rows));
+            toast.success(`Berhasil salin ${rows.length} baris kredensial sebagai tabel`);
         } catch {
             toast.error('Gagal menyalin seluruh kredensial');
         }
+    }
+
+    function downloadCredentials(rows: GeneratedCredential[]) {
+        if (rows.length === 0) return;
+
+        const blob = new Blob([`\uFEFF${credentialsToTsv(rows)}`], { type: 'text/tab-separated-values;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+
+        link.href = url;
+        link.download = credentialDownloadFilename(selectedResultRun);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        toast.success('File TSV kredensial berhasil diunduh');
     }
 
     function setPerPage(value: string) {
@@ -397,15 +514,26 @@ export default function AccountGeneratorIndex({
                             <button type="button" className="mcr-btn ghost" onClick={() => setResultRunId(null)}>
                                 Tutup
                             </button>
-                            <button
-                                type="button"
-                                className="mcr-btn primary"
-                                onClick={() => copyAllCredentials(selectedResultRows)}
-                                disabled={selectedResultRows.length === 0}
-                            >
-                                <Copy size={14} />
-                                Salin Semua Kredensial
-                            </button>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button
+                                    type="button"
+                                    className="mcr-btn secondary"
+                                    onClick={() => downloadCredentials(selectedResultRows)}
+                                    disabled={selectedResultRows.length === 0}
+                                >
+                                    <Download size={14} />
+                                    Download TSV
+                                </button>
+                                <button
+                                    type="button"
+                                    className="mcr-btn primary"
+                                    onClick={() => copyAllCredentials(selectedResultRows)}
+                                    disabled={selectedResultRows.length === 0}
+                                >
+                                    <Copy size={14} />
+                                    Salin Semua Kredensial
+                                </button>
+                            </div>
                         </div>
                     }
                 >
@@ -416,21 +544,24 @@ export default function AccountGeneratorIndex({
                             <table className="mcr-table">
                                 <thead>
                                     <tr>
-                                        <th>Nama</th>
+                                        <th>NIS</th>
+                                        <th>Santri</th>
                                         <th>Username</th>
                                         <th>Password</th>
+                                        <th>Username Wali</th>
+                                        <th>Password Wali</th>
                                         <th style={{ width: 170 }}>Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {selectedResultRows.map((row) => (
-                                        <tr key={`${row.username}-${row.password}`}>
-                                            <td>
-                                                <div>{row.label}</div>
-                                                <div className="mcr-table-meta">{row.secondaryLabel}</div>
-                                            </td>
-                                            <td>{row.username}</td>
-                                            <td>{row.password}</td>
+                                    {selectedResultRows.map((row, index) => (
+                                        <tr key={`${row.nis}-${row.username}-${row.waliUsername}-${index}`}>
+                                            <td>{row.nis || '-'}</td>
+                                            <td>{row.studentName || '-'}</td>
+                                            <td>{row.username || '-'}</td>
+                                            <td>{row.password || '-'}</td>
+                                            <td>{row.waliUsername || '-'}</td>
+                                            <td>{row.waliPassword || '-'}</td>
                                             <td>
                                                 <button type="button" className="mcr-btn secondary" onClick={() => copyCredential(row)}>
                                                     <Copy size={14} />

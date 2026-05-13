@@ -386,7 +386,7 @@ class ProcessBulkRun implements ShouldBeUnique, ShouldQueue
         }
 
         $role = Role::query()->where('name', Role::WALI_SANTRI)->firstOrFail();
-        $guardian->load('students:id,nis');
+        $guardian->load('students:id,nis,full_name');
         $firstStudent = $guardian->students->first();
         $password = Str::random(8);
         $username = 'wali_'.($firstStudent?->nis ?? $guardian->id).'_'.$guardian->id;
@@ -406,6 +406,7 @@ class ProcessBulkRun implements ShouldBeUnique, ShouldQueue
         return [
             'guardian_name' => $guardian->full_name,
             'student_nis' => $firstStudent?->nis ?? '-',
+            'student_name' => $firstStudent?->full_name ?? '',
             'username' => $username,
             'password' => $password,
         ];
