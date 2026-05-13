@@ -17,6 +17,7 @@ php artisan route:clear --no-interaction || true
 php artisan view:clear --no-interaction || true
 php artisan optimize:clear --no-interaction || true
 php artisan migrate --force --no-interaction || true
+php artisan storage:link --force --no-interaction || true
 if [ -z "${APP_KEY:-}" ]; then
   php artisan key:generate --force --no-interaction
 fi

@@ -1,5 +1,5 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { Download, FileText, FileUp, Pencil, Plus, Power, RotateCcw, Search, ShieldCheck, Users } from 'lucide-react';
+import { Download, FileText, FileUp, Pencil, Plus, Power, RotateCcw, Search, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import FlashMessage from '@/components/flash-message';
@@ -32,6 +32,12 @@ type TeacherRow = {
     username: string | null;
     email: string;
     is_active: boolean;
+};
+
+type EligibleUserRow = {
+    id: number;
+    name: string;
+    email: string;
 };
 
 type Props = {
@@ -81,6 +87,22 @@ export default function TeacherIndex({ teachers, importRuns, filters }: Props) {
         strategy: 'skip',
     });
 
+    const [selectedTeacherIds, setSelectedTeacherIds] = useState<number[]>([]);
+    const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
+    const [bulkEligibleUsers, setBulkEligibleUsers] = useState<EligibleUserRow[]>([]);
+    const [bulkEligibleLoading, setBulkEligibleLoading] = useState(false);
+    const [bulkUserSearch, setBulkUserSearch] = useState('');
+    const [selectedBulkUserIds, setSelectedBulkUserIds] = useState<number[]>([]);
+    const [bulkAssignActive, setBulkAssignActive] = useState(true);
+    const bulkSetActiveForm = useForm<{ teacher_ids: number[]; is_active: boolean }>({
+        teacher_ids: [],
+        is_active: true,
+    });
+    const bulkAssignForm = useForm<{ user_ids: number[]; is_active: boolean }>({
+        user_ids: [],
+        is_active: true,
+    });
+
     useEffect(() => {
         const timer = window.setTimeout(() => setDebouncedSearch(search), 300);
         return () => window.clearTimeout(timer);
@@ -96,6 +118,10 @@ export default function TeacherIndex({ teachers, importRuns, filters }: Props) {
             { preserveState: true, preserveScroll: true, replace: true },
         );
     }, [debouncedSearch, statusFilter]);
+
+    useEffect(() => {
+        setSelectedTeacherIds([]);
+    }, [debouncedSearch, statusFilter, teachers.current_page]);
 
     const activeCount = useMemo(
         () => teachers.data.filter((item) => item.is_active).length,
@@ -137,6 +163,39 @@ export default function TeacherIndex({ teachers, importRuns, filters }: Props) {
             setIsLoadingExistingUsers(false);
         }
     }
+
+    async function loadEligibleUsersForBulk(searchTerm = '') {
+        setBulkEligibleLoading(true);
+        try {
+            const url = new URL('/admin/teachers/eligible-users', window.location.origin);
+            url.searchParams.set('limit', '200');
+            if (searchTerm.trim() !== '') {
+                url.searchParams.set('search', searchTerm.trim());
+            }
+            const response = await fetch(url.toString(), {
+                method: 'GET',
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            const payload = await response.json();
+            setBulkEligibleUsers((payload?.data ?? []) as EligibleUserRow[]);
+        } catch {
+            setBulkEligibleUsers([]);
+        } finally {
+            setBulkEligibleLoading(false);
+        }
+    }
+
+    useEffect(() => {
+        if (!bulkAssignOpen) {
+            return;
+        }
+        const delay = bulkUserSearch.trim() === '' ? 0 : 280;
+        const timer = window.setTimeout(() => {
+            void loadEligibleUsersForBulk(bulkUserSearch);
+        }, delay);
+        return () => window.clearTimeout(timer);
+    }, [bulkUserSearch, bulkAssignOpen]);
 
     function openCreateModal() {
         setEditing(null);
@@ -258,6 +317,100 @@ export default function TeacherIndex({ teachers, importRuns, filters }: Props) {
         setStatusFilter('');
     }
 
+    const allTeachersOnPageSelected =
+        teachers.data.length > 0 && teachers.data.every((t) => selectedTeacherIds.includes(t.id));
+
+    function toggleTeacherRow(id: number) {
+        setSelectedTeacherIds((prev) =>
+            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+        );
+    }
+
+    function toggleAllTeachersOnPage() {
+        if (allTeachersOnPageSelected) {
+            setSelectedTeacherIds((prev) => prev.filter((id) => !teachers.data.some((t) => t.id === id)));
+        } else {
+            setSelectedTeacherIds((prev) => {
+                const rest = prev.filter((id) => !teachers.data.some((t) => t.id === id));
+                return [...rest, ...teachers.data.map((t) => t.id)];
+            });
+        }
+    }
+
+    function openBulkAssignModal() {
+        setBulkAssignOpen(true);
+        setSelectedBulkUserIds([]);
+        setBulkUserSearch('');
+        setBulkAssignActive(true);
+        void loadEligibleUsersForBulk('');
+    }
+
+    function closeBulkAssignModal() {
+        setBulkAssignOpen(false);
+        setSelectedBulkUserIds([]);
+        setBulkUserSearch('');
+        bulkAssignForm.clearErrors();
+    }
+
+    const allBulkUsersSelected =
+        bulkEligibleUsers.length > 0 &&
+        bulkEligibleUsers.every((u) => selectedBulkUserIds.includes(u.id));
+
+    function toggleBulkUserRow(id: number) {
+        setSelectedBulkUserIds((prev) =>
+            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+        );
+    }
+
+    function toggleAllBulkUsers() {
+        if (allBulkUsersSelected) {
+            setSelectedBulkUserIds([]);
+        } else {
+            setSelectedBulkUserIds(bulkEligibleUsers.map((u) => u.id));
+        }
+    }
+
+    function submitBulkSetActive(is_active: boolean) {
+        if (selectedTeacherIds.length === 0) {
+            toast.error('Pilih minimal satu guru di tabel.');
+            return;
+        }
+        if (selectedTeacherIds.length > 100) {
+            toast.error('Maksimal 100 guru per aksi bulk.');
+            return;
+        }
+        bulkSetActiveForm.setData({ teacher_ids: selectedTeacherIds, is_active });
+        bulkSetActiveForm.post('/admin/teachers/bulk-set-active', {
+            preserveScroll: true,
+            onSuccess: () => {
+                setSelectedTeacherIds([]);
+                toast.success(is_active ? 'Guru terpilih diaktifkan.' : 'Guru terpilih dinonaktifkan.');
+            },
+            onError: () => toast.error('Gagal memperbarui status massal.'),
+        });
+    }
+
+    function submitBulkAssign(e: React.FormEvent) {
+        e.preventDefault();
+        if (selectedBulkUserIds.length === 0) {
+            toast.error('Pilih minimal satu user.');
+            return;
+        }
+        if (selectedBulkUserIds.length > 100) {
+            toast.error('Maksimal 100 user per aksi bulk.');
+            return;
+        }
+        bulkAssignForm.setData({ user_ids: selectedBulkUserIds, is_active: bulkAssignActive });
+        bulkAssignForm.post('/admin/teachers/bulk-assign', {
+            preserveScroll: true,
+            onSuccess: () => {
+                closeBulkAssignModal();
+                toast.success('User ditetapkan sebagai guru.');
+            },
+            onError: () => toast.error('Gagal assign massal.'),
+        });
+    }
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Manajemen Guru" />
@@ -325,6 +478,10 @@ export default function TeacherIndex({ teachers, importRuns, filters }: Props) {
                                 <FileUp size={14} />
                                 Import
                             </button>
+                            <button type="button" className="mcr-btn secondary" onClick={openBulkAssignModal}>
+                                <UserPlus size={14} />
+                                Bulk user → Guru
+                            </button>
                             <button type="button" className="mcr-btn primary" onClick={openCreateModal}>
                                 <Plus size={14} />
                                 Tambah Guru
@@ -333,10 +490,58 @@ export default function TeacherIndex({ teachers, importRuns, filters }: Props) {
                     }
                 />
 
+                {selectedTeacherIds.length > 0 ? (
+                    <div
+                        style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            alignItems: 'center',
+                            gap: 10,
+                            marginBottom: 12,
+                            padding: '10px 14px',
+                            borderRadius: 10,
+                            border: '1px solid #e2e8f0',
+                            background: '#f1f5f9',
+                        }}
+                    >
+                        <span style={{ fontWeight: 600, fontSize: 13 }}>
+                            {selectedTeacherIds.length} guru dipilih
+                        </span>
+                        <button type="button" className="mcr-btn ghost" onClick={() => setSelectedTeacherIds([])}>
+                            Bersihkan pilihan
+                        </button>
+                        <button
+                            type="button"
+                            className="mcr-btn primary"
+                            disabled={bulkSetActiveForm.processing}
+                            onClick={() => submitBulkSetActive(true)}
+                        >
+                            Aktifkan terpilih
+                        </button>
+                        <button
+                            type="button"
+                            className="mcr-btn danger"
+                            disabled={bulkSetActiveForm.processing}
+                            onClick={() => submitBulkSetActive(false)}
+                        >
+                            Nonaktifkan terpilih
+                        </button>
+                    </div>
+                ) : null}
+
                 <CrudTableShell>
                     <table className="mcr-table">
                         <thead>
                             <tr>
+                                <th style={{ width: 40 }}>
+                                    <input
+                                        type="checkbox"
+                                        className="mcr-check"
+                                        checked={allTeachersOnPageSelected}
+                                        onChange={toggleAllTeachersOnPage}
+                                        aria-label="Pilih semua guru di halaman ini"
+                                    />
+                                </th>
                                 <th>Nama</th>
                                 <th>Username</th>
                                 <th>Email</th>
@@ -347,7 +552,7 @@ export default function TeacherIndex({ teachers, importRuns, filters }: Props) {
                         <tbody>
                             {teachers.data.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5}>
+                                    <td colSpan={6}>
                                         <CrudEmptyState
                                             title="Belum ada data guru"
                                             description="Tambahkan guru baru untuk mulai penugasan mapel."
@@ -357,6 +562,15 @@ export default function TeacherIndex({ teachers, importRuns, filters }: Props) {
                             ) : (
                                 teachers.data.map((teacher) => (
                                     <tr key={teacher.id}>
+                                        <td>
+                                            <input
+                                                type="checkbox"
+                                                className="mcr-check"
+                                                checked={selectedTeacherIds.includes(teacher.id)}
+                                                onChange={() => toggleTeacherRow(teacher.id)}
+                                                aria-label={`Pilih ${teacher.name}`}
+                                            />
+                                        </td>
                                         <td>{teacher.name}</td>
                                         <td>{teacher.username ?? '-'}</td>
                                         <td>{teacher.email}</td>
@@ -485,6 +699,105 @@ export default function TeacherIndex({ teachers, importRuns, filters }: Props) {
                         </button>
                         <button type="submit" className="mcr-btn primary" disabled={importForm.processing}>
                             {importForm.processing ? 'Memproses...' : 'Proses Import'}
+                        </button>
+                    </div>
+                </form>
+            </CrudModal>
+
+            <CrudModal
+                open={bulkAssignOpen}
+                onClose={closeBulkAssignModal}
+                title="Bulk assign: user → Guru"
+                subtitle="Pilih banyak user yang belum punya role Guru (maks. 200 daftar). Role Guru ditambahkan tanpa menghapus role lain."
+            >
+                <form onSubmit={submitBulkAssign}>
+                    <div className="mcr-form-grid">
+                        <div className="mcr-form-group full">
+                            <label htmlFor="bulk-teacher-search">Cari nama / email</label>
+                            <input
+                                id="bulk-teacher-search"
+                                className="mcr-input"
+                                type="search"
+                                value={bulkUserSearch}
+                                onChange={(e) => setBulkUserSearch(e.target.value)}
+                                placeholder="Ketik untuk memfilter..."
+                            />
+                        </div>
+                        <div className="mcr-form-group full" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <input
+                                id="bulk-assign-active"
+                                type="checkbox"
+                                className="mcr-check"
+                                checked={bulkAssignActive}
+                                onChange={(e) => setBulkAssignActive(e.target.checked)}
+                            />
+                            <label htmlFor="bulk-assign-active" style={{ fontSize: 13, cursor: 'pointer' }}>
+                                Set akun terpilih sebagai aktif setelah ditetapkan jadi guru
+                            </label>
+                        </div>
+                        <InputError message={bulkAssignForm.errors.user_ids} />
+                        <div
+                            style={{
+                                maxHeight: 280,
+                                overflow: 'auto',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: 8,
+                                background: '#fff',
+                            }}
+                        >
+                            {bulkEligibleLoading ? (
+                                <div style={{ padding: 16, textAlign: 'center', fontSize: 13 }}>Memuat daftar…</div>
+                            ) : bulkEligibleUsers.length === 0 ? (
+                                <div style={{ padding: 16, textAlign: 'center', fontSize: 13, color: '#64748b' }}>
+                                    Tidak ada user eligible (semua sudah guru atau tidak cocok filter).
+                                </div>
+                            ) : (
+                                <table className="mcr-table" style={{ margin: 0 }}>
+                                    <thead>
+                                        <tr>
+                                            <th style={{ width: 40 }}>
+                                                <input
+                                                    type="checkbox"
+                                                    className="mcr-check"
+                                                    checked={allBulkUsersSelected}
+                                                    onChange={toggleAllBulkUsers}
+                                                    aria-label="Pilih semua di daftar"
+                                                />
+                                            </th>
+                                            <th>Nama</th>
+                                            <th>Email</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {bulkEligibleUsers.map((u) => (
+                                            <tr key={u.id}>
+                                                <td>
+                                                    <input
+                                                        type="checkbox"
+                                                        className="mcr-check"
+                                                        checked={selectedBulkUserIds.includes(u.id)}
+                                                        onChange={() => toggleBulkUserRow(u.id)}
+                                                        aria-label={`Pilih ${u.name}`}
+                                                    />
+                                                </td>
+                                                <td>{u.name}</td>
+                                                <td>{u.email}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                        <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>
+                            Terpilih: {selectedBulkUserIds.length} user (maks. 100 per submit).
+                        </p>
+                    </div>
+                    <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                        <button type="button" className="mcr-btn ghost" onClick={closeBulkAssignModal}>
+                            Batal
+                        </button>
+                        <button type="submit" className="mcr-btn primary" disabled={bulkAssignForm.processing}>
+                            {bulkAssignForm.processing ? 'Menyimpan…' : 'Tetapkan sebagai guru'}
                         </button>
                     </div>
                 </form>

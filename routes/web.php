@@ -175,6 +175,8 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::delete('teaching-assignments/{teachingAssignment}', [KitabTeachingAssignmentController::class, 'destroy'])->name('teaching-assignments.destroy');
         Route::get('teachers', [TeacherManagementController::class, 'index'])->name('teachers.index');
         Route::get('teachers/eligible-users', [TeacherManagementController::class, 'eligibleUsers'])->name('teachers.eligible-users');
+        Route::post('teachers/bulk-assign', [TeacherManagementController::class, 'bulkAssign'])->name('teachers.bulk-assign');
+        Route::post('teachers/bulk-set-active', [TeacherManagementController::class, 'bulkSetActive'])->name('teachers.bulk-set-active');
         Route::post('teachers', [TeacherManagementController::class, 'store'])->name('teachers.store');
         Route::put('teachers/{teacher}', [TeacherManagementController::class, 'update'])->name('teachers.update');
         Route::post('teachers/{teacher}/toggle-active', [TeacherManagementController::class, 'toggleActive'])->name('teachers.toggle-active');

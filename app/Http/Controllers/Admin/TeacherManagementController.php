@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\BulkAssignTeachersRequest;
+use App\Http\Requests\Admin\BulkSetTeacherActiveRequest;
 use App\Http\Requests\Admin\StoreTeacherRequest;
 use App\Http\Requests\Admin\UpdateTeacherRequest;
 use App\Models\ImportRun;
@@ -12,6 +14,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -52,6 +55,7 @@ class TeacherManagementController extends Controller
     {
         $guruRoleId = (int) Role::query()->where('name', Role::GURU)->value('id');
         $search = trim((string) $request->string('search'));
+        $limit = min(200, max(1, (int) $request->query('limit', 25)));
 
         $users = User::query()
             ->when($guruRoleId > 0, fn (Builder $builder) => $builder->whereDoesntHave('roles', fn (Builder $roleQuery) => $roleQuery->where('roles.id', $guruRoleId)))
@@ -63,12 +67,62 @@ class TeacherManagementController extends Controller
                 });
             })
             ->orderBy('name')
-            ->limit(25)
+            ->limit($limit)
             ->get(['id', 'name', 'email']);
 
         return response()->json([
             'data' => $users,
         ]);
+    }
+
+    public function bulkAssign(BulkAssignTeachersRequest $request): RedirectResponse
+    {
+        $validated = $request->validated();
+        $guruRoleId = (int) Role::query()->where('name', Role::GURU)->value('id');
+        $ids = array_map('intval', $validated['user_ids']);
+        $isActive = (bool) ($validated['is_active'] ?? true);
+
+        DB::transaction(function () use ($ids, $guruRoleId, $isActive) {
+            $users = User::query()->whereIn('id', $ids)->lockForUpdate()->get();
+            foreach ($users as $user) {
+                $user->update(['is_active' => $isActive]);
+                $user->roles()->syncWithoutDetaching([$guruRoleId]);
+            }
+        });
+
+        $n = count($ids);
+
+        return redirect()->route('admin.teachers.index')
+            ->with('success', "{$n} user berhasil ditetapkan sebagai guru.");
+    }
+
+    public function bulkSetActive(BulkSetTeacherActiveRequest $request): RedirectResponse
+    {
+        $ids = array_map('intval', $request->validated('teacher_ids'));
+        $active = $request->boolean('is_active');
+
+        $users = User::query()->whereIn('id', $ids)->get();
+        if ($users->count() !== count(array_unique($ids))) {
+            return redirect()->route('admin.teachers.index')
+                ->with('error', 'Beberapa ID guru tidak ditemukan.');
+        }
+        foreach ($users as $user) {
+            if (! $user->hasRole(Role::GURU)) {
+                return redirect()->route('admin.teachers.index')
+                    ->with('error', 'Tindakan massal hanya untuk akun ber-role Guru.');
+            }
+        }
+
+        DB::transaction(function () use ($users, $active) {
+            foreach ($users as $user) {
+                $user->update(['is_active' => $active]);
+            }
+        });
+
+        $verb = $active ? 'diaktifkan' : 'dinonaktifkan';
+
+        return redirect()->route('admin.teachers.index')
+            ->with('success', count($ids).' guru berhasil '.$verb.'.');
     }
 
     public function store(StoreTeacherRequest $request): RedirectResponse
