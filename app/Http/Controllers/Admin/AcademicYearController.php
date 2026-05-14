@@ -57,12 +57,12 @@ class AcademicYearController extends Controller
     {
         DB::transaction(function () use ($request) {
             $semester = Semester::create($request->validated());
-            $isActive = $request->boolean('is_active');
+            // $isActive = $request->boolean('is_active');
 
-            if ($isActive) {
-                AcademicPeriod::query()->where('is_active', true)->update(['is_active' => false]);
-                $this->resetClassGenderRulesForNewSemester();
-            }
+            // if ($isActive) {
+            //     AcademicPeriod::query()->where('is_active', true)->update(['is_active' => false]);
+            //     $this->resetClassGenderRulesForNewSemester();
+            // }
 
             AcademicPeriod::create([
                 'academic_year_id' => $request->academic_year_id,

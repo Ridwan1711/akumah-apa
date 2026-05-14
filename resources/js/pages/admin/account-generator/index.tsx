@@ -692,7 +692,7 @@ export default function AccountGeneratorIndex({
                 <CrudModal
                     open={rollbackRun !== null}
                     title="Rollback job generate akun"
-                    subtitle="Menghapus user login hasil job ini (email *@santri.siakad.test / *@wali.siakad.test, satu role) dan melepas link ke santri/wali. Tidak menghapus data santri/wali. Job ditandai dibatalkan. Ketik ROLLBACK untuk konfirmasi."
+                    subtitle="Menghapus user login hasil job (email *@santri.siakad.test / *@wali.siakad.test, satu role), melepas link ke santri/wali, dan menghapus wali placeholder otomatis (nama persis: kata Wali, spasi, lalu nama lengkap santri seperti saat job jalan; tanpa akun; hanya terikat satu santri dari job). Data santri tidak dihapus. Job ditandai dibatalkan. Ketik ROLLBACK untuk konfirmasi."
                     onClose={() => {
                         if (!rollbackSubmitting) {
                             setRollbackRun(null);

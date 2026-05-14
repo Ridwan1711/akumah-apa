@@ -271,9 +271,10 @@ class AccountGeneratorController extends Controller
         }
 
         $msg = sprintf(
-            'Rollback selesai: %d akun santri dan %d akun wali dihapus (user + link ke santri/wali).',
+            'Rollback selesai: %d akun santri, %d akun wali, %d wali placeholder dihapus.',
             $summary['santri_removed'],
-            $summary['wali_removed']
+            $summary['wali_removed'],
+            $summary['placeholders_removed'] ?? 0
         );
         if ($summary['warnings'] !== []) {
             $msg .= ' '.implode(' ', $summary['warnings']);

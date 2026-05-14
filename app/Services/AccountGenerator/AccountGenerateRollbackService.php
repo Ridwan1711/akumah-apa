@@ -13,10 +13,11 @@ use Illuminate\Support\Facades\Storage;
 final class AccountGenerateRollbackService
 {
     /**
-     * Hapus akun user yang dibuat oleh job generate akun ini (santri + wali), lalu tandai job dibatalkan.
+     * Hapus akun user yang dibuat oleh job generate akun ini (santri + wali), hapus wali placeholder
+     * otomatis (baris `Wali {nama}` tanpa akun, hanya terikat satu santri dari job), lalu tandai job dibatalkan.
      * Hanya user yang memenuhi pola generate otomatis (email test + satu role) yang dihapus.
      *
-     * @return array{santri_removed: int, wali_removed: int, skipped_usernames: array<int, string>, warnings: array<int, string>}
+     * @return array{santri_removed: int, wali_removed: int, placeholders_removed: int, skipped_usernames: array<int, string>, warnings: array<int, string>}
      */
     public function rollback(ImportRun $importRun): array
     {
@@ -95,6 +96,8 @@ final class AccountGenerateRollbackService
                 throw new \RuntimeException('Tidak ada akun yang dihapus (semua username di-skip). Periksa apakah user sudah diubah manual atau bukan akun generate otomatis.');
             }
 
+            $placeholdersRemoved = $this->removeAutoPlaceholderGuardians($importRun);
+
             if (is_string($exportPath) && $exportPath !== '' && Storage::disk('local')->exists($exportPath)) {
                 Storage::disk('local')->delete($exportPath);
             }
@@ -106,6 +109,7 @@ final class AccountGenerateRollbackService
                     'rolled_back_summary' => [
                         'santri_removed' => $santriRemoved,
                         'wali_removed' => $waliRemoved,
+                        'placeholders_removed' => $placeholdersRemoved,
                         'skipped' => $skipped,
                     ],
                 ],
@@ -119,10 +123,59 @@ final class AccountGenerateRollbackService
             return [
                 'santri_removed' => $santriRemoved,
                 'wali_removed' => $waliRemoved,
+                'placeholders_removed' => $placeholdersRemoved,
                 'skipped_usernames' => $skipped,
                 'warnings' => $warnings,
             ];
         });
+    }
+
+    /**
+     * Hapus baris wali yang dibuat otomatis oleh {@see ProcessBulkRun::ensureWaliAccountsForStudent}:
+     * nama persis `Wali {nama santri}`, tanpa akun user, dan hanya terikat satu santri (santri ada di meta job).
+     */
+    private function removeAutoPlaceholderGuardians(ImportRun $importRun): int
+    {
+        if ($importRun->job_type !== ImportRun::JOB_ACCOUNT_GENERATE_STUDENTS) {
+            return 0;
+        }
+
+        $meta = $importRun->meta;
+        if (! is_array($meta)) {
+            return 0;
+        }
+
+        $studentIds = array_values($meta['student_ids'] ?? []);
+        $removed = 0;
+
+        foreach ($studentIds as $studentId) {
+            $student = Student::query()->find((int) $studentId);
+            if (! $student) {
+                continue;
+            }
+
+            $expectedFullName = 'Wali '.$student->full_name;
+
+            $guardians = $student->guardians()
+                ->where('guardians.full_name', $expectedFullName)
+                ->whereNull('guardians.user_id')
+                ->get();
+
+            foreach ($guardians as $guardian) {
+                if ($guardian->students()->count() !== 1) {
+                    continue;
+                }
+                if ((int) $guardian->students()->first()?->id !== (int) $student->id) {
+                    continue;
+                }
+
+                $student->guardians()->detach($guardian->id);
+                $guardian->delete();
+                $removed++;
+            }
+        }
+
+        return $removed;
     }
 
     private function isRollbackableWaliUser(?User $user): bool
