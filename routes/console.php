@@ -30,3 +30,7 @@ Schedule::command('payments:cancel-expired-gateway')
     ->everyFiveMinutes()
     ->timezone('Asia/Jakarta')
     ->onOneServer();
+Schedule::command('formal-continuation:send-fallback')
+    ->dailyAt('06:30')
+    ->timezone('Asia/Jakarta')
+    ->onOneServer();

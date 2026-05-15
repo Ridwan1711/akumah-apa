@@ -17,6 +17,7 @@ import {
     LayoutGrid,
     Layers,
     ListChecks,
+    LogOut,
     PieChart,
     Receipt,
     School,
@@ -108,6 +109,8 @@ const akademikNav: NavItem[] = [
 const musyrifOperasionalNav: NavItem[] = [
     { title: 'Pelanggaran', href: '/admin/violations', icon: AlertTriangle },
     { title: 'Perizinan Pulang', href: '/admin/leave-permissions', icon: Home },
+    { title: 'Keluar Pesantren', href: '/admin/student-withdrawals', icon: LogOut },
+    { title: 'Lanjut MA10 / Kuliah', href: '/admin/formal-continuation', icon: GraduationCap },
 ];
 
 const santriNav: NavItem[] = [
@@ -116,6 +119,8 @@ const santriNav: NavItem[] = [
     { title: 'Nilai Kitab', href: '/santri/grades', icon: ClipboardList },
     { title: 'Pelanggaran', href: '/santri/violations', icon: AlertTriangle },
     { title: 'Profil', href: '/santri/profile', icon: User },
+    { title: 'Keluar Pesantren', href: '/santri/withdrawal', icon: LogOut },
+    { title: 'Lanjut Formal', href: '/santri/formal-continuation', icon: GraduationCap },
 ];
 
 const waliNav: NavItem[] = [

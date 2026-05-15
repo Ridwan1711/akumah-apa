@@ -467,6 +467,88 @@ export type LeavePermission = {
     updated_at: string;
 };
 
+export type StudentWithdrawalRequest = {
+    id: number;
+    student_id: number;
+    status:
+        | 'awaiting_confirmations'
+        | 'pending_admin'
+        | 'closed_continue'
+        | 'approved'
+        | 'rejected'
+        | 'cancelled';
+    initiated_by: 'santri' | 'wali';
+    initiated_by_user_id: number | null;
+    santri_choice: 'withdraw' | 'continue' | null;
+    santri_user_id: number | null;
+    santri_confirmed_at: string | null;
+    santri_reason: string | null;
+    wali_choice: 'withdraw' | 'continue' | null;
+    wali_user_id: number | null;
+    wali_guardian_id: number | null;
+    wali_confirmed_at: string | null;
+    wali_reason: string | null;
+    resolved_choice: 'withdraw' | 'continue' | null;
+    effective_date: string | null;
+    reason: string | null;
+    reviewed_by: number | null;
+    reviewed_at: string | null;
+    admin_notes: string | null;
+    rejection_reason: string | null;
+    student?: Pick<Student, 'id' | 'nis' | 'full_name' | 'status'>;
+    santri_user?: Pick<User, 'id' | 'name'>;
+    wali_user?: Pick<User, 'id' | 'name'>;
+    reviewer?: Pick<User, 'id' | 'name'>;
+    created_at: string;
+    updated_at: string;
+};
+
+export type FormalContinuationRound = {
+    id: number;
+    source_academic_year_id: number;
+    target_academic_year_id: number;
+    trigger_type: 'manual' | 'fallback';
+    sent_by_user_id: number | null;
+    sent_at: string;
+    eligible_count: number;
+    requests_created: number;
+    source_academic_year?: Pick<AcademicYear, 'id' | 'name' | 'end_date'>;
+    target_academic_year?: Pick<AcademicYear, 'id' | 'name'>;
+    sender?: Pick<User, 'id' | 'name'>;
+};
+
+export type StudentFormalContinuationRequest = {
+    id: number;
+    formal_continuation_round_id: number;
+    student_id: number;
+    source_academic_year_id: number;
+    target_academic_year_id: number;
+    current_tingkat_sekolah_id: number;
+    current_tingkat_code: string;
+    status:
+        | 'awaiting_confirmations'
+        | 'pending_admin'
+        | 'approved'
+        | 'rejected'
+        | 'cancelled';
+    santri_choice: 'ma_10' | 'kuliah' | null;
+    santri_confirmed_at: string | null;
+    wali_choice: 'ma_10' | 'kuliah' | null;
+    wali_confirmed_at: string | null;
+    resolved_choice: 'ma_10' | 'kuliah' | null;
+    reviewed_by: number | null;
+    reviewed_at: string | null;
+    admin_notes: string | null;
+    rejection_reason: string | null;
+    student?: Pick<Student, 'id' | 'nis' | 'full_name' | 'status'>;
+    current_tingkat_sekolah?: Pick<TingkatSekolahFormal, 'id' | 'name' | 'code'>;
+    source_academic_year?: Pick<AcademicYear, 'id' | 'name'>;
+    target_academic_year?: Pick<AcademicYear, 'id' | 'name'>;
+    round?: Pick<FormalContinuationRound, 'id' | 'trigger_type' | 'sent_at'>;
+    created_at: string;
+    updated_at: string;
+};
+
 // --- Report Card ---
 
 export type ReportCard = {

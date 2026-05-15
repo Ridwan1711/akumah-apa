@@ -69,11 +69,23 @@ export default function WaliChildDetail({ student, semesters, currentSemesterId,
                                 ...(avg ? [{ label: 'Rata-rata Nilai', value: avg }] : []),
                             ]}
                             actions={
-                                <Link href={`/wali/children/${student.id}/schedule`}>
-                                    <Button variant="outline" size="sm" className="border-white/30 bg-white/10 text-white hover:bg-white/20">
-                                        Lihat Jadwal
-                                    </Button>
-                                </Link>
+                                <div className="flex flex-wrap gap-2">
+                                    <Link href={`/wali/children/${student.id}/schedule`}>
+                                        <Button variant="outline" size="sm" className="border-white/30 bg-white/10 text-white hover:bg-white/20">
+                                            Lihat Jadwal
+                                        </Button>
+                                    </Link>
+                                    <Link href={`/wali/children/${student.id}/withdrawal`}>
+                                        <Button variant="outline" size="sm" className="border-white/30 bg-white/10 text-white hover:bg-white/20">
+                                            Keluar Pesantren
+                                        </Button>
+                                    </Link>
+                                    <Link href={`/wali/children/${student.id}/formal-continuation`}>
+                                        <Button variant="outline" size="sm" className="border-white/30 bg-white/10 text-white hover:bg-white/20">
+                                            Lanjut Formal
+                                        </Button>
+                                    </Link>
+                                </div>
                             }
                         />
                     </div>

@@ -13,7 +13,12 @@ use App\Http\Controllers\Api\GuruAttendanceController;
 use App\Http\Controllers\Api\GuruController;
 use App\Http\Controllers\Api\PpdbSyncController;
 use App\Http\Controllers\Api\SantriController;
+use App\Http\Controllers\Api\AdminFormalContinuationController;
+use App\Http\Controllers\Api\SantriFormalContinuationController;
+use App\Http\Controllers\Api\SantriWithdrawalController;
 use App\Http\Controllers\Api\WaliController;
+use App\Http\Controllers\Api\WaliFormalContinuationController;
+use App\Http\Controllers\Api\WaliWithdrawalController;
 use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
 
@@ -72,6 +77,12 @@ Route::prefix('v1')->group(function () {
             Route::post('/invoices/{invoice}/upload-proof', [SantriController::class, 'uploadProof']);
             Route::get('/payment-history', [SantriController::class, 'paymentHistory']);
             Route::get('/attendances', [SantriController::class, 'attendances']);
+            Route::get('/withdrawal-request', [SantriWithdrawalController::class, 'show']);
+            Route::post('/withdrawal-request/choice', [SantriWithdrawalController::class, 'submitChoice']);
+            Route::post('/withdrawal-request/cancel', [SantriWithdrawalController::class, 'cancel']);
+            Route::get('/formal-continuation-request', [SantriFormalContinuationController::class, 'show']);
+            Route::post('/formal-continuation-request/choice', [SantriFormalContinuationController::class, 'submitChoice']);
+            Route::post('/formal-continuation-request/cancel', [SantriFormalContinuationController::class, 'cancel']);
         });
 
         // Wali Santri
@@ -86,6 +97,12 @@ Route::prefix('v1')->group(function () {
             Route::post('/invoices/{invoice}/create-charge', [WaliController::class, 'createCharge']);
             Route::post('/invoices/{invoice}/upload-proof', [WaliController::class, 'uploadProof']);
             Route::get('/payment-history', [WaliController::class, 'paymentHistory']);
+            Route::get('/children/{student}/withdrawal-request', [WaliWithdrawalController::class, 'show']);
+            Route::post('/children/{student}/withdrawal-request/choice', [WaliWithdrawalController::class, 'submitChoice']);
+            Route::post('/children/{student}/withdrawal-request/cancel', [WaliWithdrawalController::class, 'cancel']);
+            Route::get('/children/{student}/formal-continuation-request', [WaliFormalContinuationController::class, 'show']);
+            Route::post('/children/{student}/formal-continuation-request/choice', [WaliFormalContinuationController::class, 'submitChoice']);
+            Route::post('/children/{student}/formal-continuation-request/cancel', [WaliFormalContinuationController::class, 'cancel']);
         });
 
         // Guru (and admin for kitab grades / report cards)
@@ -161,6 +178,11 @@ Route::prefix('v1')->group(function () {
             Route::put('/attendances/{attendance}', [AdminAttendanceController::class, 'update']);
             Route::get('/teacher-attendance/recap', [AdminAttendanceController::class, 'teacherRecap']);
             Route::post('/teacher-attendance/sessions/{session}/override', [AdminAttendanceController::class, 'teacherSessionOverride']);
+
+            Route::get('/formal-continuation', [AdminFormalContinuationController::class, 'index']);
+            Route::post('/formal-continuation/send', [AdminFormalContinuationController::class, 'sendRound']);
+            Route::post('/formal-continuation/{studentFormalContinuation}/approve', [AdminFormalContinuationController::class, 'approve']);
+            Route::post('/formal-continuation/{studentFormalContinuation}/reject', [AdminFormalContinuationController::class, 'reject']);
         });
 
         Route::middleware('role:super_admin,admin_akademik,admin_pendidikan')->prefix('admin')->group(function () {

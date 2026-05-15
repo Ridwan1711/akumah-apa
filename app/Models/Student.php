@@ -231,6 +231,16 @@ class Student extends Model
         return $this->hasMany(LeavePermission::class);
     }
 
+    public function withdrawalRequests(): HasMany
+    {
+        return $this->hasMany(StudentWithdrawalRequest::class);
+    }
+
+    public function formalContinuationRequests(): HasMany
+    {
+        return $this->hasMany(StudentFormalContinuationRequest::class);
+    }
+
     // --- Keuangan ---
 
     public function enrollmentTingkatSekolahs(): HasMany

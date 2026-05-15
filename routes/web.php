@@ -23,6 +23,8 @@ use App\Http\Controllers\Admin\KitabSubjectController;
 use App\Http\Controllers\Admin\KitabTeachingAssignmentController;
 use App\Http\Controllers\Admin\LaravelLogController;
 use App\Http\Controllers\Admin\LeavePermissionController;
+use App\Http\Controllers\Admin\FormalContinuationController;
+use App\Http\Controllers\Admin\StudentWithdrawalRequestController;
 use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\PaymentReportController;
 use App\Http\Controllers\Admin\PaymentTypeController;
@@ -53,6 +55,10 @@ use App\Http\Controllers\PaymentGatewayController;
 use App\Http\Controllers\QueueRunController;
 use App\Http\Controllers\ReportCardVerificationController;
 use App\Http\Controllers\Santri\SantriController;
+use App\Http\Controllers\Santri\FormalContinuationController as SantriFormalContinuationController;
+use App\Http\Controllers\Santri\WithdrawalController as SantriWithdrawalController;
+use App\Http\Controllers\Wali\ChildFormalContinuationController;
+use App\Http\Controllers\Wali\ChildWithdrawalController;
 use App\Http\Controllers\Wali\WaliPaymentController;
 use App\Http\Controllers\Wali\WaliProfileController;
 use App\Http\Controllers\Wali\WaliSantriController;
@@ -268,6 +274,17 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::post('leave-permissions/{leavePermission}/reject', [LeavePermissionController::class, 'reject'])->name('leave-permissions.reject');
         Route::post('leave-permissions/{leavePermission}/returned', [LeavePermissionController::class, 'markReturned'])->name('leave-permissions.returned');
 
+        // Keluar pesantren (konfirmasi santri + wali, approve admin)
+        Route::get('student-withdrawals', [StudentWithdrawalRequestController::class, 'index'])->name('student-withdrawals.index');
+        Route::post('student-withdrawals/{studentWithdrawal}/approve', [StudentWithdrawalRequestController::class, 'approve'])->name('student-withdrawals.approve');
+        Route::post('student-withdrawals/{studentWithdrawal}/reject', [StudentWithdrawalRequestController::class, 'reject'])->name('student-withdrawals.reject');
+
+        // Lanjut MA10 / Kuliah (MTs 9 & MA 12)
+        Route::get('formal-continuation', [FormalContinuationController::class, 'index'])->name('formal-continuation.index');
+        Route::post('formal-continuation/send', [FormalContinuationController::class, 'sendRound'])->name('formal-continuation.send');
+        Route::post('formal-continuation/{studentFormalContinuation}/approve', [FormalContinuationController::class, 'approve'])->name('formal-continuation.approve');
+        Route::post('formal-continuation/{studentFormalContinuation}/reject', [FormalContinuationController::class, 'reject'])->name('formal-continuation.reject');
+
         // Lesson Attendance
         Route::get('attendances', [AttendanceController::class, 'index'])->name('attendances.index');
         Route::put('attendances/{attendance}', [AttendanceController::class, 'update'])->name('attendances.update');
@@ -422,6 +439,12 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.Role::SANTRI]
         Route::get('profile/edit', [SantriController::class, 'editProfile'])->name('profile.edit');
         Route::put('profile', [SantriController::class, 'updateProfile'])->name('profile.update');
         Route::put('profile/guardians/{guardian}', [SantriController::class, 'updateGuardian'])->name('profile.guardians.update');
+        Route::get('withdrawal', [SantriWithdrawalController::class, 'show'])->name('withdrawal.show');
+        Route::post('withdrawal/choice', [SantriWithdrawalController::class, 'submitChoice'])->name('withdrawal.choice');
+        Route::post('withdrawal/cancel', [SantriWithdrawalController::class, 'cancel'])->name('withdrawal.cancel');
+        Route::get('formal-continuation', [SantriFormalContinuationController::class, 'show'])->name('formal-continuation.show');
+        Route::post('formal-continuation/choice', [SantriFormalContinuationController::class, 'submitChoice'])->name('formal-continuation.choice');
+        Route::post('formal-continuation/cancel', [SantriFormalContinuationController::class, 'cancel'])->name('formal-continuation.cancel');
     });
 
 // Wali Kelas portal (hanya user yang punya wali_kelas_id di diniyah_classes)
@@ -459,6 +482,12 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.Role::WALI_SA
         Route::get('children/{student}/edit', [WaliSantriController::class, 'editChild'])->name('children.edit');
         Route::put('children/{student}', [WaliSantriController::class, 'updateChild'])->name('children.update');
         Route::get('children/{student}/schedule', [WaliSantriController::class, 'childSchedule'])->name('children.schedule');
+        Route::get('children/{student}/withdrawal', [ChildWithdrawalController::class, 'show'])->name('children.withdrawal');
+        Route::post('children/{student}/withdrawal/choice', [ChildWithdrawalController::class, 'submitChoice'])->name('children.withdrawal.choice');
+        Route::post('children/{student}/withdrawal/cancel', [ChildWithdrawalController::class, 'cancel'])->name('children.withdrawal.cancel');
+        Route::get('children/{student}/formal-continuation', [ChildFormalContinuationController::class, 'show'])->name('children.formal-continuation');
+        Route::post('children/{student}/formal-continuation/choice', [ChildFormalContinuationController::class, 'submitChoice'])->name('children.formal-continuation.choice');
+        Route::post('children/{student}/formal-continuation/cancel', [ChildFormalContinuationController::class, 'cancel'])->name('children.formal-continuation.cancel');
 
         Route::get('invoices', [WaliPaymentController::class, 'invoices'])->name('invoices');
         Route::get('invoices/{invoice}', [WaliPaymentController::class, 'invoiceDetail'])->name('invoices.show');
