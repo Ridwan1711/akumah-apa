@@ -48,6 +48,8 @@ class User extends Authenticatable
     protected $appends = [
         'role',
         'profile_photo_url',
+        'official_photo_url',
+        'custom_photo_url',
         'has_official_photo',
     ];
 
@@ -67,6 +69,22 @@ class User extends Authenticatable
     public function getProfilePhotoUrlAttribute(): ?string
     {
         $path = $this->custom_photo_path ?: $this->official_photo_path;
+
+        return $this->publicUrlForPhotoPath($path);
+    }
+
+    public function getOfficialPhotoUrlAttribute(): ?string
+    {
+        return $this->publicUrlForPhotoPath($this->official_photo_path);
+    }
+
+    public function getCustomPhotoUrlAttribute(): ?string
+    {
+        return $this->publicUrlForPhotoPath($this->custom_photo_path);
+    }
+
+    private function publicUrlForPhotoPath(mixed $path): ?string
+    {
         if (! is_string($path) || $path === '') {
             return null;
         }
