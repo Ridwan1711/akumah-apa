@@ -5,11 +5,17 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreStudentRequest;
 use App\Http\Requests\Admin\UpdateStudentRequest;
+use App\Models\AcademicPeriod;
+use App\Models\AcademicYear;
 use App\Models\Diniyyah\SchoolClass;
+use App\Models\DormAssignment;
+use App\Models\DormRoom;
 use App\Models\EmProfile;
+use App\Models\EnrollmentTingkatSekolah;
 use App\Models\ImportRun;
 use App\Models\Role;
 use App\Models\Student;
+use App\Models\TingkatSekolah;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -51,13 +57,35 @@ class StudentController extends Controller
 
     public function index(Request $request): Response
     {
-        $query = Student::with(['currentClass', 'user'])
+        $displayAcademicYearId = $this->resolveAcademicYearId((int) $request->input('academic_year_id', 0));
+        $roomId = (int) $request->input('room_id', 0);
+        $tingkatSekolahId = (int) $request->input('tingkat_sekolah_id', 0);
+
+        $query = Student::with([
+            'currentClass',
+            'user',
+            'enrollmentTingkatSekolahs' => fn ($q) => $q
+                ->where('academic_year_id', $displayAcademicYearId)
+                ->with('tingkatSekolah:id,name,code'),
+        ])
             ->when($request->search, fn ($q, $search) => $q->where(function ($q) use ($search) {
                 $q->where('full_name', 'ilike', "%{$search}%")
                     ->orWhere('nis', 'ilike', "%{$search}%");
             }))
             ->when($request->status, fn ($q, $status) => $q->where('status', $status))
             ->when($request->class_id, fn ($q, $classId) => $q->where('current_class_id', $classId))
+            ->when($roomId > 0, function (Builder $q) use ($roomId, $displayAcademicYearId) {
+                $q->whereHas('dormAssignments', function (Builder $inner) use ($roomId, $displayAcademicYearId) {
+                    $inner->where('room_id', $roomId)
+                        ->activeInAcademicYear($displayAcademicYearId);
+                });
+            })
+            ->when($tingkatSekolahId > 0, function (Builder $q) use ($tingkatSekolahId, $displayAcademicYearId) {
+                $q->whereHas('enrollmentTingkatSekolahs', function (Builder $inner) use ($tingkatSekolahId, $displayAcademicYearId) {
+                    $inner->where('academic_year_id', $displayAcademicYearId)
+                        ->where('tingkat_sekolah_id', $tingkatSekolahId);
+                });
+            })
             ->orderBy('full_name');
 
         $importRunsQuery = ImportRun::query()
@@ -81,10 +109,107 @@ class StudentController extends Controller
         return Inertia::render('admin/students/index', [
             'students' => $query->paginate(15)->withQueryString(),
             'classes' => SchoolClass::orderBy('name')->get(['id', 'name', 'grade_level_id']),
-            'filters' => $request->only(['search', 'status', 'class_id', 'import_uploader_id']),
+            'tingkatSekolahs' => TingkatSekolah::query()
+                ->orderBy('order')
+                ->orderBy('name')
+                ->get(['id', 'name', 'code', 'group']),
+            'academicYears' => AcademicYear::query()
+                ->orderByDesc('start_date')
+                ->orderByDesc('id')
+                ->get(['id', 'name']),
+            'selectedAcademicYearId' => $displayAcademicYearId,
+            'filters' => $request->only([
+                'search',
+                'status',
+                'class_id',
+                'import_uploader_id',
+                'room_id',
+                'tingkat_sekolah_id',
+                'academic_year_id',
+            ]),
+            'filterContext' => $this->buildStudentFilterContext(
+                $request,
+                $displayAcademicYearId,
+                $roomId,
+                $tingkatSekolahId,
+            ),
             'importRuns' => $importRunsQuery->limit(20)->get(),
             'importUploaders' => $uploaders,
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildStudentFilterContext(
+        Request $request,
+        int $displayAcademicYearId,
+        int $roomId,
+        int $tingkatSekolahId,
+    ): ?array {
+        $academicYearName = AcademicYear::query()->whereKey($displayAcademicYearId)->value('name');
+
+        if ($roomId > 0) {
+            $room = DormRoom::query()
+                ->with('building:id,name')
+                ->find($roomId);
+            if ($room) {
+                $buildingName = $room->building?->name ?? 'Asrama';
+
+                return [
+                    'type' => 'room',
+                    'title' => "Anggota Kobong {$room->room_number}",
+                    'subtitle' => "{$buildingName} · Tahun ajaran {$academicYearName}",
+                    'back_href' => '/admin/asrama',
+                    'back_label' => 'Kembali ke Asrama',
+                ];
+            }
+        }
+
+        if ($request->filled('class_id')) {
+            $class = SchoolClass::query()->find((int) $request->input('class_id'));
+            if ($class) {
+                return [
+                    'type' => 'class',
+                    'title' => "Anggota Kelas {$class->name}",
+                    'subtitle' => 'Kelas diniyah · berdasarkan kelas saat ini santri',
+                    'back_href' => '/admin/diniyah-classes',
+                    'back_label' => 'Kembali ke Kelas Diniyah',
+                ];
+            }
+        }
+
+        if ($tingkatSekolahId > 0) {
+            $tingkat = TingkatSekolah::query()->find($tingkatSekolahId);
+            if ($tingkat) {
+                return [
+                    'type' => 'tingkat',
+                    'title' => "Anggota Tingkat {$tingkat->name}",
+                    'subtitle' => "Enrollment formal · Tahun ajaran {$academicYearName}",
+                    'back_href' => '/admin/tingkat-sekolahs',
+                    'back_label' => 'Kembali ke Master Tingkat',
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveAcademicYearId(?int $requestedAcademicYearId = null): int
+    {
+        if (($requestedAcademicYearId ?? 0) > 0 && AcademicYear::query()->whereKey($requestedAcademicYearId)->exists()) {
+            return (int) $requestedAcademicYearId;
+        }
+
+        $activeAcademicYearId = AcademicPeriod::query()
+            ->active()
+            ->value('academic_year_id');
+        if ($activeAcademicYearId) {
+            return (int) $activeAcademicYearId;
+        }
+
+        return (int) (AcademicYear::query()->orderByDesc('start_date')->value('id')
+            ?? AcademicYear::query()->orderByDesc('id')->value('id'));
     }
 
     public function create(Request $request): Response

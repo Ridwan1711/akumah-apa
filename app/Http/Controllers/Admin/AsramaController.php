@@ -18,9 +18,9 @@ use Inertia\Response;
 
 class AsramaController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $selectedAcademicYearId = $this->resolveAcademicYearId();
+        $selectedAcademicYearId = $this->resolveAcademicYearId((int) $request->input('academic_year_id', 0));
 
         $buildings = DormBuilding::with(['rooms' => function ($q) use ($selectedAcademicYearId) {
             $q->withCount(['assignments as occupants_count' => fn ($sq) => $sq->activeInAcademicYear($selectedAcademicYearId)])

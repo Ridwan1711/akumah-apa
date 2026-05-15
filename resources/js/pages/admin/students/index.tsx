@@ -1,5 +1,6 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import {
+    ArrowLeft,
     CheckCircle2,
     Download,
     Eye,
@@ -35,13 +36,34 @@ import {
 import type { SelectOption } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
 import type {
+    AcademicYear,
     BreadcrumbItem,
     DiniyahClass,
     ImportRun,
     PaginatedData,
     Student,
+    TingkatSekolahFormal,
     User,
 } from '@/types';
+import { memberListUrl } from './member-list-url';
+
+type EnrollmentTingkatRow = {
+    academic_year_id: number;
+    tingkat_sekolah_id: number;
+    tingkat_sekolah?: Pick<TingkatSekolahFormal, 'id' | 'name' | 'code'> | null;
+};
+
+type StudentRow = Student & {
+    enrollment_tingkat_sekolahs?: EnrollmentTingkatRow[];
+};
+
+type FilterContext = {
+    type: 'room' | 'class' | 'tingkat';
+    title: string;
+    subtitle: string;
+    back_href: string;
+    back_label: string;
+};
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/dashboard' },
@@ -49,13 +71,20 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 type Props = {
-    students: PaginatedData<Student>;
+    students: PaginatedData<StudentRow>;
     classes: Pick<DiniyahClass, 'id' | 'name' | 'grade_level_id'>[];
+    tingkatSekolahs: Pick<TingkatSekolahFormal, 'id' | 'name' | 'code' | 'group'>[];
+    academicYears: Pick<AcademicYear, 'id' | 'name'>[];
+    selectedAcademicYearId: number;
+    filterContext: FilterContext | null;
     filters: {
         search?: string;
         status?: string;
         class_id?: string;
         import_uploader_id?: string;
+        room_id?: string;
+        tingkat_sekolah_id?: string;
+        academic_year_id?: string;
     };
     importRuns: ImportRun[];
     importUploaders: Pick<User, 'id' | 'name'>[];
@@ -71,9 +100,18 @@ const statusMap: Record<
     wafat: { label: 'Wafat', className: 'wafat' },
 };
 
+function formalTingkatLabel(student: StudentRow): string {
+    const enrollment = student.enrollment_tingkat_sekolahs?.[0];
+    return enrollment?.tingkat_sekolah?.name ?? '—';
+}
+
 export default function StudentIndex({
     students,
     classes,
+    tingkatSekolahs,
+    academicYears,
+    selectedAcademicYearId,
+    filterContext,
     filters,
     importRuns,
     importUploaders,
@@ -119,22 +157,49 @@ export default function StudentIndex({
                     search: debouncedSearch || undefined,
                     status: filters.status,
                     class_id: filters.class_id,
+                    room_id: filters.room_id,
+                    tingkat_sekolah_id: filters.tingkat_sekolah_id,
+                    academic_year_id: filters.academic_year_id ?? String(selectedAcademicYearId),
                 },
                 { preserveState: true, preserveScroll: true },
             );
         }
-    }, [debouncedSearch, filters.class_id, filters.search, filters.status]);
+    }, [
+        debouncedSearch,
+        filters.academic_year_id,
+        filters.class_id,
+        filters.room_id,
+        filters.search,
+        filters.status,
+        filters.tingkat_sekolah_id,
+        selectedAcademicYearId,
+    ]);
+
+    function listQuery(overrides: Record<string, string | undefined> = {}) {
+        const merged = {
+            search: debouncedSearch || undefined,
+            status: filters.status,
+            class_id: filters.class_id,
+            room_id: filters.room_id,
+            tingkat_sekolah_id: filters.tingkat_sekolah_id,
+            academic_year_id: filters.academic_year_id ?? String(selectedAcademicYearId),
+            import_uploader_id: filters.import_uploader_id,
+            ...overrides,
+        };
+        const params: Record<string, string> = {};
+        for (const [key, value] of Object.entries(merged)) {
+            if (value != null && value !== '' && value !== 'all') {
+                params[key] = value;
+            }
+        }
+        return params;
+    }
 
     function handleFilter(key: string, value: string | undefined) {
-        router.get(
-            '/admin/students',
-            {
-                ...filters,
-                search: debouncedSearch,
-                [key]: value === 'all' ? undefined : value,
-            },
-            { preserveState: true, preserveScroll: true },
-        );
+        router.get('/admin/students', listQuery({ [key]: value === 'all' ? undefined : value }), {
+            preserveState: true,
+            preserveScroll: true,
+        });
     }
 
     function handleDelete() {
@@ -213,11 +278,7 @@ export default function StudentIndex({
     function handleHistoryFilter(value: string) {
         router.get(
             '/admin/students',
-            {
-                ...filters,
-                search: debouncedSearch,
-                import_uploader_id: value === 'all' ? undefined : value,
-            },
+            listQuery({ import_uploader_id: value === 'all' ? undefined : value }),
             { preserveState: true, preserveScroll: true },
         );
     }
@@ -279,8 +340,34 @@ export default function StudentIndex({
         if (debouncedSearch.trim().length > 0) total += 1;
         if (filters.status) total += 1;
         if (filters.class_id) total += 1;
+        if (filters.room_id) total += 1;
+        if (filters.tingkat_sekolah_id) total += 1;
         return total;
-    }, [filters.class_id, filters.status, debouncedSearch]);
+    }, [
+        filters.class_id,
+        filters.room_id,
+        filters.status,
+        filters.tingkat_sekolah_id,
+        debouncedSearch,
+    ]);
+
+    const exportQuery = useMemo(() => {
+        const params: Record<string, string> = {};
+        const merged = listQuery();
+        for (const [key, value] of Object.entries(merged)) {
+            if (value) params[key] = value;
+        }
+        return new URLSearchParams(params).toString();
+    }, [
+        debouncedSearch,
+        filters.class_id,
+        filters.room_id,
+        filters.status,
+        filters.tingkat_sekolah_id,
+        filters.academic_year_id,
+        filters.import_uploader_id,
+        selectedAcademicYearId,
+    ]);
 
     const completedImports = useMemo(
         () => importRuns.filter((run) => run.status === 'completed').length,
@@ -366,6 +453,32 @@ export default function StudentIndex({
 
                 <FlashMessage />
 
+                {filterContext ? (
+                    <div
+                        className="mcr-card"
+                        style={{
+                            marginBottom: 16,
+                            padding: '14px 16px',
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 12,
+                        }}
+                    >
+                        <div>
+                            <div style={{ fontWeight: 600, fontSize: 15 }}>{filterContext.title}</div>
+                            <p className="mcr-table-meta" style={{ marginTop: 4, marginBottom: 0 }}>
+                                {filterContext.subtitle}
+                            </p>
+                        </div>
+                        <Link href={filterContext.back_href} className="mcr-btn ghost">
+                            <ArrowLeft size={14} />
+                            {filterContext.back_label}
+                        </Link>
+                    </div>
+                ) : null}
+
                 <CrudToolbar
                     left={
                         <>
@@ -400,6 +513,32 @@ export default function StudentIndex({
                                 <option value="keluar">Keluar</option>
                                 <option value="wafat">Wafat</option>
                             </select>
+                            <select
+                                className="mcr-filter-select"
+                                value={filters.tingkat_sekolah_id ?? 'all'}
+                                onChange={(e) => handleFilter('tingkat_sekolah_id', e.target.value)}
+                                disabled={Boolean(filters.room_id)}
+                                title={filters.room_id ? 'Kosongkan filter kobong untuk filter tingkat formal' : undefined}
+                            >
+                                <option value="all">Semua Tingkat Formal</option>
+                                {tingkatSekolahs.map((t) => (
+                                    <option key={t.id} value={String(t.id)}>
+                                        {t.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <select
+                                className="mcr-filter-select"
+                                value={filters.academic_year_id ?? String(selectedAcademicYearId)}
+                                onChange={(e) => handleFilter('academic_year_id', e.target.value)}
+                                title="Tahun ajaran untuk kolom tingkat formal & filter kobong/tingkat"
+                            >
+                                {academicYears.map((year) => (
+                                    <option key={year.id} value={String(year.id)}>
+                                        TA {year.name}
+                                    </option>
+                                ))}
+                            </select>
                             {activeFilterCount > 0 ? (
                                 <button type="button" className="mcr-btn ghost" onClick={resetFilters}>
                                     <RotateCcw size={14} />
@@ -415,9 +554,7 @@ export default function StudentIndex({
                                 className="mcr-btn secondary"
                                 onClick={() =>
                                     openDownload(
-                                        `/admin/students-export?format=xlsx&search=${encodeURIComponent(
-                                            debouncedSearch,
-                                        )}&status=${filters.status ?? ''}&class_id=${filters.class_id ?? ''}`,
+                                        `/admin/students-export?format=xlsx&${exportQuery}`,
                                     )
                                 }
                             >
@@ -463,7 +600,8 @@ export default function StudentIndex({
                                 </th>
                                 <th>Santri</th>
                                 <th>NIS</th>
-                                <th>Kelas</th>
+                                <th>Kelas Diniyah</th>
+                                <th>Tingkat Formal</th>
                                 <th>Status</th>
                                 <th>Akun</th>
                                 <th style={{ textAlign: 'right' }}>Aksi</th>
@@ -472,7 +610,7 @@ export default function StudentIndex({
                         <tbody>
                             {students.data.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7}>
+                                    <td colSpan={8}>
                                         <CrudEmptyState
                                             title="Tidak ada data santri"
                                             description="Coba ubah filter atau tambah data santri baru."
@@ -514,6 +652,7 @@ export default function StudentIndex({
                                             </td>
                                             <td>{student.nis}</td>
                                             <td>{student.current_class?.name ?? '-'}</td>
+                                            <td>{formalTingkatLabel(student)}</td>
                                             <td>
                                                 <span
                                                     className={`mcr-dot-badge ${status?.className ?? 'alumni'}`}

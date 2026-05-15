@@ -1,5 +1,5 @@
-import { Head, router, useForm } from '@inertiajs/react';
-import { CheckCircle2, Download, FileText, FileUp, Layers, Plus, Users } from 'lucide-react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { CheckCircle2, Download, Eye, FileText, FileUp, Layers, Plus, Users } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import FlashMessage from '@/components/flash-message';
@@ -18,6 +18,7 @@ import {
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
 import type { AcademicYear, BreadcrumbItem, PaginatedData, Student, TingkatSekolahFormal } from '@/types';
+import { memberListUrl } from '../students/member-list-url';
 
 type Props = {
     unassignedStudents: PaginatedData<Pick<Student, 'id' | 'nis' | 'full_name'>>;
@@ -177,6 +178,29 @@ export default function FormalTingkatAssign({
                 />
 
                 <FlashMessage />
+
+                {tingkatSekolahs.length > 0 ? (
+                    <div className="mcr-card" style={{ marginBottom: 16, padding: '12px 16px' }}>
+                        <p className="mcr-table-meta" style={{ marginBottom: 8 }}>
+                            Lihat anggota per tingkat formal (tahun ajaran terpilih):
+                        </p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                            {tingkatSekolahs.map((tingkat) => (
+                                <Link
+                                    key={tingkat.id}
+                                    href={memberListUrl({
+                                        tingkat_sekolah_id: tingkat.id,
+                                        academic_year_id: currentAcademicYearId,
+                                    })}
+                                    className="mcr-btn ghost"
+                                >
+                                    <Eye size={13} />
+                                    {tingkat.name}
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                ) : null}
 
                 <CrudToolbar
                     left={

@@ -25,7 +25,14 @@ class StudentDataTransferController extends Controller
         $filename = 'santri-export-'.now()->format('Y-m-d-His').'.'.$format;
 
         return Excel::download(
-            new StudentDataExport($request->only(['search', 'status', 'class_id'])),
+            new StudentDataExport($request->only([
+                'search',
+                'status',
+                'class_id',
+                'room_id',
+                'tingkat_sekolah_id',
+                'academic_year_id',
+            ])),
             $filename,
             $writerType
         );

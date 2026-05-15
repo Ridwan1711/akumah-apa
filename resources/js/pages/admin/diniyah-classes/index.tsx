@@ -1,5 +1,5 @@
-import { Head, router, useForm } from '@inertiajs/react';
-import { Download, Edit, FileText, FileUp, GraduationCap, Hash, Plus, Search, Trash2, Users } from 'lucide-react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Download, Edit, Eye, FileText, FileUp, GraduationCap, Hash, Plus, Search, Trash2, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import FlashMessage from '@/components/flash-message';
@@ -18,6 +18,7 @@ import {
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem, ClassWali, PaginatedData, SchoolClass } from '@/types';
+import { memberListUrl } from '../students/member-list-url';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/dashboard' },
@@ -371,6 +372,13 @@ export default function DiniyahClassIndex({
                                         <td>{cls.students_count ?? 0}</td>
                                         <td>
                                             <div className="mcr-action-group">
+                                                <Link
+                                                    href={memberListUrl({ class_id: cls.id, status: 'active' })}
+                                                    className="mcr-icon-action"
+                                                    title="Lihat anggota kelas"
+                                                >
+                                                    <Eye size={13} />
+                                                </Link>
                                                 <button
                                                     type="button"
                                                     className="mcr-icon-action"

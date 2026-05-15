@@ -1,5 +1,5 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { BedDouble, Building2, Download, FileText, FileUp, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import { BedDouble, Building2, Download, Eye, FileText, FileUp, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import FlashMessage from '@/components/flash-message';
@@ -15,7 +15,8 @@ import {
     openDownload,
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
-import type { BreadcrumbItem, DormBuilding, DormRoom } from '@/types';
+import type { AcademicYear, BreadcrumbItem, DormBuilding, DormRoom } from '@/types';
+import { memberListUrl } from '../students/member-list-url';
 
 type BuildingRow = DormBuilding & {
     rooms?: (DormRoom & { musyrif?: { user?: { name?: string } | null } | null })[];
@@ -23,6 +24,8 @@ type BuildingRow = DormBuilding & {
 
 type Props = {
     buildings: BuildingRow[];
+    academicYears: Pick<AcademicYear, 'id' | 'name'>[];
+    selectedAcademicYearId: number;
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -33,7 +36,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 type BuildingForm = { name: string; description: string };
 type RoomForm = { building_id: string; room_number: string; capacity: string; floor: string };
 
-export default function AsramaIndex({ buildings }: Props) {
+export default function AsramaIndex({ buildings, academicYears, selectedAcademicYearId }: Props) {
     const [buildingModalOpen, setBuildingModalOpen] = useState(false);
     const [editingBuilding, setEditingBuilding] = useState<BuildingRow | null>(null);
     const [roomModalOpen, setRoomModalOpen] = useState(false);
@@ -160,9 +163,29 @@ export default function AsramaIndex({ buildings }: Props) {
                 <FlashMessage />
 
                 <CrudToolbar
-                    left={<span className="mcr-table-meta">Tambahkan gedung dan kamar, lalu lakukan penempatan via menu assign. Import file Excel (2 sheet) dari halaman ini setelah unduh template.</span>}
+                    left={
+                        <span className="mcr-table-meta">
+                            Penghuni kobong mengikuti tahun ajaran terpilih. Gunakan &quot;Lihat Anggota&quot; per kamar atau assign via menu assign.
+                        </span>
+                    }
                     right={
                         <>
+                            <select
+                                className="mcr-filter-select"
+                                value={String(selectedAcademicYearId)}
+                                onChange={(e) =>
+                                    router.get('/admin/asrama', { academic_year_id: e.target.value }, {
+                                        preserveState: true,
+                                        preserveScroll: true,
+                                    })
+                                }
+                            >
+                                {academicYears.map((year) => (
+                                    <option key={year.id} value={String(year.id)}>
+                                        TA {year.name}
+                                    </option>
+                                ))}
+                            </select>
                             <button type="button" className="mcr-btn ghost" onClick={() => openDownload('/admin/asrama/template?format=xlsx')}>
                                 <FileText size={14} />
                                 Template Excel
@@ -267,6 +290,16 @@ export default function AsramaIndex({ buildings }: Props) {
                                                 <td>{room.musyrif?.user?.name ?? '-'}</td>
                                                 <td>
                                                     <div className="mcr-action-group">
+                                                        <Link
+                                                            href={memberListUrl({
+                                                                room_id: room.id,
+                                                                academic_year_id: selectedAcademicYearId,
+                                                            })}
+                                                            className="mcr-icon-action"
+                                                            title="Lihat anggota kobong"
+                                                        >
+                                                            <Eye size={13} />
+                                                        </Link>
                                                         <button
                                                             type="button"
                                                             className="mcr-icon-action"

@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\Student;
+use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
@@ -23,6 +24,26 @@ class StudentDataExport implements FromQuery, WithHeadings, WithMapping
             }))
             ->when($this->filters['status'] ?? null, fn ($q, $status) => $q->where('status', $status))
             ->when($this->filters['class_id'] ?? null, fn ($q, $classId) => $q->where('current_class_id', $classId))
+            ->when(
+                ! empty($this->filters['room_id']) && ! empty($this->filters['academic_year_id']),
+                function (Builder $q) {
+                    $roomId = (int) $this->filters['room_id'];
+                    $yearId = (int) $this->filters['academic_year_id'];
+                    $q->whereHas('dormAssignments', fn (Builder $inner) => $inner
+                        ->where('room_id', $roomId)
+                        ->activeInAcademicYear($yearId));
+                },
+            )
+            ->when(
+                ! empty($this->filters['tingkat_sekolah_id']) && ! empty($this->filters['academic_year_id']),
+                function (Builder $q) {
+                    $tingkatId = (int) $this->filters['tingkat_sekolah_id'];
+                    $yearId = (int) $this->filters['academic_year_id'];
+                    $q->whereHas('enrollmentTingkatSekolahs', fn (Builder $inner) => $inner
+                        ->where('academic_year_id', $yearId)
+                        ->where('tingkat_sekolah_id', $tingkatId));
+                },
+            )
             ->orderBy('full_name');
     }
 

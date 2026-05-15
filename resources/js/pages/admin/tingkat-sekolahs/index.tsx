@@ -1,5 +1,5 @@
-import { Head, router, useForm } from '@inertiajs/react';
-import { Layers, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Eye, Layers, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import FlashMessage from '@/components/flash-message';
@@ -15,13 +15,16 @@ import {
     CrudToolbar,
 } from '@/components/manhood';
 import AppLayout from '@/layouts/app-layout';
-import type { BreadcrumbItem, TingkatSekolahFormal } from '@/types';
+import type { AcademicYear, BreadcrumbItem, TingkatSekolahFormal } from '@/types';
+import { memberListUrl } from '../students/member-list-url';
 
-type Row = TingkatSekolahFormal;
+type Row = TingkatSekolahFormal & { enrollments_count?: number };
 
 type Props = {
     tingkatSekolahs: Row[];
     knownCodes: string[];
+    academicYears: Pick<AcademicYear, 'id' | 'name'>[];
+    selectedAcademicYearId: number;
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -45,7 +48,12 @@ const emptyForm: FormShape = {
     is_billable: true,
 };
 
-export default function TingkatSekolahIndex({ tingkatSekolahs, knownCodes }: Props) {
+export default function TingkatSekolahIndex({
+    tingkatSekolahs,
+    knownCodes,
+    academicYears,
+    selectedAcademicYearId,
+}: Props) {
     const [modalOpen, setModalOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [editing, setEditing] = useState<Row | null>(null);
@@ -137,12 +145,34 @@ export default function TingkatSekolahIndex({ tingkatSekolahs, knownCodes }: Pro
                 />
                 <FlashMessage />
                 <CrudToolbar
-                    left={<span className="mcr-table-meta">Urutan kolom <code>order</code> dipakai di dropdown dan laporan.</span>}
+                    left={
+                        <span className="mcr-table-meta">
+                            Jumlah santri per tingkat mengikuti enrollment tahun ajaran terpilih.
+                        </span>
+                    }
                     right={
+                        <>
+                            <select
+                                className="mcr-filter-select"
+                                value={String(selectedAcademicYearId)}
+                                onChange={(e) =>
+                                    router.get('/admin/tingkat-sekolahs', { academic_year_id: e.target.value }, {
+                                        preserveState: true,
+                                        preserveScroll: true,
+                                    })
+                                }
+                            >
+                                {academicYears.map((year) => (
+                                    <option key={year.id} value={String(year.id)}>
+                                        TA {year.name}
+                                    </option>
+                                ))}
+                            </select>
                         <button type="button" className="mcr-btn primary" onClick={openCreate}>
                             <Plus size={14} />
                             Tambah tingkat
                         </button>
+                        </>
                     }
                 />
                 <CrudCard title="Daftar tingkat">
@@ -155,13 +185,14 @@ export default function TingkatSekolahIndex({ tingkatSekolahs, knownCodes }: Pro
                                     <th>Kode</th>
                                     <th>Grup</th>
                                     <th>Tagihan</th>
-                                    <th style={{ width: 120 }} />
+                                    <th>Santri</th>
+                                    <th style={{ width: 140 }} />
                                 </tr>
                             </thead>
                             <tbody>
                                 {tingkatSekolahs.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6}>
+                                        <td colSpan={7}>
                                             <CrudEmptyState title="Belum ada data" description="Tambahkan tingkat untuk enrollment dan keuangan." />
                                         </td>
                                     </tr>
@@ -176,7 +207,20 @@ export default function TingkatSekolahIndex({ tingkatSekolahs, knownCodes }: Pro
                                             <td>{row.group ?? '—'}</td>
                                             <td>{row.is_billable ? 'Ya' : 'Tidak'}</td>
                                             <td>
+                                                <span className="mcr-dot-badge active">{row.enrollments_count ?? 0}</span>
+                                            </td>
+                                            <td>
                                                 <div className="mcr-action-group">
+                                                    <Link
+                                                        href={memberListUrl({
+                                                            tingkat_sekolah_id: row.id,
+                                                            academic_year_id: selectedAcademicYearId,
+                                                        })}
+                                                        className="mcr-icon-action"
+                                                        title="Lihat anggota tingkat formal"
+                                                    >
+                                                        <Eye size={13} />
+                                                    </Link>
                                                     <button type="button" className="mcr-icon-action" title="Edit" onClick={() => openEdit(row)}>
                                                         <Pencil size={13} />
                                                     </button>
