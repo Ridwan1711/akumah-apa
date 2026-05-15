@@ -61,7 +61,11 @@ class SantriController extends Controller
         $student = $this->getStudent($request);
 
         $semesterId = $request->semester_id;
-        $semesters = Semester::with('academicYear:id,name')->orderByDesc('id')->get(['id', 'name', 'academic_year_id']);
+        $semesters = Semester::query()
+            ->with('academicYear:id,name')
+            ->withActivePeriodFlag()
+            ->orderByDesc('id')
+            ->get(['id', 'name', 'academic_year_id']);
 
         $grades = [];
         if ($semesterId) {
