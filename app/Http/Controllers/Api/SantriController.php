@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\UpdatesStudentFamilyProfile;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\PaymentGatewayController;
 use App\Models\AcademicPeriod;
 use App\Models\Diniyyah\AcademicSchedule;
 use App\Models\Diniyyah\Score;
-use App\Models\EmProfile;
 use App\Models\Invoice;
 use App\Models\LeavePermission;
 use App\Models\LessonAttendance;
@@ -22,6 +22,8 @@ use Illuminate\Support\Facades\Storage;
 
 class SantriController extends Controller
 {
+    use UpdatesStudentFamilyProfile;
+
     private function getStudent(Request $request)
     {
         $student = $request->user()->student;
@@ -107,7 +109,7 @@ class SantriController extends Controller
         ]);
 
         return response()->json([
-            'student' => $this->studentPayload($student),
+            'student' => $this->studentProfilePayload($student),
             'user' => $request->user()->load('roles'),
             'dorm_label' => $this->dormLabel($student),
             'role_label' => $request->user()->roles()->orderBy('roles.id')->value('roles.name'),
@@ -123,40 +125,8 @@ class SantriController extends Controller
     {
         $student = $this->getStudent($request);
 
-        $validated = $request->validate([
-            'em_profile' => 'nullable|array',
-            'full_name' => 'sometimes|nullable|string|max:255',
-            'nik' => 'sometimes|nullable|string|max:32',
-            'birth_place' => 'sometimes|nullable|string|max:120',
-            'birth_date' => 'sometimes|nullable|date',
-            'gender' => 'sometimes|nullable|in:'.implode(',', [Student::GENDER_MALE, Student::GENDER_FEMALE]),
-            'address' => 'sometimes|nullable|string|max:2000',
-        ]);
-
-        $incoming = is_array($validated['em_profile'] ?? null) ? $validated['em_profile'] : [];
-        if ($incoming !== []) {
-            $this->upsertEmProfile($student, $incoming);
-        }
-
-        if (array_key_exists('full_name', $validated)) {
-            $student->full_name = $validated['full_name'] ?? $student->full_name;
-        }
-        if (array_key_exists('nik', $validated)) {
-            $student->nik = $validated['nik'];
-        }
-        if (array_key_exists('birth_place', $validated)) {
-            $student->birth_place = $validated['birth_place'];
-        }
-        if (array_key_exists('birth_date', $validated)) {
-            $student->birth_date = $validated['birth_date'];
-        }
-        if (array_key_exists('gender', $validated)) {
-            $student->gender = $validated['gender'];
-        }
-        if (array_key_exists('address', $validated)) {
-            $student->address = $validated['address'];
-        }
-        $student->save();
+        $validated = $this->validateStudentProfileUpdate($request);
+        $this->applyStudentProfileUpdate($student, $validated);
 
         $student->load([
             'currentClass:id,name,grade_level_id',
@@ -168,37 +138,13 @@ class SantriController extends Controller
         ]);
 
         return response()->json([
-            'student' => $this->studentPayload($student),
+            'student' => $this->studentProfilePayload($student),
             'user' => $request->user()->load('roles'),
             'dorm_label' => $this->dormLabel($student),
             'role_label' => $request->user()->roles()->orderBy('roles.id')->value('roles.name'),
             'photo_url' => $this->publicPhotoUrl($student->photo),
             'message' => 'Profil berhasil disimpan.',
         ]);
-    }
-
-    private function upsertEmProfile(Student $student, array $incoming): void
-    {
-        $student->loadMissing('emisProfile');
-        $current = $student->emProfilePayload();
-        $merged = array_replace_recursive($current, $incoming);
-        $merged = $student->withComputedNismInEmProfilePayload($merged);
-        $attributes = EmProfile::fromPayload($merged);
-        $student->emisProfile()->updateOrCreate([], $attributes);
-        $student->forceFill(['em_profile' => $merged])->save();
-        $student->unsetRelation('emisProfile');
-        $student->load('emisProfile');
-    }
-
-    private function studentPayload(Student $student): array
-    {
-        $payload = $student->toArray();
-        $payload['em_profile'] = $student->emProfilePayloadForFrontend() ?: [
-            'santri' => [],
-            'alamat' => [],
-        ];
-
-        return $payload;
     }
 
     private function publicPhotoUrl(?string $path): ?string

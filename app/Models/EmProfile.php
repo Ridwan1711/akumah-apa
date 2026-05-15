@@ -40,6 +40,57 @@ class EmProfile extends Model
         'koordinat',
         'asal_daerah',
         'catatan_khusus',
+
+        // Snapshot alamat (disinkronkan dari guardians saat simpan profil)
+        'ayah_tinggal_luar_negeri',
+        'ayah_status_kepemilikan_rumah',
+        'ayah_sama_dengan_ktp',
+        'ayah_provinsi',
+        'ayah_kabupaten',
+        'ayah_kecamatan',
+        'ayah_kelurahan',
+        'ayah_dusun',
+        'ayah_rw',
+        'ayah_rt',
+        'ayah_alamat',
+        'ayah_kode_pos',
+        'ayah_nik_ktp',
+        'ibu_tinggal_luar_negeri',
+        'ibu_status_kepemilikan_rumah',
+        'ibu_sama_dengan_ktp',
+        'ibu_provinsi',
+        'ibu_kabupaten',
+        'ibu_kecamatan',
+        'ibu_kelurahan',
+        'ibu_dusun',
+        'ibu_rw',
+        'ibu_rt',
+        'ibu_alamat',
+        'ibu_kode_pos',
+        'ibu_nik_ktp',
+        'wali_domisili',
+        'wali_sama_dengan_ktp',
+        'wali_provinsi',
+        'wali_kabupaten',
+        'wali_kecamatan',
+        'wali_kelurahan',
+        'wali_dusun',
+        'wali_rw',
+        'wali_rt',
+        'wali_alamat',
+        'wali_kode_pos',
+        'wali_nik_ktp',
+        'santri_sama_dengan_ktp',
+        'santri_provinsi',
+        'santri_kabupaten',
+        'santri_kecamatan',
+        'santri_kelurahan',
+        'santri_dusun',
+        'santri_rw',
+        'santri_rt',
+        'santri_alamat',
+        'santri_kode_pos',
+        'santri_nik_ktp',
     ];
 
     protected function casts(): array
@@ -55,22 +106,79 @@ class EmProfile extends Model
     }
 
     /**
-     * Semua kolom EMIS yang wajib terisi untuk status profil lengkap.
+     * Kolom EMIS bagian santri (tanpa alamat orang tua/wali).
+     *
+     * @return array<int, string>
+     */
+    public static function santriRequiredColumns(): array
+    {
+        $excludePrefixes = ['ayah_', 'ibu_', 'wali_', 'santri_'];
+
+        return array_values(array_filter(
+            (new self)->getFillable(),
+            function (string $column) use ($excludePrefixes) {
+                if ($column === 'student_id') {
+                    return false;
+                }
+                foreach ($excludePrefixes as $prefix) {
+                    if (str_starts_with($column, $prefix)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+        ));
+    }
+
+    /**
+     * @deprecated Gunakan santriRequiredColumns() — alamat keluarga dicek via Student::hasRequiredGuardians()
      *
      * @return array<int, string>
      */
     public static function requiredColumns(): array
     {
-        return array_values(array_filter(
-            (new self)->getFillable(),
-            fn (string $column) => $column !== 'student_id'
-        ));
+        return self::santriRequiredColumns();
+    }
+
+    public function isSantriDataComplete(): bool
+    {
+        $boolColumns = array_keys((new self)->getCasts());
+        foreach (self::santriRequiredColumns() as $column) {
+            $value = $this->getAttribute($column);
+            if (in_array($column, $boolColumns, true)) {
+                if ($value === null) {
+                    return false;
+                }
+                continue;
+            }
+
+            if ($value === null || trim((string) $value) === '') {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function isDataComplete(): bool
     {
+        if (! $this->isSantriDataComplete()) {
+            return false;
+        }
+
+        $this->loadMissing('student.guardians');
+
+        return $this->student?->hasRequiredGuardians() ?? false;
+    }
+
+    public function isLegacyDataComplete(): bool
+    {
         $boolColumns = array_keys((new self)->getCasts());
-        foreach (self::requiredColumns() as $column) {
+        foreach (array_values(array_filter(
+            (new self)->getFillable(),
+            fn (string $column) => $column !== 'student_id'
+        )) as $column) {
             $value = $this->getAttribute($column);
             if (in_array($column, $boolColumns, true)) {
                 if ($value === null) {
@@ -90,7 +198,7 @@ class EmProfile extends Model
     public function scopeCompleteData(Builder $query): Builder
     {
         $boolColumns = array_keys((new self)->getCasts());
-        foreach (self::requiredColumns() as $column) {
+        foreach (self::santriRequiredColumns() as $column) {
             if (in_array($column, $boolColumns, true)) {
                 $query->whereNotNull($column);
                 continue;
@@ -106,8 +214,9 @@ class EmProfile extends Model
     public function scopeIncompleteData(Builder $query): Builder
     {
         $boolColumns = array_keys((new self)->getCasts());
+
         return $query->where(function (Builder $q) use ($boolColumns) {
-            foreach (self::requiredColumns() as $column) {
+            foreach (self::santriRequiredColumns() as $column) {
                 if (in_array($column, $boolColumns, true)) {
                     $q->orWhereNull($column);
                     continue;

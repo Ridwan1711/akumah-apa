@@ -163,6 +163,26 @@ class Student extends Model
         return $this->guardians()->wherePivot('relationship', 'wali');
     }
 
+    /**
+     * Ayah, ibu, dan wali wajib ada dengan nama terisi.
+     */
+    public function hasRequiredGuardians(): bool
+    {
+        $this->loadMissing(['guardians' => fn ($q) => $q->withPivot('relationship')]);
+
+        foreach (['ayah', 'ibu', 'wali'] as $relationship) {
+            $guardian = $this->guardians->first(
+                fn (Guardian $g) => ($g->pivot->relationship ?? $g->relationship) === $relationship
+            );
+
+            if ($guardian === null || trim((string) $guardian->full_name) === '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     // --- Akademik Diniyah ---
 
     public function scores(): HasMany

@@ -43,7 +43,7 @@ class Guardian extends Model
         'rt',
         'alamat',
         'kode_pos',
-        'nik_ktp',
+        'nik_ktp', // Gak Perlu Sudah Terhandle field nik
     ];
 
     protected function casts(): array
