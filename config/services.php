@@ -39,6 +39,12 @@ return [
         'api_key' => env('PPDB_SYNC_API_KEY'),
     ],
 
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI', env('APP_URL').'/auth/google/callback'),
+    ],
+
     'wa' => [
         'enabled' => (bool) env('WA_ENABLED', false),
         'url' => env('WA_API_URL', 'https://api-wa.ngedeploy.online/send-message'),

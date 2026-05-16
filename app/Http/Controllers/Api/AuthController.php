@@ -8,10 +8,10 @@ use App\Models\User;
 use App\Services\Firebase\AccountLinkSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\Validation\ValidationException;
@@ -117,7 +117,6 @@ class AuthController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,'.$request->user()->id],
             'whatsapp_phone' => ['nullable', 'string', 'max:32'],
-            'google_connected' => ['nullable', 'boolean'],
         ]);
 
         $user = $request->user();

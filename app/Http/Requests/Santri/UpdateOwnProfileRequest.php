@@ -23,7 +23,6 @@ class UpdateOwnProfileRequest extends FormRequest
             'gender' => ['required', Rule::in([Student::GENDER_MALE, Student::GENDER_FEMALE])],
             'address' => ['nullable', 'string'],
             'whatsapp_phone' => ['nullable', 'string', 'max:32'],
-            'google_connected' => ['nullable', 'boolean'],
             'em_profile' => ['nullable', 'array'],
             'em_profile.nisn' => ['nullable', 'string', 'max:20'],
             'em_profile.nism' => ['nullable', 'string', 'max:50'],

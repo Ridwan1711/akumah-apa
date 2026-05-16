@@ -19,6 +19,7 @@
         "laravel/octane": "*",
         "laravel/reverb": "^1.10",
         "laravel/sanctum": "^4.0",
+        "laravel/socialite": "^5.27",
         "laravel/tinker": "^2.10.1",
         "laravel/wayfinder": "^0.1.9",
         "maatwebsite/excel": "*",

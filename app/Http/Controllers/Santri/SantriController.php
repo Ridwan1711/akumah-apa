@@ -113,14 +113,13 @@ class SantriController extends Controller
         $validated = $request->validated();
 
         $emProfileData = $validated['em_profile'] ?? [];
-        $studentFields = collect($validated)->except(['whatsapp_phone', 'google_connected', 'em_profile'])->all();
+        $studentFields = collect($validated)->except(['whatsapp_phone', 'em_profile'])->all();
 
         $student->update($studentFields);
 
         $user = $request->user();
         $user->fill([
             'whatsapp_phone' => $validated['whatsapp_phone'] ?? null,
-            'google_connected' => (bool) ($validated['google_connected'] ?? false),
         ]);
         $user->save();
         $this->accountLinkSync->syncUser($user);

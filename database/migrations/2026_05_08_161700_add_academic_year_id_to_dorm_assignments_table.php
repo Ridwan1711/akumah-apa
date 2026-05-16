@@ -19,6 +19,21 @@ return new class extends Migration
                 ->value('id');
         }
 
+        if (! $defaultAcademicYearId && app()->environment('testing')) {
+            $now = now();
+            $yearRow = [
+                'name' => 'PHPUnit',
+                'start_date' => $now->copy()->startOfYear()->toDateString(),
+                'end_date' => $now->copy()->endOfYear()->toDateString(),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+            if (Schema::hasColumn('academic_years', 'is_active')) {
+                $yearRow['is_active'] = true;
+            }
+            $defaultAcademicYearId = DB::table('academic_years')->insertGetId($yearRow);
+        }
+
         if (! $defaultAcademicYearId) {
             throw new RuntimeException('Academic year tidak ditemukan. Buat data tahun ajaran sebelum menjalankan migrasi ini.');
         }
@@ -56,4 +71,3 @@ return new class extends Migration
         });
     }
 };
-

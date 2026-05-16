@@ -3,17 +3,18 @@
 use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\AdminAttendanceController;
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\AdminFormalContinuationController;
 use App\Http\Controllers\Api\AdminKeuanganController;
 use App\Http\Controllers\Api\AdminScheduleController;
 use App\Http\Controllers\Api\AdminTeacherLocationController;
 use App\Http\Controllers\Api\AdminUserManagementController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardSummaryController;
+use App\Http\Controllers\Api\GoogleAccountController;
 use App\Http\Controllers\Api\GuruAttendanceController;
 use App\Http\Controllers\Api\GuruController;
 use App\Http\Controllers\Api\PpdbSyncController;
 use App\Http\Controllers\Api\SantriController;
-use App\Http\Controllers\Api\AdminFormalContinuationController;
 use App\Http\Controllers\Api\SantriFormalContinuationController;
 use App\Http\Controllers\Api\SantriWithdrawalController;
 use App\Http\Controllers\Api\WaliController;
@@ -38,6 +39,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/user', [AuthController::class, 'user']);
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::patch('/user/profile', [AuthController::class, 'updateProfile']);
+        Route::post('/user/google/link', [GoogleAccountController::class, 'link']);
+        Route::delete('/user/google', [GoogleAccountController::class, 'unlink']);
         Route::post('/user/profile-photo', [AuthController::class, 'uploadProfilePhoto']);
         Route::delete('/user/profile-photo/custom', [AuthController::class, 'removeCustomProfilePhoto']);
         Route::put('/user/password', [AuthController::class, 'updatePassword']);

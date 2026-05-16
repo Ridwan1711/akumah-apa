@@ -29,6 +29,8 @@ class User extends Authenticatable
         'email',
         'whatsapp_phone',
         'google_connected',
+        'google_id',
+        'google_email',
         'password',
         'is_active',
         'must_change_password',
@@ -249,6 +251,11 @@ class User extends Authenticatable
     public function routeNotificationForFcm(): array
     {
         return $this->deviceTokens()->pluck('token')->all();
+    }
+
+    public function isGoogleLinked(): bool
+    {
+        return filled($this->google_id);
     }
 
     public function hasRole(string ...$roles): bool
