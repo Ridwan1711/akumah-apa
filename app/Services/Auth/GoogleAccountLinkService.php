@@ -53,6 +53,46 @@ class GoogleAccountLinkService
         return $user->fresh();
     }
 
+    /**
+     * Resolve SIAKAD user from a verified Google access token (login flow).
+     *
+     * @throws ValidationException when Google is not linked or account inactive
+     */
+    public function findUserForLogin(string $accessToken): User
+    {
+        $googleUser = $this->resolveGoogleUser($accessToken);
+
+        $googleId = (string) $googleUser->getId();
+        if ($googleId === '') {
+            throw ValidationException::withMessages([
+                'access_token' => ['Data akun Google tidak lengkap.'],
+            ]);
+        }
+
+        $user = User::query()->where('google_id', $googleId)->first();
+
+        if (! $user) {
+            throw ValidationException::withMessages([
+                'access_token' => [
+                    'Akun Google belum dihubungkan. Login dengan username/password, lalu hubungkan Google di menu Profil.',
+                ],
+            ]);
+        }
+
+        if (! $user->is_active) {
+            throw ValidationException::withMessages([
+                'access_token' => ['Akun tidak aktif.'],
+            ]);
+        }
+
+        $googleEmail = $googleUser->getEmail();
+        if (is_string($googleEmail) && $googleEmail !== '' && $user->google_email !== $googleEmail) {
+            $user->forceFill(['google_email' => $googleEmail])->save();
+        }
+
+        return $user->fresh();
+    }
+
     private function resolveGoogleUser(string $accessToken): \Laravel\Socialite\Contracts\User
     {
         try {
