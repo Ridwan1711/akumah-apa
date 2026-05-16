@@ -46,9 +46,13 @@ class EmProfile extends Model
         'ayah_status_kepemilikan_rumah',
         'ayah_sama_dengan_ktp',
         'ayah_provinsi',
+        'ayah_provinsi_code',
         'ayah_kabupaten',
+        'ayah_kabupaten_code',
         'ayah_kecamatan',
+        'ayah_kecamatan_code',
         'ayah_kelurahan',
+        'ayah_kelurahan_code',
         'ayah_dusun',
         'ayah_rw',
         'ayah_rt',
@@ -59,9 +63,13 @@ class EmProfile extends Model
         'ibu_status_kepemilikan_rumah',
         'ibu_sama_dengan_ktp',
         'ibu_provinsi',
+        'ibu_provinsi_code',
         'ibu_kabupaten',
+        'ibu_kabupaten_code',
         'ibu_kecamatan',
+        'ibu_kecamatan_code',
         'ibu_kelurahan',
+        'ibu_kelurahan_code',
         'ibu_dusun',
         'ibu_rw',
         'ibu_rt',
@@ -71,9 +79,13 @@ class EmProfile extends Model
         'wali_domisili',
         'wali_sama_dengan_ktp',
         'wali_provinsi',
+        'wali_provinsi_code',
         'wali_kabupaten',
+        'wali_kabupaten_code',
         'wali_kecamatan',
+        'wali_kecamatan_code',
         'wali_kelurahan',
+        'wali_kelurahan_code',
         'wali_dusun',
         'wali_rw',
         'wali_rt',
@@ -82,9 +94,13 @@ class EmProfile extends Model
         'wali_nik_ktp',
         'santri_sama_dengan_ktp',
         'santri_provinsi',
+        'santri_provinsi_code',
         'santri_kabupaten',
+        'santri_kabupaten_code',
         'santri_kecamatan',
+        'santri_kecamatan_code',
         'santri_kelurahan',
+        'santri_kelurahan_code',
         'santri_dusun',
         'santri_rw',
         'santri_rt',
@@ -270,10 +286,7 @@ class EmProfile extends Model
             'ayah_tinggal_luar_negeri' => self::toBool($ayah['tinggal_luar_negeri'] ?? null),
             'ayah_status_kepemilikan_rumah' => self::nullableString($ayah['status_kepemilikan_rumah'] ?? null),
             'ayah_sama_dengan_ktp' => self::toBool($ayah['sama_dengan_ktp'] ?? null),
-            'ayah_provinsi' => self::nullableString($ayah['provinsi'] ?? null),
-            'ayah_kabupaten' => self::nullableString($ayah['kabupaten'] ?? null),
-            'ayah_kecamatan' => self::nullableString($ayah['kecamatan'] ?? null),
-            'ayah_kelurahan' => self::nullableString($ayah['kelurahan'] ?? null),
+            ...self::wilayahColumnsFromAddress('ayah', $ayah),
             'ayah_dusun' => self::nullableString($ayah['dusun'] ?? null),
             'ayah_rw' => self::nullableString($ayah['rw'] ?? null),
             'ayah_rt' => self::nullableString($ayah['rt'] ?? null),
@@ -283,10 +296,7 @@ class EmProfile extends Model
             'ibu_tinggal_luar_negeri' => self::toBool($ibu['tinggal_luar_negeri'] ?? null),
             'ibu_status_kepemilikan_rumah' => self::nullableString($ibu['status_kepemilikan_rumah'] ?? null),
             'ibu_sama_dengan_ktp' => self::toBool($ibu['sama_dengan_ktp'] ?? null),
-            'ibu_provinsi' => self::nullableString($ibu['provinsi'] ?? null),
-            'ibu_kabupaten' => self::nullableString($ibu['kabupaten'] ?? null),
-            'ibu_kecamatan' => self::nullableString($ibu['kecamatan'] ?? null),
-            'ibu_kelurahan' => self::nullableString($ibu['kelurahan'] ?? null),
+            ...self::wilayahColumnsFromAddress('ibu', $ibu),
             'ibu_dusun' => self::nullableString($ibu['dusun'] ?? null),
             'ibu_rw' => self::nullableString($ibu['rw'] ?? null),
             'ibu_rt' => self::nullableString($ibu['rt'] ?? null),
@@ -295,10 +305,7 @@ class EmProfile extends Model
             'ibu_nik_ktp' => self::nullableString($ibu['nik_ktp'] ?? null),
             'wali_domisili' => self::nullableString($wali['domisili'] ?? null),
             'wali_sama_dengan_ktp' => self::toBool($wali['sama_dengan_ktp'] ?? null),
-            'wali_provinsi' => self::nullableString($wali['provinsi'] ?? null),
-            'wali_kabupaten' => self::nullableString($wali['kabupaten'] ?? null),
-            'wali_kecamatan' => self::nullableString($wali['kecamatan'] ?? null),
-            'wali_kelurahan' => self::nullableString($wali['kelurahan'] ?? null),
+            ...self::wilayahColumnsFromAddress('wali', $wali),
             'wali_dusun' => self::nullableString($wali['dusun'] ?? null),
             'wali_rw' => self::nullableString($wali['rw'] ?? null),
             'wali_rt' => self::nullableString($wali['rt'] ?? null),
@@ -306,10 +313,7 @@ class EmProfile extends Model
             'wali_kode_pos' => self::nullableString($wali['kode_pos'] ?? null),
             'wali_nik_ktp' => self::nullableString($wali['nik_ktp'] ?? null),
             'santri_sama_dengan_ktp' => self::toBool($santriAlamat['sama_dengan_ktp'] ?? null),
-            'santri_provinsi' => self::nullableString($santriAlamat['provinsi'] ?? null),
-            'santri_kabupaten' => self::nullableString($santriAlamat['kabupaten'] ?? null),
-            'santri_kecamatan' => self::nullableString($santriAlamat['kecamatan'] ?? null),
-            'santri_kelurahan' => self::nullableString($santriAlamat['kelurahan'] ?? null),
+            ...self::wilayahColumnsFromAddress('santri', $santriAlamat),
             'santri_dusun' => self::nullableString($santriAlamat['dusun'] ?? null),
             'santri_rw' => self::nullableString($santriAlamat['rw'] ?? null),
             'santri_rt' => self::nullableString($santriAlamat['rt'] ?? null),
@@ -376,10 +380,7 @@ class EmProfile extends Model
     {
         return [
             'sama_dengan_ktp' => $this->{"{$prefix}_sama_dengan_ktp"},
-            'provinsi' => $this->{"{$prefix}_provinsi"},
-            'kabupaten' => $this->{"{$prefix}_kabupaten"},
-            'kecamatan' => $this->{"{$prefix}_kecamatan"},
-            'kelurahan' => $this->{"{$prefix}_kelurahan"},
+            ...self::wilayahPayloadFromModel($prefix, $this),
             'dusun' => $this->{"{$prefix}_dusun"},
             'rw' => $this->{"{$prefix}_rw"},
             'rt' => $this->{"{$prefix}_rt"},
@@ -387,6 +388,35 @@ class EmProfile extends Model
             'kode_pos' => $this->{"{$prefix}_kode_pos"},
             'nik_ktp' => $this->{"{$prefix}_nik_ktp"},
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $address
+     * @return array<string, string|null>
+     */
+    private static function wilayahColumnsFromAddress(string $prefix, array $address): array
+    {
+        $out = [];
+        foreach (['provinsi', 'kabupaten', 'kecamatan', 'kelurahan'] as $level) {
+            $out["{$prefix}_{$level}"] = self::nullableString($address[$level] ?? null);
+            $out["{$prefix}_{$level}_code"] = self::nullableString($address["{$level}_code"] ?? null);
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array<string, string|null>
+     */
+    private static function wilayahPayloadFromModel(string $prefix, self $model): array
+    {
+        $out = [];
+        foreach (['provinsi', 'kabupaten', 'kecamatan', 'kelurahan'] as $level) {
+            $out[$level] = $model->{"{$prefix}_{$level}"};
+            $out["{$level}_code"] = $model->{"{$prefix}_{$level}_code"};
+        }
+
+        return $out;
     }
 
     private static function toMap(mixed $value): array
