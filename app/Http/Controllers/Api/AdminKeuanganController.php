@@ -17,11 +17,10 @@ use App\Models\StudentDiscount;
 use App\Models\TingkatSekolah;
 use App\Models\User;
 use App\Notifications\InvoiceCreatedNotification;
-use App\Notifications\PaymentVerifiedNotification;
 use App\Services\Authorization\InvoiceVisibilityScope;
 use App\Services\Finance\DispatchInvoiceRemindersAction;
 use App\Services\Finance\FinanceFormalTingkatSummary;
-use App\Services\Finance\FinanceWhatsappOutbound;
+use App\Services\Finance\FinanceWhatsappNotificationService;
 use App\Services\Finance\FinanceWhatsappPhone;
 use App\Services\Finance\FinanceWhatsappRecipient;
 use App\Services\Finance\InstallmentService;
@@ -39,7 +38,7 @@ class AdminKeuanganController extends Controller
     public function __construct(
         private readonly InvoiceVisibilityScope $invoiceVisibilityScope,
         private readonly DispatchInvoiceRemindersAction $dispatchInvoiceRemindersAction,
-        private readonly FinanceWhatsappOutbound $financeWhatsappOutbound,
+        private readonly FinanceWhatsappNotificationService $financeWhatsappNotifications,
     ) {}
 
     public function indexInvoices(Request $request): JsonResponse
@@ -401,14 +400,7 @@ class AdminKeuanganController extends Controller
 
         $payment->invoice->recalculateStatus();
 
-        $student = $payment->invoice->student;
-        if ($student) {
-            $student->guardians()->whereHas('user')->with('user')->each(function ($guardian) use ($payment) {
-                $guardian->user?->notify(new PaymentVerifiedNotification($payment));
-            });
-        }
-
-        $this->financeWhatsappOutbound->queuePaymentVerifiedForPayment($payment);
+        $this->financeWhatsappNotifications->notifyPaymentVerified($payment);
 
         $payment->load(['invoice', 'verifier:id,name']);
 

@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\AdminScheduleController;
 use App\Http\Controllers\Api\AdminTeacherLocationController;
 use App\Http\Controllers\Api\AdminUserManagementController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\WhatsappOtpController;
 use App\Http\Controllers\Api\DashboardSummaryController;
 use App\Http\Controllers\Api\GoogleAccountController;
 use App\Http\Controllers\Api\GuruAttendanceController;
@@ -20,8 +21,12 @@ use App\Http\Controllers\Api\SantriWithdrawalController;
 use App\Http\Controllers\Api\WaliController;
 use App\Http\Controllers\Api\WaliFormalContinuationController;
 use App\Http\Controllers\Api\WaliWithdrawalController;
+use App\Http\Controllers\Internal\WaGatewayWebhookController;
 use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
+
+Route::post('/internal/wa-gateway/webhook', WaGatewayWebhookController::class)
+    ->middleware('wa.gateway.webhook');
 
 Route::prefix('v1')->group(function () {
     Route::middleware('ppdb.sync')->prefix('integrations/ppdb')->group(function () {
@@ -34,6 +39,9 @@ Route::prefix('v1')->group(function () {
     Route::post('/login/google', [GoogleAccountController::class, 'login'])->middleware('throttle:login');
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1');
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+
+    Route::post('/auth/otp/request', [WhatsappOtpController::class, 'request'])->middleware('throttle:10,1');
+    Route::post('/auth/otp/verify', [WhatsappOtpController::class, 'verifyLogin'])->middleware('throttle:20,1');
 
     // Protected
     Route::middleware('auth:sanctum')->group(function () {
@@ -49,6 +57,10 @@ Route::prefix('v1')->group(function () {
 
         Route::post('/user/fcm-token', [AuthController::class, 'registerFcmToken']);
         Route::delete('/user/fcm-token', [AuthController::class, 'unregisterFcmToken']);
+
+        Route::post('/account/whatsapp/request', [WhatsappOtpController::class, 'requestVerifyNumber'])->middleware('throttle:10,1');
+        Route::post('/account/whatsapp/verify', [WhatsappOtpController::class, 'verifyNumber'])->middleware('throttle:20,1');
+        Route::patch('/account/whatsapp/preferences', [WhatsappOtpController::class, 'updateWhatsappPreferences']);
 
         Route::get('/user/sessions', [AuthController::class, 'sessions']);
         Route::delete('/user/sessions/{id}', [AuthController::class, 'revokeSession'])

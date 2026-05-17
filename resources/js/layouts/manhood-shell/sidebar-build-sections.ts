@@ -18,6 +18,7 @@ import {
     Layers,
     ListChecks,
     LogOut,
+    MessageCircle,
     PieChart,
     Receipt,
     School,
@@ -204,6 +205,7 @@ export function buildSidebarSections(
         const sistemItems: NavItem[] = isSuperAdmin
             ? [
                   { title: 'Manajemen User', href: '/admin/users', icon: Shield },
+                  { title: 'WhatsApp Gateway', href: '/admin/wa-gateway', icon: MessageCircle },
                   { title: 'Log Sistem', href: '/admin/system-logs', icon: FileText },
                   { title: 'Laravel Log', href: '/admin/laravel-logs', icon: FileText },
                   { title: 'Log Aktivitas', href: '/admin/audit-logs', icon: FileText },

@@ -2,8 +2,11 @@
 
 namespace App\Notifications;
 
+use App\Models\Invoice;
 use App\Models\Payment;
 use App\Notifications\Channels\FcmChannel;
+use App\Notifications\Channels\WhatsappChannel;
+use App\Notifications\Messages\WhatsappMessage;
 use App\Services\Finance\FinanceKeuanganMessageBody;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -16,15 +19,26 @@ class PaymentVerifiedNotification extends Notification implements ShouldQueue
     public function __construct(
         public Payment $payment,
         public bool $sendAppNotification = true,
-    ) {}
+        public bool $sendWhatsapp = false,
+        public ?string $whatsappOverridePhone = null,
+    ) {
+        $this->onQueue((string) config('services.wa.queue', 'wa'));
+    }
 
     public function via(object $notifiable): array
     {
-        if (! $this->sendAppNotification) {
-            return [];
+        $channels = [];
+
+        if ($this->sendAppNotification) {
+            $channels[] = 'database';
+            $channels[] = FcmChannel::class;
         }
 
-        return ['database', FcmChannel::class];
+        if ($this->sendWhatsapp && config('services.wa.enabled')) {
+            $channels[] = WhatsappChannel::class;
+        }
+
+        return $channels;
     }
 
     public function paymentVerifiedMessageLine(object $notifiable): string
@@ -32,11 +46,24 @@ class PaymentVerifiedNotification extends Notification implements ShouldQueue
         return FinanceKeuanganMessageBody::paymentVerified($this->payment);
     }
 
+    public function toWhatsapp(object $notifiable): ?WhatsappMessage
+    {
+        if (! $this->sendWhatsapp || $this->whatsappOverridePhone === null) {
+            return null;
+        }
+
+        return WhatsappMessage::make(
+            FinanceKeuanganMessageBody::paymentVerified($this->payment),
+            $this->whatsappOverridePhone,
+            'payment_verified',
+        );
+    }
+
     public function toArray(object $notifiable): array
     {
         $this->payment->loadMissing('invoice.student', 'invoice.payments');
         $invoice = $this->payment->invoice;
-        $isPaidOff = $invoice?->status === \App\Models\Invoice::STATUS_PAID;
+        $isPaidOff = $invoice?->status === Invoice::STATUS_PAID;
         $title = $isPaidOff ? 'Tagihan Lunas' : 'Pembayaran Cicilan Diterima';
         $body = $this->compactInAppBody($notifiable);
         $roleTarget = $this->roleTarget($notifiable);
@@ -67,7 +94,7 @@ class PaymentVerifiedNotification extends Notification implements ShouldQueue
     {
         $invoice = $this->payment->invoice;
         $this->payment->loadMissing('invoice.student', 'invoice.payments');
-        $isPaidOff = $invoice?->status === \App\Models\Invoice::STATUS_PAID;
+        $isPaidOff = $invoice?->status === Invoice::STATUS_PAID;
         $title = $isPaidOff ? 'Tagihan Lunas' : 'Pembayaran Cicilan Diterima';
         $body = $this->compactInAppBody($notifiable);
         $roleTarget = $this->roleTarget($notifiable);

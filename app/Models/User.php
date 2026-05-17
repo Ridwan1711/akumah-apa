@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Diniyyah\ClassPromotionRecap;
+use App\Services\Finance\FinanceWhatsappPhone;
 use App\Models\Diniyyah\ClassWali;
 use App\Models\Diniyyah\KitabReadingAssessment;
 use App\Models\Diniyyah\KitabReadingExaminerAssignment;
@@ -28,6 +29,8 @@ class User extends Authenticatable
         'username',
         'email',
         'whatsapp_phone',
+        'whatsapp_phone_verified_at',
+        'whatsapp_notifications_enabled',
         'google_connected',
         'google_id',
         'google_email',
@@ -65,7 +68,22 @@ class User extends Authenticatable
             'must_change_password' => 'boolean',
             'must_complete_profile' => 'boolean',
             'google_connected' => 'boolean',
+            'whatsapp_phone_verified_at' => 'datetime',
+            'whatsapp_notifications_enabled' => 'boolean',
         ];
+    }
+
+    public function routeNotificationForWhatsapp($notification = null): ?string
+    {
+        if (! $this->whatsapp_notifications_enabled) {
+            return null;
+        }
+
+        if ($this->whatsapp_phone_verified_at === null) {
+            return null;
+        }
+
+        return FinanceWhatsappPhone::normalize($this->whatsapp_phone);
     }
 
     public function getProfilePhotoUrlAttribute(): ?string

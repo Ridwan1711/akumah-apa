@@ -45,6 +45,7 @@ use App\Http\Controllers\Admin\TeacherManagementController;
 use App\Http\Controllers\Admin\TingkatSekolahController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\ViolationController;
+use App\Http\Controllers\Admin\WaGatewayController;
 use App\Http\Controllers\Auth\ForceChangePasswordController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Guru\GuruAcademicController;
@@ -326,6 +327,22 @@ Route::middleware(['auth', 'verified', 'password.changed', 'role:'.implode(',', 
         Route::post('notifications/manual/teacher-presence-overlay-demo', [AdminNotificationController::class, 'sendTeacherPresenceOverlayDemo'])
             ->middleware('permission:'.Permissions::NOTIFICATION_MANUAL_SEND)
             ->name('notifications.manual.teacher-presence-overlay-demo');
+
+        Route::get('wa-gateway', [WaGatewayController::class, 'index'])
+            ->middleware('role:'.Role::SUPER_ADMIN)
+            ->name('wa-gateway.index');
+        Route::post('wa-gateway/{slug}/start', [WaGatewayController::class, 'start'])
+            ->middleware('role:'.Role::SUPER_ADMIN)
+            ->name('wa-gateway.start');
+        Route::get('wa-gateway/{slug}/qr', [WaGatewayController::class, 'qr'])
+            ->middleware('role:'.Role::SUPER_ADMIN)
+            ->name('wa-gateway.qr');
+        Route::get('wa-gateway/{slug}/status', [WaGatewayController::class, 'status'])
+            ->middleware('role:'.Role::SUPER_ADMIN)
+            ->name('wa-gateway.status');
+        Route::post('wa-gateway/{slug}/logout', [WaGatewayController::class, 'logout'])
+            ->middleware('role:'.Role::SUPER_ADMIN)
+            ->name('wa-gateway.logout');
     });
 
 // Audit log: super_admin (semua modul), admin_keuangan (keuangan), admin_akademik (akademik & operasional)

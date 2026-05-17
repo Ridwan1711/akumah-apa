@@ -13,8 +13,7 @@ use Illuminate\Support\Facades\Log;
 final class DispatchInvoiceRemindersAction
 {
     public function __construct(
-        private readonly FinanceWhatsappRecipient $recipient,
-        private readonly FinanceWhatsappOutbound $whatsappOutbound,
+        private readonly FinanceWhatsappNotificationService $whatsappNotifications,
     ) {}
 
     /**
@@ -188,17 +187,15 @@ final class DispatchInvoiceRemindersAction
         array &$waDedupePhones,
         int $waStagger,
     ): bool {
+        $recipient = app(FinanceWhatsappRecipient::class);
         $phone = $guardianWithoutUser !== null
-            ? $this->recipient->resolve($student, null, $guardianWithoutUser)
-            : $this->recipient->resolve($student, $waliUser);
+            ? $recipient->resolve($student, null, $guardianWithoutUser)
+            : $recipient->resolve($student, $waliUser);
 
         if ($phone === null) {
             Log::warning('invoice_wa_skipped_no_phone', [
                 'invoice_id' => (int) $invoice->id,
                 'student_id' => (int) $student->id,
-                'wali_user_id' => $waliUser !== null ? (int) $waliUser->id : null,
-                'guardian_without_user_id' => $guardianWithoutUser !== null ? (int) $guardianWithoutUser->id : null,
-                'hint' => 'Isi WhatsApp di akun santri, No HP (EM), telepon wali, atau aktifkan WA_ALLOW_FALLBACK_RECIPIENT + WA_FALLBACK_PHONE.',
             ]);
 
             return false;
@@ -206,17 +203,18 @@ final class DispatchInvoiceRemindersAction
 
         $dedupeKey = $invoice->id.'|'.$phone;
         if (isset($waDedupePhones[$dedupeKey])) {
-            Log::info('invoice_wa_skipped_dedupe', [
-                'invoice_id' => (int) $invoice->id,
-                'number_suffix' => NgedeployWaClient::maskNumber($phone),
-            ]);
-
             return false;
         }
 
         $waDedupePhones[$dedupeKey] = true;
-        $this->whatsappOutbound->queueInvoiceReminderToPhone($phone, $invoice, $notification, $waStagger);
 
-        return true;
+        return $this->whatsappNotifications->notifyInvoiceReminder(
+            $invoice,
+            $student,
+            $notification,
+            $waliUser,
+            $guardianWithoutUser,
+            $waStagger,
+        );
     }
 }

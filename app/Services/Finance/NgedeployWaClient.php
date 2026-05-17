@@ -7,6 +7,9 @@ use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
 
+/**
+ * @deprecated Use App\Services\Whatsapp\WhatsappClient instead.
+ */
 final class NgedeployWaClient
 {
     public function send(string $numberDigits, string $message): void

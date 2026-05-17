@@ -126,6 +126,10 @@ class AuthController extends Controller
             $user->email_verified_at = null;
         }
 
+        if ($user->isDirty('whatsapp_phone')) {
+            $user->whatsapp_phone_verified_at = null;
+        }
+
         $user->save();
         $this->accountLinkSync->syncUser($user);
 

@@ -12,6 +12,9 @@ use App\Notifications\PaymentVerifiedNotification;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * @deprecated Use App\Services\Finance\FinanceWhatsappNotificationService instead.
+ */
 final class FinanceWhatsappOutbound
 {
     public function __construct(

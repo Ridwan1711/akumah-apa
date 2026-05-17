@@ -6,8 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentType;
-use App\Notifications\PaymentVerifiedNotification;
-use App\Services\Finance\FinanceWhatsappOutbound;
+use App\Services\Finance\FinanceWhatsappNotificationService;
 use App\Services\Finance\InstallmentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -136,14 +135,7 @@ class PaymentController extends Controller
 
         $invoice->recalculateStatus();
 
-        $student = $invoice->student;
-        if ($student) {
-            $student->guardians()->whereHas('user')->with('user')->each(function ($guardian) use ($payment) {
-                $guardian->user?->notify(new PaymentVerifiedNotification($payment));
-            });
-        }
-
-        app(FinanceWhatsappOutbound::class)->queuePaymentVerifiedForPayment($payment);
+        app(FinanceWhatsappNotificationService::class)->notifyPaymentVerified($payment);
 
         return redirect()->route('admin.payments.index')
             ->with('success', "Pembayaran {$payment->payment_number} berhasil dicatat.");
@@ -173,14 +165,7 @@ class PaymentController extends Controller
 
         $payment->invoice->recalculateStatus();
 
-        $student = $payment->invoice->student;
-        if ($student) {
-            $student->guardians()->whereHas('user')->with('user')->each(function ($guardian) use ($payment) {
-                $guardian->user?->notify(new PaymentVerifiedNotification($payment));
-            });
-        }
-
-        app(FinanceWhatsappOutbound::class)->queuePaymentVerifiedForPayment($payment);
+        app(FinanceWhatsappNotificationService::class)->notifyPaymentVerified($payment);
 
         return redirect()->back()->with('success', 'Pembayaran berhasil diverifikasi.');
     }

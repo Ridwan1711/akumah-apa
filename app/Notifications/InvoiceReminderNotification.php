@@ -4,6 +4,8 @@ namespace App\Notifications;
 
 use App\Models\Invoice;
 use App\Notifications\Channels\FcmChannel;
+use App\Notifications\Channels\WhatsappChannel;
+use App\Notifications\Messages\WhatsappMessage;
 use App\Services\Finance\FinanceKeuanganMessageBody;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -13,25 +15,55 @@ class InvoiceReminderNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
+    public bool $sendWhatsapp = false;
+
+    public ?string $whatsappOverridePhone = null;
+
     public function __construct(
         public Invoice $invoice,
         public ?string $customMessage = null,
         public ?int $sentByUserId = null,
         public bool $sendAppNotification = true,
-    ) {}
+        bool $sendWhatsapp = false,
+        ?string $whatsappOverridePhone = null,
+    ) {
+        $this->sendWhatsapp = $sendWhatsapp;
+        $this->whatsappOverridePhone = $whatsappOverridePhone;
+        $this->onQueue((string) config('services.wa.queue', 'wa'));
+    }
 
     public function via(object $notifiable): array
     {
-        if (! $this->sendAppNotification) {
-            return [];
+        $channels = [];
+
+        if ($this->sendAppNotification) {
+            $channels[] = 'database';
+            $channels[] = FcmChannel::class;
         }
 
-        return ['database', FcmChannel::class];
+        if ($this->sendWhatsapp && config('services.wa.enabled')) {
+            $channels[] = WhatsappChannel::class;
+        }
+
+        return $channels;
     }
 
     public function reminderMessageText(): string
     {
         return $this->body();
+    }
+
+    public function toWhatsapp(object $notifiable): ?WhatsappMessage
+    {
+        if (! $this->sendWhatsapp || $this->whatsappOverridePhone === null) {
+            return null;
+        }
+
+        return WhatsappMessage::make(
+            $this->body(),
+            $this->whatsappOverridePhone,
+            'invoice_reminder',
+        );
     }
 
     public function toArray(object $notifiable): array
